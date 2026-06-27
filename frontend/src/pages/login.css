@@ -1,0 +1,362 @@
+/* =============================================================
+ * 日耕 · 登录页专属样式
+ * 全屏页面，不套 AppShell
+ * ============================================================= */
+
+.rg-login {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-brand-bg-page);
+  font-family: var(--font-family-base);
+}
+
+/* ── 左侧品牌区（PC 可见） ── */
+.rg-login__brand {
+  display: none;
+  flex: 1;
+  background: linear-gradient(160deg, #6B3410 0%, #8B4513 40%, #A0522D 100%);
+  color: #fff;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-3xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.rg-login__brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.rg-login__brand-logo {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  font-family: var(--font-family-guofeng);
+  margin-bottom: var(--spacing-xl);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rg-login__brand-name {
+  font-size: var(--font-size-l0);
+  font-weight: var(--font-weight-black);
+  font-family: var(--font-family-guofeng);
+  letter-spacing: 0.1em;
+  margin-bottom: var(--spacing-sm);
+  position: relative;
+  z-index: 1;
+}
+
+.rg-login__brand-slogan {
+  font-size: var(--font-size-l5);
+  opacity: 0.85;
+  font-style: italic;
+  position: relative;
+  z-index: 1;
+}
+
+.rg-login__brand-concept {
+  font-size: var(--font-size-l6);
+  opacity: 0.65;
+  margin-top: var(--spacing-lg);
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 右侧表单区 ── */
+.rg-login__form-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-xl);
+  position: relative;
+}
+
+.rg-login__form-card {
+  width: 100%;
+  max-width: 400px;
+  animation: fadeSlideUp var(--duration-slow) var(--easing-out);
+}
+
+/* 移动端品牌标识（小尺寸显示在表单上方） */
+.rg-login__mobile-brand {
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.rg-login__mobile-brand .rg-login__mobile-logo {
+  width: 64px;
+  height: 64px;
+  background: var(--color-brand-primary);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  font-family: var(--font-family-guofeng);
+  margin-bottom: var(--spacing-md);
+}
+
+.rg-login__mobile-brand h1 {
+  font-size: var(--font-size-l1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-neutral-900);
+  font-family: var(--font-family-guofeng);
+}
+
+.rg-login__mobile-brand p {
+  font-size: var(--font-size-l6);
+  color: var(--color-neutral-500);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ── 表单标题 ── */
+.rg-login__title {
+  font-size: var(--font-size-l1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-neutral-900);
+  text-align: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.rg-login__subtitle {
+  font-size: var(--font-size-l5);
+  color: var(--color-neutral-500);
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* ── 登录方式切换 ── */
+.rg-login__tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--spacing-xl);
+  border-bottom: 2px solid var(--color-neutral-50);
+}
+
+.rg-login__tab {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  background: none;
+  font-size: var(--font-size-l5);
+  color: var(--color-neutral-500);
+  cursor: pointer;
+  position: relative;
+  font-family: var(--font-family-base);
+  transition: color var(--duration-normal) var(--easing-default);
+}
+
+.rg-login__tab:hover {
+  color: var(--color-neutral-700);
+}
+
+.rg-login__tab--active {
+  color: var(--color-brand-primary);
+  font-weight: var(--font-weight-semi-bold);
+}
+
+.rg-login__tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--color-brand-primary);
+  border-radius: 1px;
+}
+
+/* ── 表单 ── */
+.rg-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.rg-login__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.rg-login__label {
+  font-size: var(--font-size-l6);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-neutral-700);
+}
+
+.rg-login__input {
+  height: 48px;
+  padding: 0 var(--spacing-lg);
+  border: 1.5px solid var(--color-neutral-100);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-l5);
+  font-family: var(--font-family-base);
+  color: var(--color-neutral-900);
+  background: var(--color-brand-white);
+  transition: border-color var(--duration-normal) var(--easing-default),
+              box-shadow var(--duration-normal) var(--easing-default);
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.rg-login__input:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+.rg-login__input::placeholder {
+  color: var(--color-neutral-300);
+}
+
+.rg-login__input--error {
+  border-color: var(--color-error);
+}
+
+.rg-login__input--error:focus {
+  box-shadow: var(--shadow-focus-error);
+}
+
+/* 验证码行 */
+.rg-login__code-row {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.rg-login__code-row .rg-login__input {
+  flex: 1;
+}
+
+.rg-login__code-btn {
+  width: 120px;
+  height: 48px;
+  border: 1.5px solid var(--color-brand-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-white);
+  color: var(--color-brand-primary);
+  font-size: var(--font-size-l6);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-normal) var(--easing-default);
+  flex-shrink: 0;
+}
+
+.rg-login__code-btn:hover:not(:disabled) {
+  background: var(--color-brand-primary-light);
+}
+
+.rg-login__code-btn:disabled {
+  border-color: var(--color-neutral-200);
+  color: var(--color-neutral-300);
+  cursor: not-allowed;
+}
+
+/* ── 错误提示 ── */
+.rg-login__error {
+  font-size: var(--font-size-l6);
+  color: var(--color-error);
+  text-align: center;
+  min-height: 20px;
+  line-height: 20px;
+}
+
+/* ── 成功提示 ── */
+.rg-login__success {
+  font-size: var(--font-size-l6);
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: center;
+  line-height: 20px;
+}
+
+/* ── 提交按钮 ── */
+.rg-login__submit {
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: var(--font-size-l4);
+  font-weight: var(--font-weight-semi-bold);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  transition: background var(--duration-normal) var(--easing-default);
+  margin-top: var(--spacing-sm);
+}
+
+.rg-login__submit:hover:not(:disabled) {
+  background: var(--color-brand-primary-hover);
+}
+
+.rg-login__submit:active:not(:disabled) {
+  background: var(--color-brand-primary-active);
+}
+
+.rg-login__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── 注册入口 ── */
+.rg-login__register-link {
+  text-align: center;
+  margin-top: var(--spacing-xl);
+  font-size: var(--font-size-l5);
+  color: var(--color-neutral-500);
+}
+
+.rg-login__register-link a {
+  color: var(--color-brand-primary);
+  font-weight: var(--font-weight-semi-bold);
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.rg-login__register-link a:hover {
+  text-decoration: underline;
+}
+
+/* ── 底部提示 ── */
+.rg-login__footer-tip {
+  text-align: center;
+  margin-top: var(--spacing-md);
+  font-size: var(--font-size-l7);
+  color: var(--color-neutral-500);
+  line-height: 1.6;
+}
+
+/* ── 响应式：PC 端显示左侧品牌区 ── */
+@media (min-width: 768px) {
+  .rg-login__brand {
+    display: flex;
+  }
+
+  .rg-login__mobile-brand {
+    display: none;
+  }
+
+  .rg-login__form-panel {
+    padding: var(--spacing-3xl);
+  }
+}

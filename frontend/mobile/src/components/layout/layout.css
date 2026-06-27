@@ -1,0 +1,119 @@
+/* =============================================================
+ * 移动端 H5 布局框架
+ * 始终显示底部 TabBar，safe-area 适配，触摸目标优化
+ * ============================================================= */
+
+.rg-shell-mobile {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;  /* dynamic viewport height for mobile browsers */
+  background: var(--color-brand-bg-page);
+}
+
+/* ---------- 主区域 ---------- */
+.rg-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 紧凑顶部栏 64px ---------- */
+.rg-topbar {
+  height: var(--topbar-height);
+  flex: none;
+  background: var(--color-brand-white);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--container-padding-mobile);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.rg-topbar__left { min-width: 0; display: flex; align-items: center; }
+.rg-topbar__brandline { display: flex; align-items: baseline; gap: var(--spacing-sm); }
+.rg-topbar__brand {
+  color: var(--color-brand-primary);
+  font-size: 22px;
+  font-weight: var(--font-weight-black);
+  letter-spacing: var(--letter-spacing-l0);
+}
+.rg-topbar__slogan { color: var(--color-neutral-500); font-size: var(--font-size-l5); }
+.rg-topbar__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-l5);
+}
+.rg-topbar__breadcrumb-board { color: #999; }
+.rg-topbar__breadcrumb-sep { color: #D4A574; }
+.rg-topbar__breadcrumb-module {
+  color: #333;
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- 离线状态横幅 ---------- */
+.rg-offline {
+  height: var(--offline-banner-height);
+  background: var(--color-warning-bg);
+  color: var(--color-alert);
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-l5);
+  animation: fadeIn var(--duration-slow) var(--easing-out);
+}
+
+/* ---------- 页面容器 ---------- */
+.rg-page {
+  flex: 1;
+  padding: var(--spacing-lg) var(--container-padding-mobile);
+  padding-bottom: calc(var(--tabbar-height) + var(--spacing-lg) + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+/* ---------- 底部 Tab 栏（80px + safe-area） ---------- */
+.rg-tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: var(--tabbar-height);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--color-brand-white);
+  border-top: 1px solid #E8E0D6;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: var(--z-sticky);
+}
+.rg-tab {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px;
+  padding: 12px 0 8px;
+  color: #BCAAA4;
+  font-size: 10px;
+  line-height: 1;
+  position: relative;
+  transition: color var(--duration-normal);
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-height: 44px;  /* touch target minimum */
+}
+.rg-tab--active { color: #C03A39; }
+.rg-tab__icon { font-size: 24px; line-height: 1; }
+.rg-tab__label { margin-top: 2px; }
+
+/* ---------- 移动端子模块卡片网格（点 Tab 弹出） ---------- */
+.rg-boardgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+.rg-boardgrid__card {
+  display: flex; flex-direction: column; gap: var(--spacing-xs);
+}
+.rg-boardgrid__emoji { font-size: 28px; }

@@ -1,0 +1,27 @@
+{
+  "name": "@rigeng/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "日耕（RiGeng）共享代码 — API、Hooks、基础组件、设计系统",
+  "exports": {
+    "./api/*": "./src/api/*",
+    "./hooks/*": "./src/hooks/*",
+    "./data/*": "./src/data/*",
+    "./styles/*": "./src/styles/*",
+    "./components/primitives": "./src/components/primitives/index.tsx",
+    "./components/primitives/toast": "./src/components/primitives/toast.tsx",
+    "./components/chat": "./src/components/chat/index.tsx",
+    "./components/business": "./src/components/business/index.tsx",
+    "./components/business/BrandSlogan": "./src/components/business/BrandSlogan.tsx",
+    "./components/business/charts": "./src/components/business/charts.tsx",
+    "./components/plan/*": "./src/components/plan/*",
+    "./components/auth/ProtectedRoute": "./src/components/auth/ProtectedRoute.tsx",
+    "./types/*": "./src/types/*",
+    "./api/auth": "./src/api/auth.ts"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

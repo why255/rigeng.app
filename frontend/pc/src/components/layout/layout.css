@@ -1,0 +1,239 @@
+/* =============================================================
+ * PC 端布局框架
+ * 始终显示侧边栏 + 顶部栏，无移动端适配
+ * ============================================================= */
+
+.rg-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-brand-bg-page);
+}
+
+/* ---------- 左侧导航栏（深色侧栏） ---------- */
+.rg-sidebar {
+  flex: none;
+  width: var(--sidebar-width);              /* 240px */
+  background: #2C1810;
+  color: #BCAAA4;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
+  z-index: 20;
+}
+.rg-sidebar__brand {
+  height: auto;
+  padding: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.rg-sidebar__brand-logo {
+  width: 40px;
+  height: 40px;
+  background: #C03A39;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #D4A574;
+  flex: none;
+}
+.rg-sidebar__brand-logo span {
+  color: white;
+  font-family: var(--font-family-guofeng);
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+}
+.rg-sidebar__brand-text {
+  display: flex;
+  flex-direction: column;
+}
+.rg-sidebar__brand-name {
+  color: #FFFFFF;
+  font-size: 18px;
+  font-family: var(--font-family-guofeng);
+  line-height: 1.2;
+}
+.rg-sidebar__slogan {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+}
+.rg-sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md) 0;
+}
+.rg-sidebar__board {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+.rg-sidebar__board-arrow {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.rg-sidebar__board-group {
+  margin-bottom: var(--spacing-md);
+}
+.rg-navitem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: var(--sidebar-item-height);       /* 48px */
+  padding: 0 var(--spacing-lg);
+  margin-bottom: 0;
+  border-radius: 0;
+  font-size: var(--font-size-l5);
+  font-weight: var(--font-weight-medium);
+  color: #BCAAA4;
+  position: relative;
+  transition: all var(--duration-fast) var(--easing-default);
+  border-left: 4px solid transparent;
+  text-decoration: none;
+}
+.rg-navitem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #FFFFFF;
+}
+.rg-navitem--active {
+  background: #1A0F0A;
+  color: #FFFFFF;
+  border-left-color: #C03A39;
+}
+.rg-navitem__icon {
+  width: 24px;
+  text-align: center;
+  font-size: 18px;
+}
+.rg-sidebar__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+}
+.rg-sidebar__settings-link {
+  color: #BCAAA4;
+  font-size: 20px;
+  transition: color var(--duration-fast);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+}
+.rg-sidebar__settings-link:hover {
+  color: #FFFFFF;
+}
+
+/* 板块标签（如 "PRIVATE"） */
+.rg-sidebar__board-badge {
+  display: inline-block;
+  margin-left: var(--spacing-sm);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+  vertical-align: middle;
+}
+
+/* ---------- 主区域 ---------- */
+.rg-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 顶部栏 64px ---------- */
+.rg-topbar {
+  height: var(--topbar-height);
+  flex: none;
+  background: var(--color-brand-white);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-2xl);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.rg-topbar__left { min-width: 0; display: flex; align-items: center; }
+.rg-topbar__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-l5);
+}
+.rg-topbar__breadcrumb-board {
+  color: #999;
+}
+.rg-topbar__breadcrumb-sep {
+  color: #D4A574;
+}
+.rg-topbar__breadcrumb-module {
+  color: #333;
+  font-weight: var(--font-weight-bold);
+}
+.rg-topbar__right { display: flex; align-items: center; gap: var(--spacing-lg); }
+.rg-topbar__settings {
+  color: #666;
+  font-size: 20px;
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+.rg-topbar__settings:hover {
+  color: #C03A39;
+}
+.rg-topbar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+.rg-topbar__user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: #E8D5B7;
+  border: 1px solid rgba(212, 165, 116, 0.3);
+  overflow: hidden;
+}
+.rg-topbar__user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rg-topbar__user-name {
+  font-size: var(--font-size-l5);
+  font-weight: var(--font-weight-medium);
+  color: #333;
+}
+
+/* ---------- 离线状态横幅 ---------- */
+.rg-offline {
+  height: var(--offline-banner-height);
+  background: var(--color-warning-bg);
+  color: var(--color-alert);
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-l5);
+  animation: fadeIn var(--duration-slow) var(--easing-out);
+}
+
+/* ---------- 页面容器 ---------- */
+.rg-page {
+  flex: 1;
+  padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-3xl);
+  overflow-y: auto;
+}

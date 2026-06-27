@@ -1,0 +1,178 @@
+/* =============================================================
+ * 基础通用组件样式（A 层）
+ * 全部走 CSS 变量 —— 锁定书第七章组件规范
+ * ============================================================= */
+
+/* ---------- 02 卡片 ---------- */
+.rg-card {
+  background: var(--color-brand-white);
+  border-radius: var(--radius-lg);          /* 12px */
+  box-shadow: var(--shadow-md);             /* 0 2px 8px rgba(0,0,0,.06) */
+  padding: var(--spacing-lg);               /* 16px */
+  position: relative;
+  transition: box-shadow var(--duration-normal) var(--easing-default);
+}
+.rg-card--hover:hover {
+  box-shadow: var(--shadow-md-hover);
+}
+.rg-card--clickable { cursor: pointer; }
+/* 四象限左侧色条（宽4px） */
+.rg-card--bar { padding-left: calc(var(--spacing-lg) + 4px); }
+.rg-card--bar::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: var(--bar-color, var(--module-color-bar));
+}
+
+/* ---------- 07 进度条 ---------- */
+.rg-progress {
+  width: 100%;
+  height: var(--progress-height);          /* 6px */
+  background: var(--color-brand-bg);        /* #F5EFE6 */
+  border-radius: var(--progress-radius);    /* 3px */
+  overflow: hidden;
+}
+.rg-progress__fill {
+  height: 100%;
+  background: var(--color-brand-primary);   /* #8B4513 */
+  border-radius: var(--progress-radius);
+  transition: width var(--duration-slow) var(--easing-in-out);
+}
+.rg-progress__fill--courage {
+  background: linear-gradient(90deg, var(--courage-gradient-start), var(--courage-gradient-end));
+}
+
+/* ---------- 08 按钮 ---------- */
+.rg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-l4);
+  font-weight: var(--font-weight-semi-bold);
+  border-radius: var(--radius-md);          /* 8px */
+  transition: background var(--duration-normal), transform var(--duration-fast);
+  white-space: nowrap;
+}
+.rg-btn:active { transform: scale(0.97); }
+.rg-btn--primary {
+  background: var(--color-brand-primary);
+  color: var(--color-brand-white);
+  padding: 12px 24px;
+}
+.rg-btn--primary:hover { background: var(--color-brand-primary-hover); }
+.rg-btn--secondary {
+  background: var(--color-brand-primary-light);
+  color: var(--color-brand-primary);
+  padding: 12px 24px;
+}
+.rg-btn--text {
+  background: transparent;
+  color: var(--color-brand-primary);
+  padding: 8px 12px;
+}
+.rg-btn--sm { padding: 8px 16px; font-size: var(--font-size-l5); }
+.rg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ---------- 03 输入框 ---------- */
+.rg-input,
+.rg-textarea {
+  width: 100%;
+  min-height: var(--input-min-height);      /* 44px */
+  padding: 11px var(--spacing-md);
+  font-size: var(--font-size-l4);
+  color: var(--color-neutral-900);
+  background: var(--color-brand-white);
+  border: 1px solid var(--color-neutral-100);
+  border-radius: var(--radius-md);          /* 8px */
+  transition: border-color var(--duration-normal), box-shadow var(--duration-normal);
+}
+.rg-textarea {
+  max-height: var(--input-max-height);      /* 120px */
+  overflow-y: auto;
+  resize: none;
+  line-height: var(--line-height-l4);
+}
+.rg-input::placeholder,
+.rg-textarea::placeholder { color: var(--color-neutral-300); }
+.rg-input:focus,
+.rg-textarea:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ---------- 标签 / Tag ---------- */
+.rg-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-l7);
+  line-height: var(--line-height-l7);
+  padding: 3px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-brand-primary-light);
+  color: var(--color-brand-primary);
+}
+.rg-tag--muted { background: var(--color-neutral-25); color: var(--color-neutral-500); }
+.rg-tag--success { background: var(--color-success-bg); color: var(--color-success); }
+.rg-tag--warning { background: var(--color-warning-bg); color: var(--color-alert); }
+.rg-tag--error { background: var(--color-error-bg); color: var(--color-error); }
+
+/* ---------- 25b 小耕 IP 头像 ---------- */
+.rg-avatar {
+  flex: none;
+  width: var(--avatar-size-sm);             /* 36px */
+  height: var(--avatar-size-sm);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: linear-gradient(135deg, var(--color-voice-gradient-start), var(--color-voice-gradient-end));
+  color: var(--color-brand-white);
+  user-select: none;
+}
+.rg-avatar--lg { width: var(--avatar-size-lg); height: var(--avatar-size-lg); font-size: 26px; }
+
+/* ---------- 10 锁图标 ---------- */
+.rg-lock {
+  opacity: 0.4;
+  cursor: pointer;
+  font-size: var(--icon-size-sm);
+}
+
+/* ---------- 09 Toast ---------- */
+.rg-toast-layer {
+  position: fixed;
+  left: 50%;
+  bottom: var(--toast-bottom);
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  align-items: center;
+  pointer-events: none;
+}
+.rg-toast {
+  max-width: var(--toast-max-width);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-l5);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: fadeSlideUp var(--duration-slow) var(--easing-out);
+}
+.rg-toast--success { background: var(--color-success-bg); color: var(--color-neutral-900); }
+.rg-toast--warning { background: var(--color-warning-bg); color: var(--color-neutral-900); }
+.rg-toast--error { background: var(--color-error-bg); color: var(--color-neutral-900); }
+.rg-toast--neutral { background: var(--color-toast-neutral); color: var(--color-toast-neutral-text); }

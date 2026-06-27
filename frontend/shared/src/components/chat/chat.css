@@ -1,0 +1,129 @@
+/* =============================================================
+ * 对话类组件（04/05/06/12 + 25c）
+ * ============================================================= */
+
+/* ---------- 05 对话气泡 ---------- */
+.rg-bubble-row {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  animation: fadeSlideUp var(--duration-slow) var(--easing-out);
+}
+.rg-bubble-row--user { flex-direction: row-reverse; }
+
+.rg-bubble {
+  max-width: 78%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-l4);
+  line-height: var(--line-height-l4);
+  color: var(--color-neutral-900);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* 小耕气泡：左上 0，其余 12px */
+.rg-bubble--assistant {
+  background: var(--color-bubble-assistant);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) var(--radius-lg);
+}
+/* 用户气泡：右上 0，其余 12px */
+.rg-bubble--user {
+  background: var(--color-bubble-user);
+  border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* ---------- 25c 思考等待动画 (>3s) ---------- */
+.rg-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-l4);
+  margin-bottom: var(--spacing-lg);
+}
+.rg-thinking__spinner {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  animation: spin var(--duration-loading) var(--easing-linear) infinite;
+}
+
+/* ---------- 04 语音按钮 ---------- */
+.rg-voice {
+  width: var(--voice-button-size);          /* 80px */
+  height: var(--voice-button-size);
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-voice-gradient-start), var(--color-voice-gradient-end));
+  color: var(--color-brand-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  border: none;
+  /* 空闲态：持续呼吸缩放 1.0→0.92→1.0，200ms 每周期 */
+  animation: breathePulse 2.4s var(--easing-in-out) infinite;
+  transition: background var(--duration-normal) var(--easing-default),
+              box-shadow var(--duration-normal) var(--easing-default);
+}
+.rg-voice:hover {
+  box-shadow: var(--shadow-md-hover);
+}
+.rg-voice:active {
+  animation: breathePulse 200ms var(--easing-in-out); /* 按下时加速呼吸 */
+}
+.rg-voice--recording {
+  background: var(--color-voice-recording); /* 录音中常亮红 */
+  animation: ripple 0.33s var(--easing-out) infinite; /* 脉冲波纹 3次/秒 */
+  box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.25);
+}
+/* 小尺寸变体（顶部栏语音唤醒 32px） */
+.rg-voice--sm {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+  font-size: 16px;
+  box-shadow: none;
+  animation: none; /* 小尺寸不需要呼吸动效 */
+}
+
+/* ---------- 06 语音播放图标（3道竖条波形） ---------- */
+.rg-voiceplay {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.rg-voiceplay__bar {
+  width: 3px;
+  height: 60%;
+  background: var(--color-brand-primary);
+  border-radius: 2px;
+}
+.rg-voiceplay--playing .rg-voiceplay__bar { animation: wave 0.6s var(--easing-in-out) infinite; }
+.rg-voiceplay--playing .rg-voiceplay__bar:nth-child(2) { animation-delay: 0.1s; }
+.rg-voiceplay--playing .rg-voiceplay__bar:nth-child(3) { animation-delay: 0.2s; }
+
+/* ---------- 12 录音波形 ---------- */
+.rg-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 48px;
+}
+.rg-waveform__bar {
+  width: 3px;
+  background: var(--color-brand-secondary);
+  border-radius: 2px;
+  animation: wave 0.8s var(--easing-in-out) infinite;
+}
+
+/* ---------- 底部固定输入区 ---------- */
+.rg-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) 0;
+}
+.rg-composer__field { flex: 1; }

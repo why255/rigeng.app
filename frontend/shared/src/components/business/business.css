@@ -1,0 +1,135 @@
+/* =============================================================
+ * 业务特征组件（B 层）+ 全局状态辅助（C 层）子集
+ * ============================================================= */
+
+/* ---------- 14 双库切换面板 ---------- */
+.rg-duallib {
+  display: inline-flex;
+  position: relative;
+  background: var(--color-brand-bg);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+}
+.rg-duallib__tab {
+  position: relative;
+  z-index: 1;
+  padding: 8px 20px;
+  font-size: var(--font-size-l2);
+  font-weight: var(--font-weight-semi-bold);
+  color: var(--color-neutral-500);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-normal);
+}
+.rg-duallib__tab--active { color: var(--color-brand-white); }
+.rg-duallib__slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-brand-primary);
+  transition: transform var(--duration-normal) var(--easing-in-out),
+              width var(--duration-normal) var(--easing-in-out);
+  z-index: 0;
+}
+
+/* ---------- 23 五步法步骤条 (StepFlow) ---------- */
+.rg-stepflow {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+.rg-stepflow__step {
+  flex: 1;
+  text-align: center;
+  padding: var(--spacing-md) var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  background: var(--color-brand-white);
+  border: 1px solid var(--color-neutral-100);
+  cursor: pointer;
+  transition: all var(--duration-slow) var(--easing-in-out);
+}
+.rg-stepflow__step--done { border-color: var(--module-color-accent); }
+.rg-stepflow__step--current {
+  border-color: var(--module-color-accent);
+  background: var(--module-color-light);
+  box-shadow: var(--shadow-md);
+}
+.rg-stepflow__badge { font-size: 20px; display: block; margin-bottom: var(--spacing-xs); }
+.rg-stepflow__name { font-size: var(--font-size-l5); color: var(--color-neutral-700); }
+
+/* ---------- 25g 情绪评分面板 ---------- */
+.rg-moodscore { display: flex; flex-direction: column; gap: var(--spacing-md); }
+.rg-moodscore__row { display: flex; align-items: center; gap: var(--spacing-md); }
+.rg-moodscore__label { width: 72px; font-size: var(--font-size-l5); color: var(--color-neutral-500); }
+.rg-moodscore__track {
+  position: relative; flex: 1; height: 10px;
+  background: var(--color-neutral-50); border-radius: 5px;
+}
+.rg-moodscore__fill {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  background: var(--color-dark-accent); border-radius: 5px;
+}
+.rg-moodscore__value { width: 36px; text-align: right; font-size: var(--font-size-l5); color: var(--color-neutral-700); }
+
+/* ---------- 25h 勇气值进度条 ---------- */
+.rg-courage { display: flex; align-items: center; gap: var(--spacing-md); }
+.rg-courage__label { color: var(--courage-text); font-size: var(--font-size-l5); white-space: nowrap; }
+.rg-courage__bar { flex: 1; }
+
+/* ---------- 18 角色模拟面板 ---------- */
+.rg-rolepanel__tabs {
+  display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+.rg-rolepanel__tab {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-size-l4);
+  color: var(--color-neutral-500);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.rg-rolepanel__tab--active {
+  color: var(--module-color-accent);
+  border-bottom-color: var(--module-color-accent);
+  font-weight: var(--font-weight-semi-bold);
+}
+
+/* ---------- 17 甘特图（轻量） ---------- */
+.rg-gantt { width: 100%; border-collapse: collapse; font-size: var(--font-size-l5); }
+.rg-gantt th, .rg-gantt td {
+  border: 1px solid var(--color-neutral-50);
+  padding: var(--spacing-sm);
+  text-align: left;
+}
+.rg-gantt th { background: var(--color-brand-primary-light); color: var(--color-neutral-700); font-weight: var(--font-weight-semi-bold); }
+.rg-gantt__cell { position: relative; height: 20px; padding: 4px !important; }
+.rg-gantt__plan, .rg-gantt__actual {
+  display: block; height: 7px; border-radius: var(--radius-sm); margin: 1px 0;
+}
+.rg-gantt__plan { background: var(--color-neutral-100); }
+.rg-gantt__actual { background: var(--color-brand-primary); }
+.rg-gantt__actual--late { background: var(--color-error); } /* 逾期红色高亮 */
+
+/* ---------- 15 富文本编辑器占位 ---------- */
+.rg-richtext { border: 1px solid var(--color-neutral-100); border-radius: var(--radius-md); overflow: hidden; }
+.rg-richtext__toolbar {
+  display: flex; gap: var(--spacing-sm); flex-wrap: wrap;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-brand-primary-light);
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+.rg-richtext__tool {
+  font-size: var(--font-size-l5); color: var(--color-neutral-700);
+  padding: 2px 6px; border-radius: var(--radius-sm);
+}
+.rg-richtext__tool:hover { background: var(--color-brand-white); }
+.rg-richtext__area {
+  min-height: 220px; padding: var(--spacing-lg);
+  font-size: var(--font-size-l4); line-height: var(--line-height-l4);
+  color: var(--color-neutral-900);
+}
+.rg-richtext__area:focus { outline: none; }
+
+/* ---------- 16 数据图表（轻量 SVG）---------- */
+.rg-chart { width: 100%; }
+.rg-chart__title { font-size: var(--font-size-l5); color: var(--color-neutral-500); margin-bottom: var(--spacing-sm); }

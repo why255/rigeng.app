@@ -1,0 +1,41 @@
+# 日耕后台 — 本地开发依赖中间件
+# 用法：docker compose up -d   （需先安装 Docker Desktop）
+# ⚠️ 待昊宇确认服务器环境与版本；生产走 Kubernetes，本文件仅本地开发。
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16        # PostgreSQL 16 + pgvector（步骤1选型）
+    container_name: rigeng-postgres
+    environment:
+      POSTGRES_USER: rigeng
+      POSTGRES_PASSWORD: rigeng
+      POSTGRES_DB: rigeng
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine                 # 缓存 / 会话 / 推送频控计数
+    container_name: rigeng-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data                   # AOF 持久化数据目录
+
+  # 对象存储（音视频大文件）；MVP 可选，先注释，待昊宇确认自建 MinIO vs 云 OSS
+  # minio:
+  #   image: minio/minio
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: rigeng
+  #     MINIO_ROOT_PASSWORD: rigeng123
+  #   ports: ["9000:9000", "9001:9001"]
+  #   volumes: [miniodata:/data]
+
+volumes:
+  pgdata:
+  redisdata:
+  # miniodata:

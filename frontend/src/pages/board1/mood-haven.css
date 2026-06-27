@@ -1,0 +1,1206 @@
+/**
+ * 情绪树洞 · 模块专属样式
+ * 完全对齐 m3-p1.html ~ m3-p4.html 新UI设计
+ *
+ * 色板：
+ *   页面底色 #F5F3EF   主强调色 #C03A39   金色点缀 #FFCC80 / #D4A574
+ *   卡片边框 #E8E0D6   卡片背景 #FFFFFF    正文 #333
+ *   辅助文字 #999 / #666
+ *
+ * 暗色主题（倾诉对话页 + 可选全局暗色）：
+ *   底色 #1a1a1a   卡片 #2d2d44   气泡-小耕 #2d2d44   气泡-用户 #3a3a5c
+ *   正文 #E0E0E0   辅助 #B0B0B0   强调 #FFCC80
+ */
+
+/* ══════════════════════════════════════════════════════════════
+   1. 页面容器覆盖
+   ══════════════════════════════════════════════════════════════ */
+.rg-page:has([data-module="mood-haven"]) {
+  padding: 0;
+}
+.rg-page:has([data-module="mood-haven"][data-page="chat"]) {
+  overflow: hidden;
+}
+[data-module="mood-haven"] {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #F5F3EF;
+  min-height: 0;
+}
+/* 暗色主题：倾诉对话页 */
+[data-module="mood-haven"][data-page="chat"] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* 全局暗色模式（由历史页/倾诉页切换触发） */
+:root[data-theme="dark"] [data-module="mood-haven"] {
+  background-color: #1a1a1a;
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 内容区域基类
+   ══════════════════════════════════════════════════════════════ */
+.mh-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  width: 100%;
+}
+/* 对话页（暗色全高布局） */
+.mh-page--chat {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 16px 100px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 品牌标语区
+   ══════════════════════════════════════════════════════════════ */
+.mh-hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.mh-hero__slogan {
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.6;
+}
+.mh-hero__divider {
+  width: 96px;
+  height: 1px;
+  background: #E0D5C7;
+  margin: 16px auto;
+}
+.mh-hero__title {
+  font-size: 26px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 800;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.mh-hero__title--small {
+  font-size: 17px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 700;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.mh-hero__subtitle {
+  font-size: 14px;
+  color: #999;
+  margin-top: 8px;
+}
+
+/* 暗色下品牌语 */
+:root[data-theme="dark"] .mh-hero__slogan,
+:root[data-theme="dark"] .mh-hero__title,
+:root[data-theme="dark"] .mh-hero__title--small {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-hero__divider {
+  background: #3a3a5c;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. 卡片
+   ══════════════════════════════════════════════════════════════ */
+.mh-card {
+  background: #FFFFFF;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.mh-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.mh-card__header-icon {
+  font-size: 18px;
+}
+.mh-card__header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+/* 可点击卡片（如成长手册预览） */
+.mh-card--link {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mh-card--link:hover {
+  border-color: #FFCC80;
+  box-shadow: 0 2px 8px rgba(255,204,128,0.2);
+}
+
+/* 暗色下卡片 */
+:root[data-theme="dark"] .mh-card {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-card__header-title {
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5. 安全承诺语气泡
+   ══════════════════════════════════════════════════════════════ */
+.mh-safe-promise {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.mh-safe-promise__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #FFF0E5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+.mh-safe-promise__bubble {
+  background: #FFF0E5;
+  border: 1px solid #FFE0D0;
+  border-radius: 16px 16px 16px 0;
+  padding: 20px;
+  max-width: 80%;
+}
+.mh-safe-promise__text {
+  color: #555;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.mh-safe-promise__text strong {
+  color: #333;
+}
+
+/* 暗色下承诺语 */
+:root[data-theme="dark"] .mh-safe-promise__avatar {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-safe-promise__bubble {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-safe-promise__text {
+  color: #B0B0B0;
+}
+:root[data-theme="dark"] .mh-safe-promise__text strong {
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 情绪评分滑块
+   ══════════════════════════════════════════════════════════════ */
+.mh-emotion-slider-group {
+  margin-bottom: 16px;
+}
+.mh-emotion-slider-group__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mh-emotion-slider-group__label {
+  font-size: 14px;
+  color: #999;
+}
+.mh-emotion-slider-group__value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFCC80;
+}
+.mh-emotion-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #f0f0f0;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  accent-color: #FFCC80;
+}
+.mh-emotion-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFCC80;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.mh-emotion-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #ccc;
+  margin-top: 4px;
+}
+
+/* 暗色下滑块 */
+:root[data-theme="dark"] .mh-emotion-slider {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-emotion-slider-group__label {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 勇气值进度条
+   ══════════════════════════════════════════════════════════════ */
+.mh-courage-bar {
+  margin-bottom: 8px;
+}
+.mh-courage-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mh-courage-bar__label {
+  font-size: 14px;
+  color: #999;
+}
+.mh-courage-bar__value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-courage-bar__track {
+  width: 100%;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mh-courage-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #FFCC80 0%, #C03A39 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+:root[data-theme="dark"] .mh-courage-bar__track {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-courage-bar__value {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-courage-bar__label {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 主按钮
+   ══════════════════════════════════════════════════════════════ */
+.mh-btn-primary {
+  display: block;
+  width: 100%;
+  padding: 16px 24px;
+  background: #C03A39;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(192,58,57,0.15);
+  transition: background 0.2s, transform 0.1s;
+}
+.mh-btn-primary:hover {
+  background: #A0302F;
+}
+.mh-btn-primary:active {
+  transform: scale(0.98);
+}
+.mh-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #E8E0D6;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mh-btn-secondary:hover {
+  background: #eee;
+  color: #333;
+}
+.mh-nav-link {
+  font-size: 14px;
+  color: #999;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.2s;
+}
+.mh-nav-link:hover {
+  color: #C03A39;
+}
+
+/* 暗色下按钮 */
+:root[data-theme="dark"] .mh-btn-secondary {
+  background: #3a3a5c;
+  border-color: #4a4a6c;
+  color: #B0B0B0;
+}
+:root[data-theme="dark"] .mh-btn-secondary:hover {
+  background: #4a4a6c;
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 对话页（暗色主题）
+   ══════════════════════════════════════════════════════════════ */
+.mh-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.mh-chat__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* 兼容旧滚动容器 */
+.mh-chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 气泡 */
+.mh-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.mh-bubble-row--user {
+  flex-direction: row-reverse;
+}
+.mh-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.mh-avatar--assistant {
+  background: #C03A39;
+  color: #fff;
+  font-family: 'ZCOOL XiaoWei', serif;
+}
+.mh-avatar--user {
+  background: #E8E0D6;
+  color: #333;
+  overflow: hidden;
+}
+.mh-avatar--user img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mh-bubble {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.mh-bubble--assistant {
+  background: #2d2d44;
+  color: #E0E0E0;
+  border-top-left-radius: 0;
+}
+.mh-bubble--user {
+  background: #3a3a5c;
+  color: #E0E0E0;
+  border-top-right-radius: 0;
+}
+.mh-bubble-time {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+.mh-bubble-row--user .mh-bubble-time {
+  text-align: right;
+}
+
+/* 思考动画 */
+.mh-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #B0B0B0;
+  font-size: 13px;
+}
+.mh-thinking__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #3a3a5c;
+  border-top: 2px solid #FFCC80;
+  border-radius: 50%;
+  animation: mh-spin 0.8s linear infinite;
+}
+@keyframes mh-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10. 计时器
+   ══════════════════════════════════════════════════════════════ */
+.mh-timer {
+  text-align: center;
+  padding: 8px 0;
+  font-size: 12px;
+  color: #FFCC80;
+  font-weight: 500;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   11. 语音按钮（呼吸动画）
+   ══════════════════════════════════════════════════════════════ */
+@keyframes mh-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 204, 128, 0.4); }
+  50% { transform: scale(1.1); box-shadow: 0 0 20px 10px rgba(255, 204, 128, 0.2); }
+}
+@keyframes mh-breathe-recording {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(192, 58, 57, 0.6); }
+  50% { transform: scale(1.15); box-shadow: 0 0 24px 12px rgba(192, 58, 57, 0.3); }
+}
+.mh-voice-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFCC80 0%, #E8A94D 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  animation: mh-breathe 2s infinite ease-in-out;
+  transition: transform 0.1s;
+  font-size: 36px;
+}
+.mh-voice-btn:hover {
+  transform: scale(1.05);
+}
+.mh-voice-btn--recording {
+  background: linear-gradient(135deg, #C03A39 0%, #E53935 100%);
+  animation: mh-breathe-recording 1.5s infinite ease-in-out;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. 底部输入区
+   ══════════════════════════════════════════════════════════════ */
+.mh-chat__composer {
+  flex-shrink: 0;
+  padding: 16px 0 8px;
+}
+.mh-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.mh-composer textarea {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #3a3a5c;
+  border-radius: 12px;
+  background: #2d2d44;
+  color: #E0E0E0;
+  font-size: 14px;
+  font-family: 'Noto Sans SC', sans-serif;
+  resize: none;
+  outline: none;
+  min-height: 48px;
+  max-height: 120px;
+}
+.mh-composer textarea::placeholder {
+  color: #666;
+}
+.mh-composer textarea:focus {
+  border-color: #FFCC80;
+}
+.mh-composer__send {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #C03A39;
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.mh-composer__send:hover {
+  background: #A0302F;
+}
+.mh-composer__send:disabled {
+  background: #3a3a5c;
+  color: #666;
+  cursor: not-allowed;
+}
+.mh-voice-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 8px;
+}
+.mh-voice-bar__hint {
+  font-size: 10px;
+  color: #666;
+}
+.mh-composer__actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 0;
+}
+.mh-composer__keyboard-toggle {
+  font-size: 12px;
+  color: #999;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mh-composer__keyboard-toggle:hover {
+  color: #fff;
+}
+.mh-composer__end-link {
+  font-size: 12px;
+  color: #FFCC80;
+  font-weight: 700;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mh-composer__end-link:hover {
+  text-decoration: underline;
+}
+.mh-composer__privacy-note {
+  font-size: 10px;
+  color: #666;
+  text-align: center;
+  padding-top: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   13. 危机干预弹窗
+   ══════════════════════════════════════════════════════════════ */
+.mh-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+  animation: mh-fade-in 0.3s ease;
+}
+@keyframes mh-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mh-modal {
+  background: #2d2d44;
+  border: 1px solid rgba(192,58,57,0.3);
+  border-radius: 24px;
+  padding: 32px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.mh-modal__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(192,58,57,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 32px;
+}
+.mh-modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.mh-modal__desc {
+  font-size: 14px;
+  color: #B0B0B0;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.mh-modal__hotline {
+  font-size: 28px;
+  font-weight: 700;
+  color: #C03A39;
+  letter-spacing: 0.1em;
+  margin-bottom: 20px;
+}
+.mh-modal__close {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255,255,255,0.05);
+  color: #B0B0B0;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.mh-modal__close:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   14. 30分钟温柔提醒
+   ══════════════════════════════════════════════════════════════ */
+.mh-time-alert {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background: #FFCC80;
+  color: #333;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: mh-slide-down 0.5s ease;
+}
+@keyframes mh-slide-down {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.mh-time-alert__icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mh-time-alert__text {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   15. 成长手册条目
+   ══════════════════════════════════════════════════════════════ */
+.mh-growth-entry {
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+/* 左侧彩色边框 */
+.mh-growth-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+.mh-growth-entry--growth::before {
+  background: #FFCC80;
+}
+.mh-growth-entry--emotion::before {
+  background: #C03A39;
+}
+.mh-growth-entry--cognition::before {
+  background: #9E9E9E;
+}
+.mh-growth-entry__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.mh-growth-entry__date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+}
+.mh-growth-entry__tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.mh-growth-entry__tag--growth {
+  background: #FFF3E0;
+  color: #E65100;
+  border: 1px solid #FFE0B2;
+}
+.mh-growth-entry__tag--emotion {
+  background: #FFEBEE;
+  color: #C62828;
+  border: 1px solid #FFCDD2;
+}
+.mh-growth-entry__tag--cognition {
+  background: #F5F5F5;
+  color: #616161;
+  border: 1px solid #E0E0E0;
+}
+.mh-growth-entry__content {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 12px;
+}
+.mh-growth-entry__meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #999;
+}
+.mh-growth-entry__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 暗色下 */
+:root[data-theme="dark"] .mh-growth-entry {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-growth-entry__content {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   16. 加载更多按钮
+   ══════════════════════════════════════════════════════════════ */
+.mh-load-more {
+  text-align: center;
+  padding: 32px 0;
+}
+.mh-load-more__btn {
+  font-size: 14px;
+  color: #999;
+  background: none;
+  border: 1px solid #E8E0D6;
+  border-radius: 12px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mh-load-more__btn:hover {
+  color: #C03A39;
+  border-color: #C03A39;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   17. 情绪趋势柱状图
+   ══════════════════════════════════════════════════════════════ */
+.mh-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 160px;
+  padding: 0 12px;
+  gap: 8px;
+}
+.mh-chart__bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.mh-chart__bar {
+  width: 100%;
+  max-width: 48px;
+  border-radius: 6px 6px 0 0;
+  transition: height 0.7s ease;
+  min-height: 4px;
+}
+.mh-chart__bar--positive {
+  background: #FFCC80;
+}
+.mh-chart__bar--negative {
+  background: #C03A39;
+}
+.mh-chart__label {
+  font-size: 10px;
+  color: #999;
+}
+.mh-chart__section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0 4px 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   18. 历史记录列表
+   ══════════════════════════════════════════════════════════════ */
+.mh-history-list {
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.mh-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #f5f5f5;
+}
+.mh-history-item:last-child {
+  border-bottom: none;
+}
+.mh-history-item:hover {
+  background: #fafaf8;
+}
+.mh-history-item__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.mh-history-item__emoji {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mh-history-item__emoji--happy {
+  background: #E8F5E9;
+}
+.mh-history-item__emoji--neutral {
+  background: #FFF3E0;
+}
+.mh-history-item__emoji--sad {
+  background: #FFEBEE;
+}
+.mh-history-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mh-history-item__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-history-item__title--negative {
+  color: #C03A39;
+}
+.mh-history-item__detail {
+  font-size: 12px;
+  color: #999;
+}
+.mh-history-item__arrow {
+  color: #ddd;
+  font-size: 18px;
+}
+
+/* 暗色下 */
+:root[data-theme="dark"] .mh-history-list {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-history-item {
+  border-bottom-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-history-item:hover {
+  background: #35355a;
+}
+:root[data-theme="dark"] .mh-history-item__title {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-history-item__detail {
+  color: #888;
+}
+:root[data-theme="dark"] .mh-history-item__arrow {
+  color: #555;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   19. 暗色模式开关
+   ══════════════════════════════════════════════════════════════ */
+.mh-dark-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+}
+.mh-dark-toggle__icon {
+  font-size: 18px;
+  color: #999;
+}
+.mh-dark-toggle__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+.mh-dark-toggle__switch {
+  width: 48px;
+  height: 26px;
+  background: #E0E0E0;
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  border: none;
+}
+.mh-dark-toggle__switch--on {
+  background: #C03A39;
+}
+.mh-dark-toggle__switch-knob {
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.mh-dark-toggle__switch--on .mh-dark-toggle__switch-knob {
+  left: 24px;
+}
+
+/* 暗色下 */
+:root[data-theme="dark"] .mh-dark-toggle {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-dark-toggle__label {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-dark-toggle__switch {
+  background: #555;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   20. 情绪概览标签
+   ══════════════════════════════════════════════════════════════ */
+.mh-mood-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.mh-mood-badge--calm {
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+.mh-mood-badge--happy {
+  background: #FFF3E0;
+  color: #E65100;
+}
+.mh-mood-badge--tired {
+  background: #FFF8E1;
+  color: #F57F17;
+}
+.mh-mood-badge--sad {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   21. 成长手册预览
+   ══════════════════════════════════════════════════════════════ */
+.mh-growth-preview__stats {
+  display: flex;
+  gap: 12px;
+}
+.mh-growth-preview__stat {
+  background: #fafaf8;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.mh-growth-preview__stat--count {
+  flex: 1;
+}
+.mh-growth-preview__stat--recent {
+  flex: 2;
+}
+.mh-growth-preview__stat-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+.mh-growth-preview__stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-growth-preview__stat-value small {
+  font-size: 12px;
+  font-weight: 400;
+  color: #999;
+}
+.mh-growth-preview__recent-text {
+  font-size: 14px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   22. 底部链接区
+   ══════════════════════════════════════════════════════════════ */
+.mh-footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0;
+}
+.mh-footer-links__divider {
+  color: #ddd;
+  font-size: 12px;
+}
+.mh-footer-note {
+  text-align: center;
+  font-size: 12px;
+  color: #ccc;
+  padding-bottom: 16px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   23. 移动端适配
+   ══════════════════════════════════════════════════════════════ */
+/* 平板适配（768-1023px，侧边栏仍存在但窗口较窄） */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .mh-page {
+    padding: 32px 24px;
+  }
+  .mh-chart {
+    height: 140px;
+  }
+}
+
+/* 移动端响应式（<768px，底部 TabBar 布局） */
+@media (max-width: 767px) {
+  .mh-page {
+    padding: 24px 16px 120px;  /* 底部留出 TabBar 空间 */
+  }
+  .mh-page--chat {
+    padding: 0 12px 100px;
+  }
+  .mh-hero {
+    margin-bottom: 24px;
+  }
+  .mh-hero__title {
+    font-size: 22px;
+  }
+  .mh-hero__slogan {
+    font-size: 15px;
+  }
+  .mh-card {
+    padding: 16px;
+  }
+  .mh-chart {
+    height: 120px;
+  }
+  .mh-safe-promise {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .mh-safe-promise__bubble {
+    max-width: 100%;
+    border-radius: 16px;
+  }
+  .mh-growth-preview__stats {
+    flex-direction: column;
+  }
+  .mh-footer-links {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .mh-modal {
+    margin: 0 16px;
+  }
+  :root[data-theme="dark"] .mh-page--chat {
+    padding-bottom: 100px;
+  }
+}
