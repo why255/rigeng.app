@@ -270,3 +270,66 @@ export const extractionData: ExtractionResult = {
     { label: '文化匹配', stars: 3 },
   ],
 }
+
+/* M6 智能办公·最近文档 */
+export const recentDocs = [
+  { name: 'Q4 招聘计划.docx', time: '30分钟前', owner: '张姐' },
+  { name: '员工手册 · 2026版.pdf', time: '2小时前', owner: '李总' },
+  { name: '薪酬带宽设计 · 草稿.xlsx', time: '昨天', owner: '王经理' },
+]
+
+/* M6 智能办公·体系搭建六步 */
+export const systemSteps = [
+  { key: 's1', num: 1, title: '需求诊断', status: 'done' as const, desc: '系统自动分析组织需求与痛点，生成诊断报告' },
+  { key: 's2', num: 2, title: '框架设计', status: 'done' as const, desc: '基于诊断结果搭建体系框架与核心模块' },
+  { key: 's3', num: 3, title: '制度起草', status: 'current' as const, desc: '起草制度文件、流程图与操作手册' },
+  { key: 's4', num: 4, title: '工具配置', status: 'todo' as const, desc: '配置审批流、表单模板与自动化规则' },
+  { key: 's5', num: 5, title: '试运行', status: 'todo' as const, desc: '选定试点部门，收集反馈并迭代优化' },
+  { key: 's6', num: 6, title: '全员推行', status: 'todo' as const, desc: '发布正式版本，组织全员培训与宣讲' },
+]
+
+/* M7 高维求职·STAR 经历 */
+export const starExperiences = [
+  { company: '字节跳动', role: 'HRBP 高级经理', period: '2023.03 - 2025.12', status: 'done' as const },
+  { company: '阿里巴巴', role: '招聘专家', period: '2020.07 - 2023.02', status: 'done' as const },
+  { company: '美团', role: 'HR 管培生', period: '2018.09 - 2020.06', status: 'pending' as const },
+]
+
+/* M7 高维求职·技能晶体 */
+export const skillCrystals = {
+  what: '搭建并落地 HR 三支柱体系，覆盖招聘、绩效、薪酬、培训全模块',
+  how: '① 诊断现有 HR 流程痛点 → ② 设计 SSC/COE/HRBP 架构 → ③ 分阶段试点推行 → ④ 数据驱动迭代',
+  caution: '需要获得业务一号位的充分授权，初期试点部门选择至关重要',
+  result: 'HR 响应效率提升 40%，招聘周期缩短 30%，员工满意度从 3.2 提升至 4.5',
+  sop: '1. 组织诊断 → 2. 架构设计 → 3. 角色定义 → 4. 试点选型 → 5. 制度配套 → 6. 培训赋能 → 7. 数据复盘',
+}
+
+/* M7 高维求职·企业情报 */
+export const companyIntel = {
+  name: '蚂蚁集团',
+  position: 'HRBP 专家 · P8',
+  source: '脉脉、猎头反馈、公开财报',
+  business: '金融科技，核心业务包括支付宝、花呗、借呗、蚂蚁财富',
+  scale: '约 2 万人，HR 团队约 300 人',
+  summary: '蚂蚁集团正在推进组织升级，HRBP 团队需要既懂业务又懂数字化的复合型人才。该岗位汇报给 BU HR Head，负责 200+ 人的业务团队。面试流程通常为 4 轮：HR 电话初筛 → HRBP Lead 面试 → 业务负责人交叉面 → HR Head 终面。',
+  matchRate: 87,
+  matchDetails: [
+    { label: '行业匹配', value: 90 },
+    { label: '经验年限', value: 85 },
+    { label: '技能匹配', value: 88 },
+    { label: '文化契合', value: 85 },
+  ],
+  strategies: [
+    { title: '品牌策略', desc: '突出蚂蚁"让信用等于财富"的使命愿景，展示金融科技赛道的高速增长潜力', color: '#6B8FBF' },
+    { title: '兵法策略', desc: '准备 2-3 个组织变革实战案例，重点展示数据驱动决策能力与跨部门协同经验', color: '#C03A39' },
+  ],
+  questions: [
+    '你如何用数据驱动的方式做一次组织诊断？',
+    '面对业务部门对 HR 政策的不理解，你怎么处理？',
+    '能否分享一个你从 0 到 1 搭建 HR 体系的案例？',
+  ],
+  reviewTime: '2026-06-25 14:00',
+  reviewDuration: '48 分钟',
+  reviewAudio: '蚂蚁HRBP · 20260625.m4a',
+  reviewSOP: '1. 复盘面试全程 → 2. 标注关键问答 → 3. AI 评估表现 → 4. 匹配度分析 → 5. 生成改进建议',
+}
