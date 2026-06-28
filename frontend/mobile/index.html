@@ -16,7 +16,13 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="rg-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:PingFang SC,Microsoft YaHei,sans-serif;color:#666;font-size:14px">⏳ 日耕加载中...</div>
+    </div>
+    <script>
+      window.onerror=function(m,s,l,c,e){var r=document.getElementById('root');if(r&&r.children.length===1&&r.children[0].id==='rg-loading'){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><p style="color:#999">页面加载失败，请刷新重试</p></div>'}return!1};
+      setTimeout(function(){var r=document.getElementById('root');if(r&&(r.children.length===0||(r.children.length===1&&r.children[0].id==='rg-loading'))){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><h2 style="color:#2C1810">日耕</h2><p style="color:#666">加载超时</p><button onclick="location.reload()" style="margin-top:8px;padding:8px 24px;background:#2C1810;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">刷新重试</button></div>'}},5000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

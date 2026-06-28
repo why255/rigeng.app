@@ -14,7 +14,16 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- JS加载前占位：若3秒后仍无内容则显示 -->
+      <div id="rg-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:PingFang SC,Microsoft YaHei,sans-serif;color:#666;font-size:14px">⏳ 日耕加载中...</div>
+    </div>
+    <script>
+      // 诊断：JS加载失败时上报并显示友好提示
+      window.onerror=function(m,s,l,c,e){var r=document.getElementById('root');if(r&&r.children.length===1&&r.children[0].id==='rg-loading'){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><p style="color:#999">页面加载失败，请刷新重试</p><p style="font-size:12px;color:#bbb">'+((m||'').substring(0,80))+'</p></div>'}return!1};
+      // 超时检测：5秒后 root 仍为空 → 显示错误
+      setTimeout(function(){var r=document.getElementById('root');if(r&&(r.children.length===0||(r.children.length===1&&r.children[0].id==='rg-loading'))){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><h2 style="color:#2C1810">日耕</h2><p style="color:#666">页面加载超时，请检查网络后<button onclick="location.reload()" style="margin-left:8px;padding:4px 16px;background:#2C1810;color:#fff;border:none;border-radius:4px;cursor:pointer">刷新重试</button></p><p style="font-size:12px;color:#999">提示：如使用Chrome，请尝试无痕模式</p></div>'}},5000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
