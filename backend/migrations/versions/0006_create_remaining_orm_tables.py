@@ -906,7 +906,7 @@ def upgrade() -> None:
             {c},
             user_id {t['UUID']},
             scenario_type {t['V32']} DEFAULT 'custom',
-            current_role {t['V16']} DEFAULT 'client',
+            "current_role" {t['V16']} DEFAULT 'client',
             client_profile_json {t['JSON']},
             dialogue_json {t['JSON']},
             score_a {t['FLOAT']} DEFAULT 0.0,
