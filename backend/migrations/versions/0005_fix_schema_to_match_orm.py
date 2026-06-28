@@ -146,9 +146,10 @@ def upgrade() -> None:
         """)
     op.execute("CREATE INDEX IF NOT EXISTS ix_review_user ON review_record (user_id)")
 
-    # ── 第 5 步：创建 recording（幂等） ──
+    # ── 第 5 步：重建 recording（先删后建，因 0001 列名不同） ──
+    op.execute("DROP TABLE IF EXISTS recording CASCADE")
     op.execute(f"""
-        CREATE TABLE IF NOT EXISTS recording (
+        CREATE TABLE recording (
             {c},
             user_id {t['UUID']},
             title {t['V512']},
@@ -167,9 +168,10 @@ def upgrade() -> None:
     """)
     op.execute("CREATE INDEX IF NOT EXISTS ix_recording_user ON recording (user_id)")
 
-    # ── 第 6 步：创建 extraction_result（幂等） ──
+    # ── 第 6 步：重建 extraction_result（先删后建） ──
+    op.execute("DROP TABLE IF EXISTS extraction_result CASCADE")
     op.execute(f"""
-        CREATE TABLE IF NOT EXISTS extraction_result (
+        CREATE TABLE extraction_result (
             {c},
             recording_id {t['UUID']} UNIQUE,
             user_id {t['UUID']},
@@ -183,9 +185,10 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS ix_extraction_rec ON extraction_result (recording_id)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_extraction_user ON extraction_result (user_id)")
 
-    # ── 第 7 步：创建 transcript_segment（幂等） ──
+    # ── 第 7 步：重建 transcript_segment（先删后建，因 0001 列名不同） ──
+    op.execute("DROP TABLE IF EXISTS transcript_segment CASCADE")
     op.execute(f"""
-        CREATE TABLE IF NOT EXISTS transcript_segment (
+        CREATE TABLE transcript_segment (
             {c},
             recording_id {t['UUID']},
             user_id {t['UUID']},
@@ -202,9 +205,10 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS ix_transcript_rec ON transcript_segment (recording_id)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_transcript_user ON transcript_segment (user_id)")
 
-    # ── 第 8 步：创建 action_item（幂等） ──
+    # ── 第 8 步：重建 action_item（先删后建，因 0001 列名不同） ──
+    op.execute("DROP TABLE IF EXISTS action_item CASCADE")
     op.execute(f"""
-        CREATE TABLE IF NOT EXISTS action_item (
+        CREATE TABLE action_item (
             {c},
             recording_id {t['UUID']},
             extraction_id {t['UUID']},
