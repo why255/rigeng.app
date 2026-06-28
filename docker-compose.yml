@@ -9,7 +9,7 @@ services:
     environment:
       - RIGENG_ENV=prod
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      - DATABASE_URL=postgresql://rigeng:rigeng@db:5432/rigeng
+      - DATABASE_URL=postgresql+asyncpg://rigeng:rigeng@db:5432/rigeng
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:

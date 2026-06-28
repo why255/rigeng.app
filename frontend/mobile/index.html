@@ -7,32 +7,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>日耕（RiGeng）— 日耕朝夕，耕愈工作，耕暖生活</title>
-    <!-- 字体：仅用系统字体栈，不引用任何外部CDN，避免国内GFW白屏 -->
     <style>
-      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 400; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
-      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 500; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
-      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 700; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
-      @font-face { font-family: 'ZCOOL XiaoWei'; font-style: normal; font-weight: 400; font-display: swap; src: local('ZCOOL XiaoWei'), local('STKaiti'), local('KaiTi'), local('楷体'); }
+      body { font-family: 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif; }
     </style>
-    <!-- 图标CDN预连接 -->
-    <link rel="preconnect" href="https://api.iconify.design" />
-    <link rel="dns-prefetch" href="https://api.iconify.design" />
-    <link rel="dns-prefetch" href="https://api.simplesvg.com" />
-    <link rel="dns-prefetch" href="https://api.unisvg.com" />
-    <link rel="dns-prefetch" href="https://api.dicebear.com" />
   </head>
   <body>
-    <div id="root">
-      <div id="rg-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:PingFang SC,Microsoft YaHei,sans-serif;color:#666;font-size:15px;flex-direction:column;gap:8px">
-        <span style="font-size:36px">⏳</span>
-        <span>日耕加载中...</span>
-      </div>
-    </div>
-    <script>
-      window.onerror=function(m,s,l,c,e){var r=document.getElementById('root');if(r&&r.children.length===1&&r.children[0].id==='rg-loading'){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><p style="color:#999">页面加载失败，请刷新重试</p></div>'}return!1};
-      // 超时阈值 15 秒（移动端 495KB JS 在慢网约需 10-14 秒）
-      setTimeout(function(){var r=document.getElementById('root');if(r&&(r.children.length===0||(r.children.length===1&&r.children[0].id==='rg-loading'))){r.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:PingFang SC,Microsoft YaHei,sans-serif"><h2 style="color:#2C1810">日耕</h2><p style="color:#666">网络较慢，加载超时</p><button onclick="location.reload()" style="margin-top:8px;padding:10px 28px;background:#2C1810;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px">刷新重试</button></div>'}},15000);
-    </script>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

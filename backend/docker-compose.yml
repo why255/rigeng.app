@@ -5,7 +5,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16        # PostgreSQL 16 + pgvector（步骤1选型）
+    image: ankane/pgvector:latest         # PostgreSQL + pgvector
     container_name: rigeng-postgres
     environment:
       POSTGRES_USER: rigeng
@@ -17,7 +17,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine                 # 缓存 / 会话 / 推送频控计数
+    image: redis:alpine                    # 缓存 / 会话 / 推送频控计数
     container_name: rigeng-redis
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:

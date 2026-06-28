@@ -2074,8 +2074,7 @@ def voice_broadcast_core_metrics(db: Session, user_id: str,
         script_parts.append("每一天的积累都在让您变得更强。加油！")
 
     script = "".join(script_parts)
-    break_tag = '<break time="500ms"/>'
-    ssml = f"<speak>{break_tag.join(script_parts)}</speak>"
+    ssml = f"<speak>{'<break time=\"500ms\"/>'.join(script_parts)}</speak>"
 
     # 预估时长：约4字/秒
     duration = max(10, len(script) // 4)

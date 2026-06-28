@@ -1,30 +1,58 @@
 import { useState, useEffect } from 'react'
 import { PageContainer } from '@/components/layout/AppShell'
-import { getSystemBuilds, startSystemBuild, submitBuildStep } from '@/api/smart-office'
-import { systemSteps } from '@rigeng/shared/data/mock'
+import { startSystemBuild, submitBuildStep } from '@/api/smart-office'
 import { MAIN_SLOGAN } from '@rigeng/shared/data/modules'
 import { useToast } from '@rigeng/shared/components/primitives/toast'
 import '../pages.css'
 import './smart-office.css'
 
+interface SystemStep {
+  key: string
+  num: number
+  title: string
+  status: 'done' | 'current' | 'todo'
+  desc: string
+  summary?: string
+}
+
+const FALLBACK_STEPS: SystemStep[] = [
+  { key: 's1', num: 1, title: '需求诊断', status: 'current', desc: '系统自动分析组织需求与痛点，生成诊断报告' },
+  { key: 's2', num: 2, title: '框架设计', status: 'todo', desc: '基于诊断结果搭建体系框架与核心模块' },
+  { key: 's3', num: 3, title: '制度起草', status: 'todo', desc: '起草制度文件、流程图与操作手册' },
+  { key: 's4', num: 4, title: '工具配置', status: 'todo', desc: '配置审批流、表单模板与自动化规则' },
+  { key: 's5', num: 5, title: '试运行', status: 'todo', desc: '选定试点部门，收集反馈并迭代优化' },
+  { key: 's6', num: 6, title: '全员推行', status: 'todo', desc: '发布正式版本，组织全员培训与宣讲' },
+]
+
 /** M6-P3 智能办公·体系库 — 六步闭环进度条 + 步骤卡片 */
 export function SmartOfficeSystem() {
   const toast = useToast()
-  const [steps, setSteps] = useState(systemSteps)
+  const [steps, setSteps] = useState<SystemStep[]>(FALLBACK_STEPS)
   const [textInput, setTextInput] = useState('')
   const [buildId, setBuildId] = useState('')
   const [, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 尝试获取已有搭建记录，失败则启动新的
-    getSystemBuilds()
+    startSystemBuild({})
       .then((d) => {
-        if (d?.builds && d.builds.length > 0) {
-          const latest = d.builds[0]
-          setBuildId(latest.build_id)
+        if (d) {
+          setBuildId(d.build_id)
+          if (d.steps && d.steps.length > 0) {
+            setSteps(
+              d.steps.map((s) => ({
+                key: `s${s.step_num}`,
+                num: s.step_num,
+                title: s.step_title,
+                status: s.completed ? 'done' as const : s.step_num === d.current_step ? 'current' as const : 'todo' as const,
+                desc: s.question || s.hint || '',
+              })),
+            )
+          }
         }
       })
       .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   const doneCount = steps.filter((s) => s.status === 'done').length
@@ -37,22 +65,14 @@ export function SmartOfficeSystem() {
     const stepNum = idx + 1
     setSubmitting(true)
 
-    // 调用API提交步骤
-    const submitPromise = buildId
-      ? submitBuildStep(stepNum, { answer: textInput })
-      : startSystemBuild({}).then((d) => {
-          setBuildId(d.build_id)
-          return submitBuildStep(stepNum, { answer: textInput })
-        })
-
-    submitPromise
+    submitBuildStep(stepNum, { answer: textInput })
       .then(() => {
         setSteps((prev) =>
           prev.map((s, i) => {
             if (i === idx) return { ...s, status: 'done' as const, summary: textInput }
             if (i === idx + 1) return { ...s, status: 'current' as const }
             return s
-          })
+          }),
         )
         setTextInput('')
         if (idx + 1 === steps.length - 1) {
@@ -60,13 +80,12 @@ export function SmartOfficeSystem() {
         }
       })
       .catch(() => {
-        // API失败时仍更新本地状态
         setSteps((prev) =>
           prev.map((s, i) => {
             if (i === idx) return { ...s, status: 'done' as const, summary: textInput }
             if (i === idx + 1) return { ...s, status: 'current' as const }
             return s
-          })
+          }),
         )
         setTextInput('')
         if (idx + 1 === steps.length - 1) {
@@ -74,6 +93,14 @@ export function SmartOfficeSystem() {
         }
       })
       .finally(() => setSubmitting(false))
+  }
+
+  if (loading) {
+    return (
+      <PageContainer width="dashboard">
+        <p style={{ padding: 40, textAlign: 'center', color: 'var(--color-neutral-500)' }}>加载中...</p>
+      </PageContainer>
+    )
   }
 
   return (
@@ -119,7 +146,7 @@ export function SmartOfficeSystem() {
                   <span className="so-step-card__num">{String(s.num).padStart(2, '0')}</span>
                   <div style={{ flex: 1 }}>
                     <div className="so-step-card__header">
-                      <span className="so-step-card__icon">{s.icon}</span>
+                      <span className="so-step-card__icon">{s.status === 'done' ? '✅' : s.status === 'current' ? '\u{1F4DD}' : '\u{1F512}'}</span>
                       <h3 className="so-step-card__title">{s.title}</h3>
                       {s.status === 'done' && <span style={{ color: '#27AE60', marginLeft: 8 }}>✅</span>}
                     </div>
@@ -145,6 +172,7 @@ export function SmartOfficeSystem() {
                         <label style={{ fontSize: 14, fontWeight: 700, display: 'block', marginBottom: 8 }}>
                           本阶段核心任务：
                         </label>
+                        <p style={{ fontSize: 13, color: 'var(--color-neutral-500)', marginBottom: 12 }}>{s.desc}</p>
                         <textarea
                           className="so-step-textarea"
                           placeholder="请输入本阶段人力资源总体规划内容..."

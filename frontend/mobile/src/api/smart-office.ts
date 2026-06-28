@@ -28,6 +28,23 @@ export interface SystemBuildState {
   step_data?: any
 }
 
+export interface SystemStepQuestion {
+  step_num: number
+  step_title: string
+  question: string
+  hint: string
+  example_answer: string
+  completed: boolean
+}
+
+export interface SystemBuildStartResponse {
+  build_id: string
+  project_title: string
+  current_step: number
+  status: string
+  steps: SystemStepQuestion[]
+}
+
 export interface OfficeDocument {
   id: string
   title: string
@@ -57,7 +74,7 @@ export async function getModuleTools(moduleKey: string) {
 
 // POST /api/v1/office/system/start — 启动体系搭建
 export async function startSystemBuild(body: { module_key?: string }) {
-  return apiPost<{ build_id: string; current_step: number }>('/office/system/start', body)
+  return apiPost<SystemBuildStartResponse>('/office/system/start', body)
 }
 
 // GET /api/v1/office/system/builds — 获取体系搭建列表
