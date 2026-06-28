@@ -5,9 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#2C1810" />
     <title>日耕（RiGeng）— 日耕朝夕，耕愈工作，耕暖生活</title>
+    <!-- 中文字体栈：优先系统字体，避免 Google Fonts 国内被墙导致白屏 -->
+    <style>
+      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 400; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
+      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 500; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
+      @font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 700; font-display: swap; src: local('Noto Sans SC'), local('PingFang SC'), local('Microsoft YaHei'), local('微软雅黑'); }
+      @font-face { font-family: 'ZCOOL XiaoWei'; font-style: normal; font-weight: 400; font-display: swap; src: local('ZCOOL XiaoWei'), local('STKaiti'), local('KaiTi'), local('楷体'); }
+    </style>
+    <!-- Google Fonts 异步加载（非阻塞，失败不影响页面渲染） -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null" />
   </head>
   <body>
     <div id="root"></div>
