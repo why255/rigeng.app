@@ -8,17 +8,22 @@ revision = '0004_review_gentle_persistence'
 down_revision = '0003'
 
 
+def _get_dialect():
+    from app.shared.database import engine
+    return engine.dialect.name
+
+
 def upgrade():
     """添加 gentle_persistence_used 列 (INTEGER, default 0)。
 
-    幂等：若列已存在（如 0004_partial 或手动修复）则跳过。
+    幂等：若列已存在则跳过，兼容 SQLite 和 PostgreSQL。
     """
-    from sqlalchemy import text
+    from sqlalchemy import inspect as sa_inspect, text
     from app.shared.database import engine
     with engine.connect() as conn:
-        # 先检查列是否已存在
-        result = conn.execute(text("PRAGMA table_info(review_record)"))
-        cols = [row[1] for row in result]
+        # 跨数据库检查列是否存在
+        insp = sa_inspect(engine)
+        cols = [c["name"] for c in insp.get_columns("review_record")]
         if "gentle_persistence_used" in cols:
             print("0004: gentle_persistence_used 列已存在，跳过 ALTER TABLE")
             return
