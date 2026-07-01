@@ -42,6 +42,7 @@ from .services.career.router import router as career_router
 from .services.product_design.router import router as product_design_router
 from .services.order_delivery.router import router as order_delivery_router
 from .services.acquire_client.router import router as acquire_client_router
+from .services.admin.router import router as admin_router
 
 # ── 启动安全校验（步骤9·审查修正S1）──
 if settings.RIGENG_ENV == "prod":
@@ -132,7 +133,7 @@ class DegradationMiddleware(BaseHTTPMiddleware):
     ROUTE_SERVICE_MAP = {
         "/api/v1/auth": "user_auth",
         "/api/v1/users": "user_auth",
-        "/api/v1/admin": "user_auth",
+        "/api/v1/admin": "admin",
         "/api/v1/kb": "knowledge_base",
         "/api/v1/voice": "voice_engine",
         "/api/v1/files": "file_storage",
@@ -261,6 +262,7 @@ app.include_router(career_router, prefix=API)
 app.include_router(product_design_router, prefix=API)
 app.include_router(order_delivery_router, prefix=API)
 app.include_router(acquire_client_router, prefix=API)
+app.include_router(admin_router, prefix=API)
 
 @app.get(f"{API}/device")
 def device_info(request: Request):

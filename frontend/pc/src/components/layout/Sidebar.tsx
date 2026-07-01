@@ -5,6 +5,13 @@ import { BOARDS, getModulesByBoard, MAIN_SLOGAN, BRAND_NAME } from '@rigeng/shar
 /** 侧边栏短 slogan：取 MAIN_SLOGAN 后半段 "耕愈工作，耕暖生活" */
 const SIDEBAR_SLOGAN = MAIN_SLOGAN.replace(/^日耕朝夕[，,]\s*/, '');
 
+function isSuperAdmin(): boolean {
+  try {
+    const u = JSON.parse(localStorage.getItem('rg_user') || '{}');
+    return u.role === 'superadmin';
+  } catch { return false; }
+}
+
 /**
  * 模块 → iconify 图标映射（mingcute 图标集）
  * 与 navigation.md 标准侧边栏模板保持一致
@@ -83,6 +90,30 @@ export function Sidebar() {
             </div>
           );
         })}
+
+        {/* 管理后台入口 — 仅 superadmin 可见 */}
+        {isSuperAdmin() && (
+          <div className="rg-sidebar__board-group">
+            <div className="rg-sidebar__board">
+              <span>管理后台</span>
+              <span className="rg-sidebar__board-badge">ADMIN</span>
+            </div>
+            <div className="rg-sidebar__board-group-content">
+              <NavLink to="/admin" className={({ isActive }) => `rg-navitem ${isActive ? 'rg-navitem--active' : ''}`}>
+                <span className="rg-navitem__icon"><Icon icon="mingcute:dashboard-line" /></span>
+                <span>控制台</span>
+              </NavLink>
+              <NavLink to="/admin/users" className={({ isActive }) => `rg-navitem ${isActive ? 'rg-navitem--active' : ''}`}>
+                <span className="rg-navitem__icon"><Icon icon="mingcute:user-4-line" /></span>
+                <span>用户管理</span>
+              </NavLink>
+              <NavLink to="/admin/teachers" className={({ isActive }) => `rg-navitem ${isActive ? 'rg-navitem--active' : ''}`}>
+                <span className="rg-navitem__icon"><Icon icon="mingcute:group-line" /></span>
+                <span>老师管理</span>
+              </NavLink>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* 底部设置 */}

@@ -69,6 +69,11 @@ import { KnowledgeAudit } from '@/pages/board4/KnowledgeAudit'
 import { AnalyticsHome } from '@/pages/board4/AnalyticsHome'
 import { DataAnalytics } from '@/pages/board4/DataAnalytics'
 
+// Admin pages
+import { AdminDashboard } from '@/pages/admin/AdminDashboard'
+import { AdminUsers } from '@/pages/admin/AdminUsers'
+import { AdminTeachers } from '@/pages/admin/AdminTeachers'
+
 /**
  * PC 站路由表 — react-router-dom v6
  * 桌面端专用路由，不包含 /b/:board（PC 通过 Sidebar 导航）
@@ -172,6 +177,11 @@ export function PcApp() {
                     {/* M13 数据分析 */}
                     <Route path="/m/data-analytics" element={<AnalyticsHome />} />
                     <Route path="/m/data-analytics/insight" element={<DataAnalytics />} />
+
+                    {/* 管理后台 */}
+                    <Route path="/admin" element={<AdminDashboard />} />
+                    <Route path="/admin/users" element={<AdminUsers />} />
+                    <Route path="/admin/teachers" element={<AdminTeachers />} />
 
                     {/* 通用模块入口 — 兜底路由 */}
                     <Route path="/m/:slug" element={<ModuleEntry />} />
