@@ -73,8 +73,10 @@ export function isAuthenticated(): boolean {
 
 /** 登录 */
 export async function login(phone: string, password: string): Promise<LoginResponse> {
-  const data = await apiPost<LoginResponse>('/auth/login', { phone, password });
-  setAuth(data.token, data.user);
+  const data = await apiPost<LoginResponse & { role?: string }>('/auth/login', { phone, password });
+  // 后端返回 role 在顶层，合并到 user 对象中以便前端读取
+  const userWithRole = { ...data.user, role: (data as any).role || 'student' }
+  setAuth(data.token, userWithRole);
   return data;
 }
 

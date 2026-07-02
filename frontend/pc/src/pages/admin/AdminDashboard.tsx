@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PageContainer } from '@/components/layout/AppShell'
 import { getUsers, getTeachers } from '@/api/admin'
 import './admin.css'
 
@@ -35,8 +34,7 @@ export function AdminDashboard() {
   }, [navigate])
 
   return (
-    <PageContainer width="dashboard">
-      <div className="adm-page">
+          <div className="adm-page">
         <h2>管理后台</h2>
         <div className="adm-stats">
           <div className="adm-stat-card">
@@ -61,6 +59,5 @@ export function AdminDashboard() {
           <button className="adm-btn adm-btn--outline" onClick={() => navigate('/admin/teachers')}>老师管理</button>
         </div>
       </div>
-    </PageContainer>
   )
 }

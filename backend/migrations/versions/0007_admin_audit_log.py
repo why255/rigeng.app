@@ -23,6 +23,7 @@ def _types(dialect: str) -> dict:
         "UUID": "UUID" if pg else "CHAR(36)",
         "JSON": "JSONB" if pg else "TEXT",
         "TS": "TIMESTAMP",
+            "NOW": "NOW()" if pg else "CURRENT_TIMESTAMP",
         "INT": "INTEGER",
         "V64": "VARCHAR(64)",
     }
@@ -40,7 +41,7 @@ def upgrade() -> None:
             action {t['V64']} NOT NULL,
             target_user_id {t['UUID']},
             detail {t['JSON']},
-            created_at {t['TS']} NOT NULL DEFAULT NOW(),
+            created_at {t['TS']} NOT NULL DEFAULT {t['NOW']},
             schema_version {t['INT']} DEFAULT 1
         )
     """)

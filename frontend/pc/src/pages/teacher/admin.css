@@ -1,0 +1,3 @@
+/* 老师工作台专用样式 */
+/* 复用 admin.css 全部样式 */
+@import '../admin/admin.css';
