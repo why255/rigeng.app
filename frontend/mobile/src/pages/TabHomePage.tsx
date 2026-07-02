@@ -114,7 +114,7 @@ function DialogHome({ nav }: { nav: (k: string) => void }) {
       <div className="tab-dialog__cards">
         <div className="card-notebook" onClick={() => nav('page-morning-plan')}>
           <div className="card-notebook__icon card-notebook__icon--orange">
-            <Icon icon="mdi:weather-sunny" width="24" />
+            <Icon icon="mdi:weather-sunny" width="20" />
           </div>
           <div className="card-notebook__text">
             <h3 className="card-notebook__title">朝有规划</h3>
@@ -124,7 +124,7 @@ function DialogHome({ nav }: { nav: (k: string) => void }) {
 
         <div className="card-notebook" onClick={() => nav('page-evening-review')}>
           <div className="card-notebook__icon card-notebook__icon--blue">
-            <Icon icon="mdi:weather-night" width="24" />
+            <Icon icon="mdi:weather-night" width="20" />
           </div>
           <div className="card-notebook__text">
             <h3 className="card-notebook__title">暮有复盘</h3>
@@ -134,7 +134,7 @@ function DialogHome({ nav }: { nav: (k: string) => void }) {
 
         <div className="card-notebook" onClick={() => nav('page-emotion-cave')}>
           <div className="card-notebook__icon card-notebook__icon--purple">
-            <Icon icon="mdi:leaf" width="24" />
+            <Icon icon="mdi:leaf" width="20" />
           </div>
           <div className="card-notebook__text">
             <h3 className="card-notebook__title">情绪树洞</h3>

@@ -147,50 +147,49 @@
  * 板块一 · 日耕 (board1 / #tab-dialog) — 新版小耕对话首页
  * ================================================================ */
 .tab-dialog {
-  padding: var(--spacing-xl) 0;
+  padding: 0;
   background: #f9f5ec;
-  min-height: 100vh;
 }
 
 /* ── Logo 区 ── */
 .tab-dialog__logo {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-2xl);
+  gap: 10px;
+  margin-bottom: 18px;
 }
 .tab-dialog__logo-icon {
-  width: 56px;
-  height: 56px;
+  width: 38px;
+  height: 38px;
   background: #d62828;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .tab-dialog__logo-icon span {
   color: #fff;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: var(--font-weight-black);
 }
 .tab-dialog__logo-text {
-  font-size: 30px;
+  font-size: 20px;
   color: #8c786a;
   font-weight: var(--font-weight-medium);
 }
 
 /* ── 标题区 ── */
 .tab-dialog__header {
-  margin-bottom: 48px;
+  margin-bottom: 22px;
 }
 .tab-dialog__title {
-  font-size: 48px;
+  font-size: 26px;
   font-weight: var(--font-weight-bold);
   color: #7a685c;
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: 4px;
 }
 .tab-dialog__subtitle {
-  font-size: 18px;
+  font-size: 14px;
   color: #a08e80;
 }
 
@@ -198,17 +197,17 @@
 .tab-dialog__cards {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: 10px;
 }
 
 /* ── 卡片基底 card-notebook ── */
 .card-notebook {
   display: flex;
   align-items: center;
-  gap: var(--spacing-lg);
+  gap: 12px;
   background: var(--color-brand-white);
-  border-radius: 16px;
-  padding: var(--spacing-xl);
+  border-radius: 12px;
+  padding: 14px;
   box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
   cursor: pointer;
   transition: all var(--duration-normal) var(--easing-default);
@@ -221,8 +220,8 @@
 
 /* ── 图标圆形容器 ── */
 .card-notebook__icon {
-  width: 48px;
-  height: 48px;
+  width: 38px;
+  height: 38px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -247,23 +246,23 @@
   min-width: 0;
 }
 .card-notebook__title {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: var(--font-weight-bold);
   color: #554840;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .card-notebook__desc {
-  font-size: 16px;
+  font-size: 13px;
   color: #948478;
 }
 
 /* ── 底部装饰线 ── */
 .tab-dialog__footer-line {
-  width: 56px;
-  height: 4px;
+  width: 40px;
+  height: 3px;
   background: #e2dad0;
   border-radius: 2px;
-  margin: 40px auto 0;
+  margin: 24px auto 0;
 }
 
 /* ================================================================
