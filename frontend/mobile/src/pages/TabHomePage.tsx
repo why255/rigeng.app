@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
+import { Icon } from '@iconify/react'
 import { PageContainer } from '@/components/layout/AppShell'
 import { getBoard, type BoardId } from '@rigeng/shared/data/modules'
 import './tab-home.css'
@@ -64,16 +64,10 @@ export function TabHomePage() {
     }
   }
 
-  const [voiceActive, setVoiceActive] = useState(false)
-  const simulateVoice = () => {
-    setVoiceActive(true)
-    setTimeout(() => setVoiceActive(false), 2000)
-  }
-
   const renderView = () => {
     switch (board as BoardId) {
       case 'board1':
-        return <DialogHome nav={nav} voiceActive={voiceActive} onVoice={simulateVoice} />
+        return <DialogHome nav={nav} />
       case 'board2':
         return <CareerHome nav={nav} />
       case 'board3':
@@ -99,54 +93,58 @@ export function TabHomePage() {
 /* ================================================================
  * 板块一 · 日耕（小耕对话）— #tab-dialog
  * ================================================================ */
-function DialogHome({
-  nav, voiceActive, onVoice,
-}: {
-  nav: (k: string) => void; voiceActive: boolean; onVoice: () => void
-}) {
+function DialogHome({ nav }: { nav: (k: string) => void }) {
   return (
     <div className="sub-view tab-dialog" id="tab-dialog">
+      {/* Logo 区域 */}
+      <div className="tab-dialog__logo">
+        <div className="tab-dialog__logo-icon">
+          <span>耕</span>
+        </div>
+        <span className="tab-dialog__logo-text">日耕</span>
+      </div>
+
+      {/* 标题区 */}
       <div className="tab-dialog__header">
-        <h1 className="tab-title">小耕对话</h1>
-        <p className="tab-subtitle">日耕相伴，有趣有料，有闲有爱</p>
-        <div className="tab-card-list">
-          <div className="tab-card tab-card--row" onClick={() => nav('page-morning-plan')}>
-            <div className="tab-icon-circle" style={{ background: iconColor('orange').bg, color: iconColor('orange').fg }}>
-              🌅
-            </div>
-            <div className="tab-card__text">
-              <h3 className="tab-card__title">朝有规划</h3>
-              <p className="tab-card__desc">晨起做规划，整日不慌忙</p>
-            </div>
+        <h1 className="tab-dialog__title">小耕对话</h1>
+        <p className="tab-dialog__subtitle">日耕相伴，有趣有料，有闲有爱</p>
+      </div>
+
+      {/* 功能卡片 */}
+      <div className="tab-dialog__cards">
+        <div className="card-notebook" onClick={() => nav('page-morning-plan')}>
+          <div className="card-notebook__icon card-notebook__icon--orange">
+            <Icon icon="mdi:weather-sunny" width="24" />
           </div>
-          <div className="tab-card tab-card--row" onClick={() => nav('page-evening-review')}>
-            <div className="tab-icon-circle" style={{ background: iconColor('blue').bg, color: iconColor('blue').fg }}>
-              🌙
-            </div>
-            <div className="tab-card__text">
-              <h3 className="tab-card__title">暮有复盘</h3>
-              <p className="tab-card__desc">睡前做复盘，经验变方法</p>
-            </div>
+          <div className="card-notebook__text">
+            <h3 className="card-notebook__title">朝有规划</h3>
+            <p className="card-notebook__desc">晨起做规划，整日不慌忙</p>
           </div>
-          <div className="tab-card tab-card--row" onClick={() => nav('page-emotion-cave')}>
-            <div className="tab-icon-circle" style={{ background: iconColor('purple').bg, color: iconColor('purple').fg }}>
-              🌿
-            </div>
-            <div className="tab-card__text">
-              <h3 className="tab-card__title">情绪树洞</h3>
-              <p className="tab-card__desc">心事有处说，烦恼变智慧</p>
-            </div>
+        </div>
+
+        <div className="card-notebook" onClick={() => nav('page-evening-review')}>
+          <div className="card-notebook__icon card-notebook__icon--blue">
+            <Icon icon="mdi:weather-night" width="24" />
+          </div>
+          <div className="card-notebook__text">
+            <h3 className="card-notebook__title">暮有复盘</h3>
+            <p className="card-notebook__desc">睡前做复盘，经验变方法</p>
+          </div>
+        </div>
+
+        <div className="card-notebook" onClick={() => nav('page-emotion-cave')}>
+          <div className="card-notebook__icon card-notebook__icon--purple">
+            <Icon icon="mdi:leaf" width="24" />
+          </div>
+          <div className="card-notebook__text">
+            <h3 className="card-notebook__title">情绪树洞</h3>
+            <p className="card-notebook__desc">倾诉与释放，让心更轻盈</p>
           </div>
         </div>
       </div>
 
-      <div className="voice-area">
-        <div className={`voice-ripple ${voiceActive ? 'voice-ripple--active' : ''}`} />
-        <button className={`voice-btn ${voiceActive ? 'voice-btn--recording' : ''}`} onClick={onVoice} aria-label="语音输入">
-          🎤
-        </button>
-        <p className="voice-hint">按住 聊聊你的心情</p>
-      </div>
+      {/* 底部装饰线 */}
+      <div className="tab-dialog__footer-line" />
     </div>
   )
 }

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日耕 - 小耕对话</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Iconify 图标CDN -->
+  <script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
+  <script>
+    // 模拟页面跳转函数
+    function showPage(pageId) {
+      alert('跳转页面：' + pageId)
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      /* 修改为柔和米色 #f9f5ec，比原来更浅更干净的米色 */
+      .bg-page {
+        background-color: #f9f5ec;
+      }
+      .card-shadow {
+        box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
+      }
+      .text-brown-1 {
+        color: #7a685c;
+      }
+      .text-brown-2 {
+        color: #8c786a;
+      }
+      .text-brown-3 {
+        color: #a08e80;
+      }
+      .text-brown-4 {
+        color: #554840;
+      }
+      .text-brown-5 {
+        color: #948478;
+      }
+    }
+  </style>
+</head>
+<body class="bg-page min-h-screen py-16 px-6 max-w-md mx-auto">
+  <!-- 顶部Logo区域 -->
+  <div class="flex items-center gap-3 mb-10">
+    <div class="w-14 h-14 bg-[#d62828] rounded-lg flex items-center justify-center">
+      <span class="text-white text-3xl font-bold">耕</span>
+    </div>
+    <span class="text-3xl text-brown-2 font-medium">日耕</span>
+  </div>
+
+  <!-- 标题区 -->
+  <div class="mb-12">
+    <h1 class="text-5xl text-brown-1 font-semibold mb-2">小耕对话</h1>
+    <p class="text-lg text-brown-3">日耕相伴，有趣有料，有闲有爱</p>
+  </div>
+
+  <!-- 1. 朝有规划 卡片（你提供的结构） -->
+  <div class="card-notebook flex items-center gap-4 bg-white rounded-2xl p-6 mb-5 card-shadow cursor-pointer" onclick="showPage('page-morning-plan')">
+    <div class="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+      <iconify-icon icon="mdi:weather-sunny" width="24"></iconify-icon>
+    </div>
+    <div>
+      <h3 class="text-2xl text-brown-4 mb-1">朝有规划</h3>
+      <p class="text-brown-5 text-base">晨起做规划，整日不慌忙</p>
+    </div>
+  </div>
+
+  <!-- 2. 暮有复盘 卡片（你提供的结构） -->
+  <div class="card-notebook flex items-center gap-4 bg-white rounded-2xl p-6 mb-5 card-shadow cursor-pointer" onclick="showPage('page-evening-review')">
+    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+      <iconify-icon icon="mdi:weather-night" width="24"></iconify-icon>
+    </div>
+    <div>
+      <h3 class="text-2xl text-brown-4 mb-1">暮有复盘</h3>
+      <p class="text-brown-5 text-base">睡前做复盘，经验变方法</p>
+    </div>
+  </div>
+
+  <!-- 3. 情绪树洞 卡片（你提供的结构） -->
+  <div class="card-notebook flex items-center gap-4 bg-white rounded-2xl p-6 mb-5 card-shadow cursor-pointer" onclick="showPage('page-emotion-cave')">
+    <div class="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+      <iconify-icon icon="mdi:leaf" width="24"></iconify-icon>
+    </div>
+    <div>
+      <h3 class="text-2xl text-brown-4 mb-1">情绪树洞</h3>
+      <p class="text-brown-5 text-base">倾诉与释放，让心更轻盈</p>
+    </div>
+  </div>
+
+  <!-- 底部短横线 -->
+  <div class="w-14 h-1 bg-[#e2dad0] rounded mx-auto mt-10"></div>
+</body>
+</html>

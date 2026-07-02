@@ -4,7 +4,7 @@ import { ProtectedRoute } from '@rigeng/shared/components/auth/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 
 // Pages
-import { Login } from '@/pages/Login'
+import { Login } from '@rigeng/shared/components/auth/Login'
 import { Register } from '@/pages/Register'
 import { TabHomePage } from '@/pages/TabHomePage'
 import { ModuleEntry } from '@/pages/ModuleEntry'
@@ -85,7 +85,7 @@ export function MobileApp() {
       <ToastProvider>
         <Routes>
           {/* 登录/注册页 — 公开路由 */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login defaultRedirect="/" />} />
           <Route path="/register" element={<Register />} />
 
           {/* 所有受保护路由 */}

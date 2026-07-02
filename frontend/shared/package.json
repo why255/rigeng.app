@@ -17,6 +17,7 @@
     "./components/business/charts": "./src/components/business/charts.tsx",
     "./components/plan/*": "./src/components/plan/*",
     "./components/auth/ProtectedRoute": "./src/components/auth/ProtectedRoute.tsx",
+    "./components/auth/Login": "./src/components/auth/Login.tsx",
     "./types/*": "./src/types/*",
     "./api/auth": "./src/api/auth.ts"
   },

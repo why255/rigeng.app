@@ -6,7 +6,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 
 // ── 公开页面 ──
-import { Login } from '@/pages/Login'
+import { Login } from '@rigeng/shared/components/auth/Login'
 import { Register } from '@/pages/Register'
 import { AdminLogin } from '@/pages/admin/AdminLogin'
 
@@ -271,7 +271,7 @@ export function PcApp() {
       <ToastProvider>
         <Routes>
           {/* ── 公开路由 ── */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login defaultRedirect="/m/morning-plan" />} />
           <Route path="/register" element={<Register />} />
           <Route path="/admin/login" element={<AdminLogin />} />
 

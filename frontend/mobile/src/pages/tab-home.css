@@ -144,79 +144,126 @@
 }
 
 /* ================================================================
- * 板块一 · 日耕 (board1 / #tab-dialog)
+ * 板块一 · 日耕 (board1 / #tab-dialog) — 新版小耕对话首页
  * ================================================================ */
 .tab-dialog {
-  padding: var(--spacing-md) 0;
-}
-.tab-dialog__header {
-  flex: 1;
+  padding: var(--spacing-xl) 0;
+  background: #f9f5ec;
+  min-height: 100vh;
 }
 
-/* ── 语音按钮区 ── */
-.voice-area {
+/* ── Logo 区 ── */
+.tab-dialog__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-2xl);
+}
+.tab-dialog__logo-icon {
+  width: 56px;
+  height: 56px;
+  background: #d62828;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-dialog__logo-icon span {
+  color: #fff;
+  font-size: 30px;
+  font-weight: var(--font-weight-black);
+}
+.tab-dialog__logo-text {
+  font-size: 30px;
+  color: #8c786a;
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── 标题区 ── */
+.tab-dialog__header {
+  margin-bottom: 48px;
+}
+.tab-dialog__title {
+  font-size: 48px;
+  font-weight: var(--font-weight-bold);
+  color: #7a685c;
+  margin-bottom: var(--spacing-sm);
+}
+.tab-dialog__subtitle {
+  font-size: 18px;
+  color: #a08e80;
+}
+
+/* ── 卡片列表 ── */
+.tab-dialog__cards {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xl) 0;
-  margin-top: auto;
-  position: relative;
+  gap: var(--spacing-xl);
 }
-.voice-btn {
-  width: var(--voice-button-size);
-  height: var(--voice-button-size);
+
+/* ── 卡片基底 card-notebook ── */
+.card-notebook {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  background: var(--color-brand-white);
+  border-radius: 16px;
+  padding: var(--spacing-xl);
+  box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--easing-default);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-notebook:active {
+  transform: scale(0.98);
+}
+
+/* ── 图标圆形容器 ── */
+.card-notebook__icon {
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #8B4513, #D2691E);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  border: none;
-  color: white;
-  font-size: 32px;
-  position: relative;
-  z-index: 1;
-  transition: transform var(--duration-fast) var(--easing-default),
-              background var(--duration-normal) var(--easing-default);
-  -webkit-tap-highlight-color: transparent;
+  flex: none;
 }
-.voice-btn:active {
-  transform: scale(0.92);
+.card-notebook__icon--orange {
+  background: #fff3e0;
+  color: #f57c00;
 }
-.voice-btn--recording {
-  background: var(--color-voice-recording);
-  animation: breathePulse 0.6s ease-in-out infinite;
+.card-notebook__icon--blue {
+  background: #e3f2fd;
+  color: #1976d2;
 }
-.voice-hint {
-  margin-top: var(--spacing-lg);
-  font-size: var(--font-size-l5);
-  color: var(--color-neutral-500);
+.card-notebook__icon--purple {
+  background: #f3e5f5;
+  color: #7b1fa2;
 }
 
-/* ── 语音波纹 ── */
-.voice-ripple {
-  position: absolute;
-  width: var(--voice-button-size);
-  height: var(--voice-button-size);
-  border-radius: var(--radius-full);
-  z-index: 0;
+/* ── 卡片文字 ── */
+.card-notebook__text {
+  min-width: 0;
 }
-.voice-ripple::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-full);
-  animation: ripple 2s ease-out infinite;
+.card-notebook__title {
+  font-size: 24px;
+  font-weight: var(--font-weight-bold);
+  color: #554840;
+  margin-bottom: 4px;
 }
-.voice-ripple--active::before {
-  animation-name: rippleRed;
-  animation-duration: 0.8s;
+.card-notebook__desc {
+  font-size: 16px;
+  color: #948478;
 }
 
-@keyframes rippleRed {
-  0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.5); }
-  100% { box-shadow: 0 0 0 16px rgba(244, 67, 54, 0); }
+/* ── 底部装饰线 ── */
+.tab-dialog__footer-line {
+  width: 56px;
+  height: 4px;
+  background: #e2dad0;
+  border-radius: 2px;
+  margin: 40px auto 0;
 }
 
 /* ================================================================
