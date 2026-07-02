@@ -89,8 +89,8 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
     [phone, password, redirectTo, navigate],
   )
 
-  const brandSlogan = '日耕相伴，有趣有料，有闲有爱'
-  const brandConcept = '日耕（RiGeng）— 为不愿止步的高知职场人打造'
+  const brandSlogan = '日耕朝夕，耕愈工作，耕暖生活'
+  const brandConcept = '— 为不愿止步的高知职场人打造'
 
   if (checkingAuth) {
     return (

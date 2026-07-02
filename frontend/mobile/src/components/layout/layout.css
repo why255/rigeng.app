@@ -9,6 +9,7 @@
   min-height: 100vh;
   min-height: 100dvh;  /* dynamic viewport height for mobile browsers */
   background: var(--color-brand-bg-page);
+  --topbar-height: 0px;  /* 移动端已移除顶部品牌横幅 */
 }
 
 /* ---------- 主区域 ---------- */
