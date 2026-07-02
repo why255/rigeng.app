@@ -116,7 +116,7 @@ def asr_online(audio_base64: str, audio_format: str = "wav", sample_rate: int = 
     timestamp = int(time.time())
 
     payload = json.dumps({
-        "EngineModelType": engine,
+        "EngSerViceType": engine,
         "SourceType": 1,  # 原始音频
         "VoiceFormat": audio_format,
         "Data": audio_base64,
