@@ -2,7 +2,7 @@
 """
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String, Float
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import GUID, Base, PortableJSON, TimestampMixin
@@ -31,5 +31,5 @@ class ReviewRecord(TimestampMixin, Base):
     emotion_score: Mapped[int | None] = mapped_column(Integer)  # -10 ~ +10
     diagnosis_json: Mapped[dict | None] = mapped_column(PortableJSON())  # 诊断问卷答案
     review_date: Mapped[str | None] = mapped_column(String(10))  # YYYY-MM-DD
-    archived: Mapped[bool] = mapped_column(Integer, default=False)
-    gentle_persistence_used: Mapped[bool] = mapped_column(Integer, default=False)  # 温柔坚持已使用
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    gentle_persistence_used: Mapped[bool] = mapped_column(Boolean, default=False)  # 温柔坚持已使用
