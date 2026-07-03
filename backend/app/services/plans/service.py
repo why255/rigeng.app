@@ -207,6 +207,28 @@ def move_task_quadrant(db: Session, *, task_id: str, plan_id: str, user_id: str,
     return _task_out(task)
 
 
+def confirm_plan(db: Session, *, plan_id: str, user_id: str) -> dict:
+    """确认今日计划（设为active状态，不标记任何任务为已完成）。
+
+    对应新流程：用户在list页点击「确认今日计划」后调用，
+    计划从draft变为active，所有任务保持pending状态。
+    """
+    plan = db.get(Plan, plan_id)
+    if not plan or plan.user_id != user_id:
+        raise errors.APIError(30050, "计划不存在", 404)
+    plan.status = "active"
+    tasks = list(
+        db.scalars(
+            select(PlanTask).where(
+                and_(PlanTask.plan_id == plan_id, PlanTask.deleted_at.is_(None))
+            )
+        )
+    )
+    plan.stats_json = _compute_stats(tasks)
+    db.commit()
+    return _plan_out(plan, tasks)
+
+
 def complete_plan(db: Session, *, plan_id: str, user_id: str) -> dict:
     """标记计划为已完成，计算最终统计。"""
     plan = db.get(Plan, plan_id)

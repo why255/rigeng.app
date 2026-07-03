@@ -1,0 +1,469 @@
+/**
+ * 朝有规划 移动端样式（对齐 m1-p*.html 设计）。
+ * 包含：布局、气泡、语音按钮、象限网格、庆祝动画、开关、弹窗。
+ */
+
+/* ── 基础布局 ──────────────────────────────────────── */
+.mp-mobile-page {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: #F5F3EF;
+  display: flex;
+  flex-direction: column;
+}
+
+.mp-mobile-page__header {
+  flex: none;
+  height: 48px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+  z-index: 10;
+}
+
+.mp-mobile-page__main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.mp-mobile-page__main::-webkit-scrollbar { width: 0; }
+
+/* ── 品牌标语 ──────────────────────────────────────── */
+.mp-hero {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.mp-hero__slogan {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+.mp-hero__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif;
+}
+.mp-hero__divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #D4A574, transparent);
+  width: 66%;
+  margin: 10px auto;
+}
+
+/* ── 卡片 ──────────────────────────────────────────── */
+.mp-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(192, 58, 57, 0.06);
+  margin-bottom: 16px;
+}
+
+.mp-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mp-card__header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* ── 统计数字 ──────────────────────────────────────── */
+.mp-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.mp-stat {
+  text-align: center;
+}
+.mp-stat__number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+}
+.mp-stat__label {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+.mp-stat__divider {
+  width: 1px;
+  height: 32px;
+  background: #f0f0f0;
+}
+
+/* ── 待办事项 ──────────────────────────────────────── */
+.mp-todo-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #F9F9F9;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mp-todo-item:active {
+  background: #F0F0F0;
+}
+.mp-todo-item__badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+.mp-todo-item__text {
+  font-size: 14px;
+  color: #333;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 按钮 ──────────────────────────────────────────── */
+.mp-btn-primary {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  background: #C03A39;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  box-shadow: 0 4px 12px rgba(192, 58, 57, 0.2);
+}
+.mp-btn-primary:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+}
+
+.mp-btn-outline {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  background: transparent;
+  color: #C03A39;
+  border: 1px solid #C03A39;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mp-btn-outline:active {
+  background: rgba(192, 58, 57, 0.05);
+}
+
+/* ── 消息入场动画 ────────────────────────────────── */
+.message-enter {
+  animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 打字机光标 ──────────────────────────────────── */
+.typing-cursor::after {
+  content: '▮';
+  animation: blink 0.8s infinite;
+  color: #C03A39;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── 语音脉冲动画 ────────────────────────────────── */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* ── 弹窗动画 ────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ── 进度条 ──────────────────────────────────────── */
+.mp-progress {
+  width: 100%;
+  height: 8px;
+  background: #E8E0D6;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.mp-progress__fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #C03A39, #D4A574);
+  transition: width 0.8s ease-out;
+}
+
+/* ── 离线指示器 ──────────────────────────────────── */
+.mp-offline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px;
+  background: #FFF3E0;
+  border: 1px solid #FFE0B2;
+  border-radius: 20px;
+  font-size: 11px;
+  color: #E65100;
+}
+
+/* ── 开关组件 ────────────────────────────────────── */
+.mp-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+.mp-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.mp-switch__slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #E0E0E0;
+  border-radius: 24px;
+  transition: 0.3s;
+}
+.mp-switch__slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+.mp-switch input:checked + .mp-switch__slider {
+  background: #C03A39;
+}
+.mp-switch input:checked + .mp-switch__slider::before {
+  transform: translateX(20px);
+}
+
+/* ── 语音模式切换按钮 ────────────────────────────── */
+.mp-voice-mode-option {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  border-radius: 20px;
+  background: #F0F0F0;
+  color: #666;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+}
+.mp-voice-mode-option.active {
+  background: #C03A39;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(192, 58, 57, 0.3);
+}
+
+/* ── 弹窗 ────────────────────────────────────────── */
+.mp-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  width: 280px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+/* ── 隐藏底部导航（录音时） ───────────────────────── */
+.hide-nav {
+  display: none !important;
+}
+
+/* ── 象限网格（EisenhowerMatrix 复用） ──────────── */
+.mp-quadrant-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mp-quadrant-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  padding: 12px;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  border: 2px dashed #E8E0D6;
+}
+.mp-quadrant-card.has-items {
+  border-style: solid;
+}
+
+.mp-quadrant-card__header {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.mp-quadrant-card__header--red  { color: #C03A39; }
+.mp-quadrant-card__header--gold { color: #D4A574; }
+.mp-quadrant-card__header--blue { color: #6B8FBF; }
+.mp-quadrant-card__header--gray { color: #999; }
+
+.mp-quadrant-card__empty {
+  color: #ccc;
+  font-size: 11px;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.mp-quadrant-card__count {
+  font-size: 10px;
+  color: #999;
+  margin-left: 4px;
+}
+
+/* ── 任务卡片（TaskCard 复用） ────────────────────── */
+.mp-task-item {
+  background: #F9F9F9;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #333;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: grab;
+}
+.mp-task-item:active { cursor: grabbing; }
+.mp-task-item.done {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* ── 庆祝动画 ────────────────────────────────────── */
+.mp-celebration {
+  position: relative;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat-number {
+  display: inline-block;
+  animation: countUp 0.6s ease-out forwards;
+}
+
+.celebrate-bounce {
+  animation: bounce 1.2s ease-in-out infinite;
+}
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+/* ── 语音气泡播放 ────────────────────────────────── */
+.voice-message-bubble.playing {
+  background: #FFE8E0;
+}
+
+/* ── 思考动画 ────────────────────────────────────── */
+.mp-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #FFF0E5;
+  border-radius: 16px;
+  border-top-left-radius: 4px;
+  color: #999;
+  font-size: 13px;
+}
+.mp-thinking span {
+  animation: blink 1.2s infinite;
+}
+
+/* ── 计划提取预览 ────────────────────────────────── */
+.mp-chat-tasks {
+  margin: 16px 0;
+  padding: 16px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #f0f0f0;
+}
+.mp-chat-tasks__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+}
+.mp-chat-task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #F9F9F9;
+  border-radius: 8px;
+}
+.mp-chat-task-item__title {
+  font-size: 13px;
+  color: #333;
+}
+.mp-chat-task-item__quadrant {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #FFF0F0;
+  color: #C03A39;
+}

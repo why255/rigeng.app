@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { ToastProvider } from '@rigeng/shared/components/primitives/toast'
 import { ProtectedRoute } from '@rigeng/shared/components/auth/ProtectedRoute'
 import { AdminRoute } from '@rigeng/shared/components/auth/AdminRoute'
@@ -6,7 +6,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 
 // ── 公开页面 ──
-import { Login } from '@rigeng/shared/components/auth/Login'
+import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
 import { AdminLogin } from '@/pages/admin/AdminLogin'
 
@@ -19,6 +19,7 @@ import { MorningPlanList } from '@/pages/board1/MorningPlanList'
 import { MorningPlanComplete } from '@/pages/board1/MorningPlanComplete'
 import { MorningPlanOffline } from '@/pages/board1/MorningPlanOffline'
 import { MorningPlanSettings } from '@/pages/board1/MorningPlanSettings'
+import { MorningPlanProvider } from '@/pages/board1/MorningPlanContext'
 import { EveningReviewEntry } from '@/pages/board1/EveningReviewEntry'
 import { EveningReviewChat } from '@/pages/board1/EveningReviewChat'
 import { EveningReviewReport } from '@/pages/board1/EveningReviewReport'
@@ -120,13 +121,15 @@ function UserRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/b/:board" element={<Navigate to="/" replace />} />
 
-      {/* M1 朝有规划 */}
-      <Route path="/m/morning-plan" element={<MorningPlanEntry />} />
-      <Route path="/m/morning-plan/chat" element={<MorningPlanChat />} />
-      <Route path="/m/morning-plan/list" element={<MorningPlanList />} />
-      <Route path="/m/morning-plan/complete" element={<MorningPlanComplete />} />
-      <Route path="/m/morning-plan/offline" element={<MorningPlanOffline />} />
-      <Route path="/m/morning-plan/settings" element={<MorningPlanSettings />} />
+      {/* M1 朝有规划 — 共享 MorningPlanContext */}
+      <Route path="/m/morning-plan" element={<MorningPlanProvider><Outlet /></MorningPlanProvider>}>
+        <Route index element={<MorningPlanEntry />} />
+        <Route path="chat" element={<MorningPlanChat />} />
+        <Route path="list" element={<MorningPlanList />} />
+        <Route path="complete" element={<MorningPlanComplete />} />
+        <Route path="offline" element={<MorningPlanOffline />} />
+        <Route path="settings" element={<MorningPlanSettings />} />
+      </Route>
 
       {/* M2 暮有复盘 */}
       <Route path="/m/evening-review" element={<EveningReviewEntry />} />

@@ -109,13 +109,13 @@ export function Login() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        background: 'var(--color-brand-bg-page)',
+        background: 'var(--color-brand-bg-page, #FDF8F3)',
       }}>
         <div style={{
           width: 40,
           height: 40,
-          border: '3px solid var(--color-neutral-100)',
-          borderTopColor: 'var(--color-brand-primary)',
+          border: '3px solid var(--color-neutral-100, #E0D5C5)',
+          borderTopColor: 'var(--color-brand-primary, #8B4513)',
           borderRadius: '50%',
           animation: 'spin 0.8s linear infinite',
         }} />

@@ -1,16 +1,10 @@
 /**
- * 响应式登录页 — 全屏独立页面（不套 AppShell）。
+ * 移动端 H5 登录页 — 上品牌渐变面板 + 下表单
  * Route: /login
- *
- * PC 端：左侧品牌渐变面板 + 右侧手机号密码表单
- * 移动端：品牌标识在上 + 表单在下
- *
- * 适用于 PC / Mobile / 主前端三个项目。
- * 通过 defaultRedirect prop 指定登录后默认跳转路径。
  */
 import { useState, useCallback, useEffect, type FormEvent } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { apiPost, apiGet } from '../../api/api'
+import { apiPost, apiGet } from '@rigeng/shared/api/api'
 import './login.css'
 
 interface LoginResponse {
@@ -24,7 +18,6 @@ interface LoginResponse {
 }
 
 export interface LoginProps {
-  /** 登录成功后默认跳转路径（当 URL 中没有 ?redirect= 参数时生效） */
   defaultRedirect?: string
 }
 
@@ -34,7 +27,6 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
   const redirectTo = searchParams.get('redirect') || defaultRedirect
   const [checkingAuth, setCheckingAuth] = useState(true)
 
-  // 如果已有有效 token，直接跳转目标页
   useEffect(() => {
     const token = localStorage.getItem('rg_token')
     if (!token) {
@@ -51,7 +43,6 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // ── 提交登录 ──
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault()
@@ -72,13 +63,11 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
 
         const data = await apiPost<LoginResponse>('/auth/login', { phone, password })
 
-        // 存储 token 和用户信息
         localStorage.setItem('rg_token', data.token)
         if (data.user) {
           localStorage.setItem('rg_user', JSON.stringify(data.user))
         }
 
-        // 跳转到目标页
         navigate(redirectTo, { replace: true })
       } catch (e) {
         setError(e instanceof Error ? e.message : '登录失败，请稍后重试')
@@ -94,56 +83,34 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
 
   if (checkingAuth) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--color-brand-bg-page)',
-      }}>
-        <div style={{
-          width: 40,
-          height: 40,
-          border: '3px solid var(--color-neutral-100)',
-          borderTopColor: 'var(--color-brand-primary)',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
+      <div className="rg-login-mobile__loading">
+        <div className="rg-login-mobile__spinner" />
       </div>
     )
   }
 
   return (
-    <div className="rg-login">
-      {/* ── 左侧品牌区（PC 可见） ── */}
-      <div className="rg-login__brand">
-        <div className="rg-login__brand-logo">耕</div>
-        <div className="rg-login__brand-name">日耕</div>
-        <div className="rg-login__brand-slogan">{brandSlogan}</div>
-        <div className="rg-login__brand-concept">{brandConcept}</div>
+    <div className="rg-login-mobile">
+      {/* 上部品牌区 — 棕色渐变 + 金字塔文字 */}
+      <div className="rg-login-mobile__brand">
+        <div className="rg-login-mobile__brand-logo">耕</div>
+        <div className="rg-login-mobile__brand-name">日耕</div>
+        <div className="rg-login-mobile__brand-slogan">{brandSlogan}</div>
+        <div className="rg-login-mobile__brand-concept">{brandConcept}</div>
       </div>
 
-      {/* ── 右侧表单区 ── */}
-      <div className="rg-login__form-panel">
-        <div className="rg-login__form-card">
-          {/* 移动端品牌标识 */}
-          <div className="rg-login__mobile-brand">
-            <div className="rg-login__mobile-logo">耕</div>
-            <h1>日耕</h1>
-            <p>{brandSlogan}</p>
-          </div>
+      {/* 下部表单区 */}
+      <div className="rg-login-mobile__form-panel">
+        <div className="rg-login-mobile__form-card">
+          <h2 className="rg-login-mobile__title">欢迎回来</h2>
+          <p className="rg-login-mobile__subtitle">登录你的日耕账户，继续精进之旅</p>
 
-          <h2 className="rg-login__title">欢迎回来</h2>
-          <p className="rg-login__subtitle">登录你的日耕账户，继续精进之旅</p>
-
-          {/* 表单 */}
-          <form className="rg-login__form" onSubmit={handleSubmit}>
-            {/* 手机号 */}
-            <div className="rg-login__field">
-              <label className="rg-login__label" htmlFor="login-phone">手机号</label>
+          <form className="rg-login-mobile__form" onSubmit={handleSubmit}>
+            <div className="rg-login-mobile__field">
+              <label className="rg-login-mobile__label" htmlFor="login-phone">手机号</label>
               <input
                 id="login-phone"
-                className="rg-login__input"
+                className="rg-login-mobile__input"
                 type="tel"
                 maxLength={11}
                 placeholder="请输入手机号"
@@ -152,12 +119,11 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
               />
             </div>
 
-            {/* 密码 */}
-            <div className="rg-login__field">
-              <label className="rg-login__label" htmlFor="login-password">密码</label>
+            <div className="rg-login-mobile__field">
+              <label className="rg-login-mobile__label" htmlFor="login-password">密码</label>
               <input
                 id="login-password"
-                className="rg-login__input"
+                className="rg-login-mobile__input"
                 type="password"
                 placeholder="请输入密码（至少6位）"
                 value={password}
@@ -165,27 +131,23 @@ export function Login({ defaultRedirect = '/' }: LoginProps) {
               />
             </div>
 
-            {/* 错误提示 */}
-            <div className="rg-login__error">{error || ' '}</div>
+            <div className="rg-login-mobile__error">{error || ' '}</div>
 
-            {/* 提交按钮 */}
             <button
               type="submit"
-              className="rg-login__submit"
+              className="rg-login-mobile__submit"
               disabled={loading}
             >
               {loading ? '登录中…' : '登录'}
             </button>
           </form>
 
-          {/* 注册入口 */}
-          <div className="rg-login__register-link">
+          <div className="rg-login-mobile__register-link">
             <span>还没有账号？</span>
             <Link to="/register">立即注册</Link>
           </div>
 
-          {/* 底部提示 */}
-          <div className="rg-login__footer-tip">
+          <div className="rg-login-mobile__footer-tip">
             <p>注册即表示同意服务条款 · 7天全功能免费试用</p>
           </div>
         </div>

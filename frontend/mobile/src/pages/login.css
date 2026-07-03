@@ -1,0 +1,242 @@
+/* =============================================================
+ * 日耕 · 移动端 H5 登录页样式
+ * 上品牌渐变面板 + 下表单，垂直分区结构
+ * ============================================================= */
+
+.rg-login-mobile {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-brand-bg-page);
+  font-family: var(--font-family-base);
+}
+
+/* ── 上部品牌区 ── */
+.rg-login-mobile__brand {
+  flex: 1;
+  background: linear-gradient(160deg, #6B3410 0%, #8B4513 40%, #A0522D 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 24px;
+  position: relative;
+  overflow: hidden;
+  min-height: 40vh;
+}
+
+.rg-login-mobile__brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.rg-login-mobile__brand-logo {
+  width: 72px;
+  height: 72px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  font-family: var(--font-family-guofeng);
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rg-login-mobile__brand-name {
+  font-size: 22px;
+  font-weight: 300;
+  font-family: var(--font-family-guofeng);
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+}
+
+.rg-login-mobile__brand-slogan {
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+}
+
+.rg-login-mobile__brand-concept {
+  font-size: 22px;
+  font-weight: 700;
+  color: #FFFFFF;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 加载状态 ── */
+.rg-login-mobile__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-brand-bg-page);
+}
+
+.rg-login-mobile__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-neutral-100);
+  border-top-color: var(--color-brand-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 下部表单区 ── */
+.rg-login-mobile__form-panel {
+  background: var(--color-brand-bg-page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px 48px;
+}
+
+.rg-login-mobile__form-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* ── 表单标题 ── */
+.rg-login-mobile__title {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-neutral-900);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.rg-login-mobile__subtitle {
+  font-size: 14px;
+  color: var(--color-neutral-500);
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+/* ── 表单 ── */
+.rg-login-mobile__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rg-login-mobile__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rg-login-mobile__label {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-neutral-700);
+}
+
+.rg-login-mobile__input {
+  height: 46px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-neutral-100);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-family: var(--font-family-base);
+  color: var(--color-neutral-900);
+  background: var(--color-brand-white);
+  transition: border-color var(--duration-normal) var(--easing-default),
+              box-shadow var(--duration-normal) var(--easing-default);
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.rg-login-mobile__input:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+.rg-login-mobile__input::placeholder {
+  color: var(--color-neutral-300);
+}
+
+/* ── 错误提示 ── */
+.rg-login-mobile__error {
+  font-size: 13px;
+  color: var(--color-error);
+  text-align: center;
+  min-height: 20px;
+  line-height: 20px;
+}
+
+/* ── 提交按钮 ── */
+.rg-login-mobile__submit {
+  height: 46px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: var(--font-weight-semi-bold);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  transition: background var(--duration-normal) var(--easing-default);
+  margin-top: 4px;
+}
+
+.rg-login-mobile__submit:hover:not(:disabled) {
+  background: var(--color-brand-primary-hover);
+}
+
+.rg-login-mobile__submit:active:not(:disabled) {
+  background: var(--color-brand-primary-active);
+}
+
+.rg-login-mobile__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── 注册入口 ── */
+.rg-login-mobile__register-link {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--color-neutral-500);
+}
+
+.rg-login-mobile__register-link a {
+  color: var(--color-brand-primary);
+  font-weight: var(--font-weight-semi-bold);
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.rg-login-mobile__register-link a:hover {
+  text-decoration: underline;
+}
+
+/* ── 底部提示 ── */
+.rg-login-mobile__footer-tip {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-neutral-500);
+  line-height: 1.6;
+}

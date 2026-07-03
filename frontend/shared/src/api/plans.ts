@@ -114,6 +114,11 @@ export function completePlan(planId: string): Promise<Plan> {
   return apiPost<Plan>(`/plans/${planId}/complete`);
 }
 
+/** 确认今日计划（设为active，不标记任务完成） */
+export function confirmPlan(planId: string): Promise<Plan> {
+  return apiPost<Plan>(`/plans/${planId}/confirm`);
+}
+
 /** 归档计划 */
 export function archivePlan(planId: string, date?: string): Promise<{ archived: boolean }> {
   return apiPost<{ archived: boolean }>(`/plans/${planId}/archive`, { date });

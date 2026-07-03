@@ -95,6 +95,13 @@ def move_quadrant(plan_id: str, task_id: str, body: TaskMoveIn,
     return ok(data)
 
 
+@router.post("/plans/{plan_id}/confirm")
+def confirm(plan_id: str, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """确认今日计划（设为active，不标记任务完成）。"""
+    data = service.confirm_plan(db, plan_id=plan_id, user_id=user.user_id)
+    return ok(data)
+
+
 @router.post("/plans/{plan_id}/complete")
 def complete(plan_id: str, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """标记计划已完成。"""

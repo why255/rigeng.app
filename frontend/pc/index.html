@@ -6,142 +6,138 @@
 <meta name="theme-color" content="#2C1810" />
 <title>日耕（RiGeng）— 日耕朝夕，耕愈工作，耕暖生活</title>
 <style>
-:root{--p:#8B4513;--ph:#A0522D;--bg:#FDF8F3;--w:#FFF;--t:#2D1810;--t2:#5D4037;--tm:#8D6E63;--pl:#BBB;--br:#E0D5C5;--er:#F44336;--erb:#FFEBEE;--ok:#4CAF50;--okb:#E8F5E9}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{font-family:"PingFang SC","Microsoft YaHei","微软雅黑",sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased}
-#rg-preload{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
-.rg-card{width:100%;max-width:380px;background:var(--w);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:32px}
-.rg-brand{text-align:center;margin-bottom:32px}
-.rg-brand h1{font-size:26px;font-weight:800;color:var(--t);margin-bottom:8px}
-.rg-brand p{font-size:14px;color:var(--tm)}
-.rg-form{display:flex;flex-direction:column;gap:16px}
-.rg-msg{padding:8px 12px;border-radius:4px;font-size:14px}
-.rg-msg--e{background:var(--erb);color:var(--er)}
-.rg-msg--s{background:var(--okb);color:var(--ok)}
-.rg-field{display:flex;flex-direction:column;gap:4px}
-.rg-field label{font-size:14px;color:var(--tm)}
-.rg-field input{height:44px;padding:0 16px;border:1px solid var(--br);border-radius:8px;font-size:16px;color:var(--t);background:var(--w);outline:none;transition:border-color .2s}
-.rg-field input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(139,69,19,.12)}
-.rg-field input::placeholder{color:var(--pl)}
-.rg-btn{height:44px;background:var(--p);color:var(--w);font-size:16px;font-weight:600;border:none;border-radius:8px;cursor:pointer;margin-top:8px;transition:background .2s}
-.rg-btn:hover{background:var(--ph)}
-.rg-btn:disabled{opacity:.6;cursor:not-allowed}
-.rg-btn-o{background:var(--w);color:var(--p);border:1px solid var(--p)}
-.rg-btn-o:hover{background:var(--p);color:var(--w)}
-.rg-row{display:flex;gap:12px}
-.rg-row input{flex:1}
-.rg-row .rg-btn{flex-shrink:0;height:44px;padding:0 16px;font-size:14px;margin-top:0}
-.rg-toggle{margin-top:24px;text-align:center;font-size:14px}
-.rg-toggle s{color:var(--tm)}
-.rg-toggle a{color:var(--p);font-weight:600;cursor:pointer;text-decoration:none;margin-left:4px}
-.rg-toggle a:hover{text-decoration:underline}
-.rg-footer{margin-top:24px;text-align:center;font-size:12px;color:var(--tm);line-height:1.6}
-.h{display:none}
-.rg-load{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;color:var(--tm);font-size:14px;gap:12px}
-.rg-load span:first-child{font-size:32px}
+html,body{font-family:"PingFang SC","Microsoft YaHei","微软雅黑",sans-serif;background:#FDF8F3;color:#2D1810;-webkit-font-smoothing:antialiased}
+
+/* ── 预加载层（#root 外面）── */
+#rg-preload{position:fixed;inset:0;z-index:1000;display:flex;background:#FDF8F3}
+/* 左侧品牌区 */
+#rg-preload .rg-pl-brand{display:none;flex:1;background:linear-gradient(160deg,#6B3410,#8B4513,#A0522D);color:#fff;flex-direction:column;justify-content:center;align-items:center;padding:40px;position:relative;overflow:hidden}
+#rg-preload .rg-pl-brand::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+#rg-preload .rg-pl-logo{width:100px;height:100px;background:rgba(255,255,255,.15);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:52px;margin-bottom:24px;position:relative;z-index:1;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.2)}
+#rg-preload .rg-pl-name{font-size:24px;font-weight:300;letter-spacing:.1em;color:rgba(255,255,255,.5);margin-bottom:16px;position:relative;z-index:1}
+#rg-preload .rg-pl-slogan{font-size:16px;font-weight:400;color:rgba(255,255,255,.72);margin-bottom:16px;position:relative;z-index:1}
+#rg-preload .rg-pl-concept{font-size:26px;font-weight:700;color:#FFFFFF;position:relative;z-index:1}
+
+/* 右侧表单区 */
+#rg-preload .rg-pl-form-panel{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px}
+#rg-preload .rg-pl-card{width:100%;max-width:400px}
+/* 移动端品牌标识 */
+#rg-preload .rg-pl-mb{text-align:center;margin-bottom:32px}
+#rg-preload .rg-pl-mb-logo{width:64px;height:64px;background:#8B4513;color:#fff;border-radius:16px;display:inline-flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:12px}
+#rg-preload .rg-pl-mb h1{font-size:22px;font-weight:700;color:#2D1810;margin-bottom:4px}
+#rg-preload .rg-pl-mb p{font-size:14px;color:#8D6E63;font-style:italic}
+#rg-preload .rg-pl-title{font-size:22px;font-weight:700;color:#2D1810;text-align:center;margin-bottom:8px}
+#rg-preload .rg-pl-sub{font-size:14px;color:#8D6E63;text-align:center;margin-bottom:24px}
+#rg-preload .rg-pl-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+#rg-preload .rg-pl-field label{font-size:14px;font-weight:500;color:#5D4037}
+#rg-preload .rg-pl-field input{height:48px;padding:0 16px;border:1.5px solid #E0D5C5;border-radius:8px;font-size:15px;color:#2D1810;background:#FFF;outline:none;width:100%}
+#rg-preload .rg-pl-field input:focus{border-color:#8B4513;box-shadow:0 0 0 3px rgba(139,69,19,.12)}
+#rg-preload .rg-pl-field input::placeholder{color:#BBB}
+#rg-preload .rg-pl-err{font-size:14px;color:#F44336;text-align:center;min-height:20px;line-height:20px;margin-bottom:8px}
+#rg-preload .rg-pl-btn{width:100%;height:48px;border:none;border-radius:8px;background:#8B4513;color:#fff;font-size:16px;font-weight:600;cursor:pointer;margin-top:4px}
+#rg-preload .rg-pl-btn:hover{background:#A0522D}
+#rg-preload .rg-pl-btn:disabled{opacity:.6;cursor:not-allowed}
+#rg-preload .rg-pl-link{text-align:center;margin-top:16px;font-size:14px;color:#8D6E63}
+#rg-preload .rg-pl-link a{color:#8B4513;font-weight:600;text-decoration:none;margin-left:4px;cursor:pointer}
+#rg-preload .rg-pl-link a:hover{text-decoration:underline}
+#rg-preload .rg-pl-footer{text-align:center;margin-top:16px;font-size:12px;color:#8D6E63;line-height:1.6}
+
+@media(min-width:768px){
+  #rg-preload .rg-pl-brand{display:flex}
+  #rg-preload .rg-pl-mb{display:none}
+  #rg-preload .rg-pl-form-panel{padding:40px}
+}
 </style>
 </head>
 <body>
-<!-- 预加载层：登录 / 注册 / 已登录加载中 -->
+
+<!-- ── 预加载层：#root 外面，React 挂载后自动隐藏 ── -->
 <div id="rg-preload">
-  <div id="rg-forms"><div class="rg-card">
-    <div class="rg-brand"><h1>日耕</h1><p>日耕朝夕，耕愈工作，耕暖生活</p></div>
-    <form id="fm-login" class="rg-form" onsubmit="return H('login',event)">
-      <div id="er-login"></div>
-      <div class="rg-field"><label>手机号</label><input id="lp" type="text" placeholder="请输入手机号" /></div>
-      <div class="rg-field"><label>密码</label><input id="lw" type="password" placeholder="请输入密码" /></div>
-      <button class="rg-btn" id="lb" type="submit">登 录</button>
-    </form>
-    <form id="fm-reg" class="rg-form h" onsubmit="return H('reg',event)">
-      <div id="er-reg"></div>
-      <div class="rg-field"><label>手机号</label><input id="rp" type="text" placeholder="请输入手机号" /></div>
-      <div class="rg-field"><label>验证码</label><div class="rg-row"><input id="rc" type="text" placeholder="请输入验证码" maxlength="6" /><button class="rg-btn rg-btn-o" type="button" id="rb" onclick="G()">获取验证码</button></div></div>
-      <div class="rg-field"><label>密码</label><input id="rw" type="password" placeholder="请设置密码（至少6位）" /></div>
-      <div class="rg-field"><label>确认密码</label><input id="rw2" type="password" placeholder="请再次输入密码" /></div>
-      <button class="rg-btn" id="rbtn" type="submit">注 册</button>
-    </form>
-    <div class="rg-toggle" id="tg-login"><s>还没有账号？</s><a onclick="S('reg')">立即注册</a></div>
-    <div class="rg-toggle h" id="tg-reg"><s>已有账号？</s><a onclick="S('login')">去登录</a></div>
-    <div class="rg-footer"><p>注册即表示同意服务条款</p><p>7天全功能免费试用</p></div>
-  </div></div>
-  <div id="rg-load" class="h"><div class="rg-load"><span>⏳</span><span>日耕加载中...</span></div></div>
+  <!-- 左侧品牌区 -->
+  <div class="rg-pl-brand">
+    <div class="rg-pl-logo">耕</div>
+    <div class="rg-pl-name">日耕</div>
+    <div class="rg-pl-slogan">日耕朝夕，耕愈工作，耕暖生活</div>
+    <div class="rg-pl-concept">— 为不愿止步的高知职场人打造</div>
+  </div>
+
+  <!-- 右侧表单区 -->
+  <div class="rg-pl-form-panel">
+    <div class="rg-pl-card">
+      <!-- 移动端品牌标识 -->
+      <div class="rg-pl-mb">
+        <div class="rg-pl-mb-logo">耕</div>
+        <h1>日耕</h1>
+        <p>日耕朝夕，耕愈工作，耕暖生活</p>
+      </div>
+
+      <h2 class="rg-pl-title">欢迎回来</h2>
+      <p class="rg-pl-sub">登录你的日耕账户，继续精进之旅</p>
+
+      <form id="rg-pl-form" onsubmit="return handlePreloadLogin(event)">
+        <div class="rg-pl-err" id="rg-pl-err"> </div>
+        <div class="rg-pl-field">
+          <label>手机号</label>
+          <input id="rg-pl-phone" type="tel" maxlength="11" placeholder="请输入手机号" />
+        </div>
+        <div class="rg-pl-field">
+          <label>密码</label>
+          <input id="rg-pl-pwd" type="password" placeholder="请输入密码（至少6位）" />
+        </div>
+        <button class="rg-pl-btn" id="rg-pl-submit" type="submit">登 录</button>
+      </form>
+
+      <div class="rg-pl-link">
+        <span>还没有账号？</span>
+        <a href="/register">立即注册</a>
+      </div>
+      <div class="rg-pl-footer">
+        <p>注册即表示同意服务条款 · 7天全功能免费试用</p>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- React SPA 挂载点 -->
+<!-- React 挂载点 -->
 <div id="root"></div>
 
 <script>
-var _code='',_cd=0,_tmr=null;
-(function(){
-  if(localStorage.getItem('rg_token')){
-    document.getElementById('rg-forms').classList.add('h');
-    document.getElementById('rg-load').classList.remove('h');
-  }
-})();
-function M(id,msg,t){
-  var e=document.getElementById(id);
-  e.innerHTML='<div class="rg-msg rg-msg--'+t+'">'+msg+'</div>';
-}
-function C(id){document.getElementById(id).innerHTML='';}
-function S(t){
-  var l=document.getElementById('fm-login'),r=document.getElementById('fm-reg');
-  var tl=document.getElementById('tg-login'),tr=document.getElementById('tg-reg');
-  if(t==='reg'){l.classList.add('h');r.classList.remove('h');tl.classList.add('h');tr.classList.remove('h');}
-  else{r.classList.add('h');l.classList.remove('h');tr.classList.add('h');tl.classList.remove('h');}
-  C('er-login');C('er-reg');
-}
-function A(path,body){
-  return fetch('/api/v1'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-  .then(function(r){return r.json().then(function(d){if(d.code!==0)throw new Error(d.message||'请求失败');return d.data;})});
-}
-function H(t,e){
+// ── 预加载层登录逻辑 ──
+function handlePreloadLogin(e) {
   e.preventDefault();
-  if(t==='login'){
-    C('er-login');
-    var p=document.getElementById('lp').value.trim(),w=document.getElementById('lw').value.trim();
-    if(!p||!w){M('er-login','请填写手机号和密码','e');return!1;}
-    var b=document.getElementById('lb');b.disabled=!0;b.textContent='登录中...';
-    A('/auth/login',{phone:p,password:w}).then(function(d){
-      localStorage.setItem('rg_token',d.token);
-      localStorage.setItem('rg_user',JSON.stringify(d.user));
-      window.location.href='/m/morning-plan';
-    }).catch(function(e){M('er-login',e.message,'e');b.disabled=!1;b.textContent='登 录';});
-  }else{
-    C('er-reg');
-    var p=document.getElementById('rp').value.trim(),c=document.getElementById('rc').value.trim();
-    var w=document.getElementById('rw').value.trim(),w2=document.getElementById('rw2').value.trim();
-    if(!p){M('er-reg','请填写手机号','e');return!1;}
-    if(!_code){M('er-reg','请先获取验证码','e');return!1;}
-    if(c!==_code){M('er-reg','验证码错误','e');return!1;}
-    if(!w){M('er-reg','请填写密码','e');return!1;}
-    if(w.length<6){M('er-reg','密码至少6位','e');return!1;}
-    if(w!==w2){M('er-reg','两次密码输入不一致','e');return!1;}
-    var b=document.getElementById('rbtn');b.disabled=!0;b.textContent='注册中...';
-    A('/auth/register',{phone:p,password:w,nickname:p}).then(function(){
-      M('er-reg','注册成功！即将跳转登录页...','s');
-      setTimeout(function(){S('login');},1000);
-    }).catch(function(e){M('er-reg',e.message,'e');b.disabled=!1;b.textContent='注 册';});
+  var phone = document.getElementById('rg-pl-phone').value.trim();
+  var pwd = document.getElementById('rg-pl-pwd').value.trim();
+  var err = document.getElementById('rg-pl-err');
+  var btn = document.getElementById('rg-pl-submit');
+  if (!/^1[3-9]\d{9}$/.test(phone)) { err.textContent = '请输入正确的手机号'; return false; }
+  if (pwd.length < 6) { err.textContent = '密码至少6位'; return false; }
+  err.textContent = ' ';
+  btn.disabled = true; btn.textContent = '登录中…';
+  fetch('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: phone, password: pwd })
+  }).then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.code !== 0) { err.textContent = d.message || '登录失败'; btn.disabled = false; btn.textContent = '登 录'; return; }
+      try { localStorage.setItem('rg_token', d.data.token); localStorage.setItem('rg_user', JSON.stringify(d.data.user)); } catch(_) {}
+      window.location.href = '/m/morning-plan';
+    })
+    .catch(function() { err.textContent = '网络错误，请稍后重试'; btn.disabled = false; btn.textContent = '登 录'; });
+  return false;
+}
+
+// ── React 挂载后隐藏预加载层 ──
+new MutationObserver(function() {
+  var root = document.getElementById('root');
+  if (root && root.innerHTML.trim()) {
+    var el = document.getElementById('rg-preload');
+    if (el) { el.style.display = 'none'; }
   }
-  return!1;
-}
-function G(){
-  if(_cd>0)return;
-  var p=document.getElementById('rp').value.trim();
-  if(!p){M('er-reg','请先输入手机号','e');return;}
-  C('er-reg');
-  _code=String(Math.floor(100000+Math.random()*900000));
-  console.log('[日耕] 验证码：'+_code+'（有效期60秒）');
-  _cd=60;
-  var b=document.getElementById('rb');b.textContent=_cd+'s';b.disabled=!0;
-  _tmr=setInterval(function(){_cd--;if(_cd<=0){clearInterval(_tmr);b.textContent='获取验证码';b.disabled=!1;}else b.textContent=_cd+'s';},1000);
-}
-// React 挂载后自动隐藏预加载层：监听 #root 子元素变化
-new MutationObserver(function(cb){
-  var root=document.getElementById('root');
-  var html=root?root.innerHTML.trim():'';
-  if(html&&html!=='')document.getElementById('rg-preload').style.display='none';
-}).observe(document.getElementById('root'),{childList:!0,subtree:!0});
+}).observe(document.getElementById('root'), { childList: true, subtree: true });
 </script>
+
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

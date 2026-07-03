@@ -6,7 +6,7 @@ import './tab-home.css'
 
 /* ── showPage('page-X') → React Router 路由映射 ── */
 const PAGE_MAP: Record<string, string> = {
-  'page-morning-plan': '/m/morning-plan',
+  'page-morning-plan': '/m/morning-plan/chat',
   'page-evening-review': '/m/evening-review',
   'page-emotion-cave': '/m/mood-haven',
   'page-smart-record': '/m/smart-record',

@@ -43,11 +43,11 @@
 }
 /* P2 对话页不需要上下 padding（全高布局） */
 .mp-page--chat {
+  width: 100%;
   max-width: 680px;
   margin: 0 auto;
   padding: 0 16px 80px;  /* 底部给输入区留空间 */
-  width: 100%;
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -350,6 +350,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
   min-height: 0;
 }
 .mp-chat__scroll {
@@ -660,11 +661,11 @@
   position: relative;
 }
 .mp-celebration-hero__title {
-  font-size: 64px;
+  font-size: 72px;
   font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
   color: #D4A574;
   margin-bottom: 16px;
-  animation: bounce 2s ease-in-out infinite;
+  animation: mp-bounce 2s ease-in-out infinite;
 }
 .mp-celebration-hero__sub {
   font-size: 20px;
@@ -750,6 +751,24 @@
   10%  { opacity: 0.6; }
   90%  { opacity: 0.6; }
   100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* 星星闪烁 */
+.mp-sparkle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 49;
+  animation: mp-sparkle 1.5s ease-out forwards;
+}
+@keyframes mp-sparkle {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2) rotate(180deg); opacity: 0; }
+}
+
+/* 庆祝主标题弹跳 */
+@keyframes mp-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 /* ══════════════════════════════════════════════════════════════

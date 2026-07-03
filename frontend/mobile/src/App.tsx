@@ -4,18 +4,19 @@ import { ProtectedRoute } from '@rigeng/shared/components/auth/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 
 // Pages
-import { Login } from '@rigeng/shared/components/auth/Login'
+import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
 import { TabHomePage } from '@/pages/TabHomePage'
 import { ModuleEntry } from '@/pages/ModuleEntry'
 
-// Board 1 - 小耕对话
-import { MorningPlanEntry } from '@/pages/board1/MorningPlanEntry'
-import { MorningPlanChat } from '@/pages/board1/MorningPlanChat'
-import { MorningPlanList } from '@/pages/board1/MorningPlanList'
-import { MorningPlanComplete } from '@/pages/board1/MorningPlanComplete'
-import { MorningPlanOffline } from '@/pages/board1/MorningPlanOffline'
-import { MorningPlanSettings } from '@/pages/board1/MorningPlanSettings'
+// Board 1 - 小耕对话 (朝有规划)
+import { MorningPlanLayout } from '@/pages/morning-plan/MorningPlanLayout'
+import { MorningPlanChat } from '@/pages/morning-plan/chat'
+import { MorningPlanList } from '@/pages/morning-plan/list'
+import { MorningPlanHome } from '@/pages/morning-plan/home'
+import { MorningPlanComplete } from '@/pages/morning-plan/complete'
+import { MorningPlanOffline } from '@/pages/morning-plan/offline'
+import { MorningPlanSettings } from '@/pages/morning-plan/settings'
 import { EveningReviewEntry } from '@/pages/board1/EveningReviewEntry'
 import { EveningReviewChat } from '@/pages/board1/EveningReviewChat'
 import { EveningReviewReport } from '@/pages/board1/EveningReviewReport'
@@ -100,13 +101,16 @@ export function MobileApp() {
                     {/* 底部 Tab 导航 → 板卡网格 */}
                     <Route path="/b/:board" element={<TabHomePage />} />
 
-                    {/* M1 朝有规划 */}
-                    <Route path="/m/morning-plan" element={<MorningPlanEntry />} />
-                    <Route path="/m/morning-plan/chat" element={<MorningPlanChat />} />
-                    <Route path="/m/morning-plan/list" element={<MorningPlanList />} />
-                    <Route path="/m/morning-plan/complete" element={<MorningPlanComplete />} />
-                    <Route path="/m/morning-plan/offline" element={<MorningPlanOffline />} />
-                    <Route path="/m/morning-plan/settings" element={<MorningPlanSettings />} />
+                    {/* M1 朝有规划 — 共享 MorningPlanProvider */}
+                    <Route path="/m/morning-plan" element={<MorningPlanLayout />}>
+                      <Route index element={<Navigate to="chat" replace />} />
+                      <Route path="chat" element={<MorningPlanChat />} />
+                      <Route path="list" element={<MorningPlanList />} />
+                      <Route path="home" element={<MorningPlanHome />} />
+                      <Route path="complete" element={<MorningPlanComplete />} />
+                      <Route path="offline" element={<MorningPlanOffline />} />
+                      <Route path="settings" element={<MorningPlanSettings />} />
+                    </Route>
 
                     {/* M2 暮有复盘 */}
                     <Route path="/m/evening-review" element={<EveningReviewEntry />} />
