@@ -12,7 +12,7 @@ import '@rigeng/shared/components/chat/chat.css'
 import '@rigeng/shared/components/business/business.css'
 import './components/layout/layout.css'
 
-// 清除旧版 HTML localStorage 键值（morning_plans, careMode, voiceMode, offlineModeEnabled）
+// 清除旧版 HTML localStorage 键值
 clearLegacyMorningPlanStorage()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

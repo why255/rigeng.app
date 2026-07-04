@@ -9,7 +9,7 @@ import { Register } from '@/pages/Register'
 import { TabHomePage } from '@/pages/TabHomePage'
 import { ModuleEntry } from '@/pages/ModuleEntry'
 
-// Board 1 - 小耕对话 (朝有规划)
+// Board 1 - 小耕对话 (朝有规划/暮有复盘/情绪树洞)
 import { MorningPlanLayout } from '@/pages/morning-plan/MorningPlanLayout'
 import { MorningPlanChat } from '@/pages/morning-plan/chat'
 import { MorningPlanList } from '@/pages/morning-plan/list'
@@ -101,9 +101,9 @@ export function MobileApp() {
                     {/* 底部 Tab 导航 → 板卡网格 */}
                     <Route path="/b/:board" element={<TabHomePage />} />
 
-                    {/* M1 朝有规划 — 共享 MorningPlanProvider */}
+                    {/* M1 朝有规划 */}
                     <Route path="/m/morning-plan" element={<MorningPlanLayout />}>
-                      <Route index element={<Navigate to="chat" replace />} />
+                      <Route index element={<Navigate to="home" replace />} />
                       <Route path="chat" element={<MorningPlanChat />} />
                       <Route path="list" element={<MorningPlanList />} />
                       <Route path="home" element={<MorningPlanHome />} />
@@ -118,67 +118,67 @@ export function MobileApp() {
                     <Route path="/m/evening-review/report" element={<EveningReviewReport />} />
                     <Route path="/m/evening-review/history" element={<EveningReviewHistory />} />
 
-                    {/* M3 心有灵犀 */}
+                    {/* 心有灵犀 */}
                     <Route path="/m/mood-haven" element={<MoodHavenEntry />} />
                     <Route path="/m/mood-haven/chat" element={<MoodHavenChat />} />
                     <Route path="/m/mood-haven/growth" element={<MoodHavenGrowth />} />
                     <Route path="/m/mood-haven/history" element={<MoodHavenHistory />} />
 
-                    {/* M4 智能记录 — 5 个独立页面 */}
+                    {/* 智能记录 — 5 个独立页面 */}
                     <Route path="/m/smart-record" element={<SmartRecordHome />} />
                     <Route path="/m/smart-record/recording" element={<SmartRecordRecording />} />
                     <Route path="/m/smart-record/transcript" element={<SmartRecordTranscript />} />
                     <Route path="/m/smart-record/extract" element={<SmartRecordExtract />} />
                     <Route path="/m/smart-record/history" element={<SmartRecordHistory />} />
 
-                    {/* M5 智能问答 — 3 个独立页面 */}
+                    {/* 智能问答 — 3 个独立页面 */}
                     <Route path="/m/smart-qa" element={<SmartQaHome />} />
                     <Route path="/m/smart-qa/chat" element={<SmartQaChat />} />
                     <Route path="/m/smart-qa/detail" element={<SmartQaDetail />} />
 
-                    {/* M6 智能办公 — 4 个独立页面 */}
+                    {/* 智能办公 — 4 个独立页面 */}
                     <Route path="/m/smart-office" element={<SmartOfficeHome />} />
                     <Route path="/m/smart-office/work" element={<SmartOffice />} />
                     <Route path="/m/smart-office/system" element={<SmartOfficeSystem />} />
                     <Route path="/m/smart-office/editor" element={<SmartOfficeEditor />} />
 
-                    {/* M7 职业导师 — 5 个独立页面 */}
+                    {/* 职业导师 — 5 个独立页面 */}
                     <Route path="/m/career-mentor" element={<CareerMentor />} />
                     <Route path="/m/career-mentor/steps" element={<CareerMentorStep1 />} />
                     <Route path="/m/career-mentor/double" element={<CareerMentorStep23 />} />
                     <Route path="/m/career-mentor/interview" element={<CareerMentorStep4 />} />
                     <Route path="/m/career-mentor/select" element={<CareerMentorStep5 />} />
 
-                    {/* M8 品牌打造中心 — 4 个独立页面 */}
+                    {/* 品牌打造中心 — 4 个独立页面 */}
                     <Route path="/m/brand-building" element={<BrandBuildingEntry />} />
                     <Route path="/m/brand-building/generate" element={<BrandBuildingGenerate />} />
                     <Route path="/m/brand-building/schedule" element={<BrandBuildingSchedule />} />
                     <Route path="/m/brand-building/data" element={<BrandBuildingData />} />
 
-                    {/* M9 拿下一个客户 — 4 个独立页面 */}
+                    {/* 拿下一个客户 — 4 个独立页面 */}
                     <Route path="/m/acquire-client" element={<AcquireClientEntry />} />
                     <Route path="/m/acquire-client/diagnosis" element={<AcquireClientDiagnosis />} />
                     <Route path="/m/acquire-client/meeting" element={<AcquireClientMeeting />} />
                     <Route path="/m/acquire-client/contract" element={<AcquireClientContract />} />
 
-                    {/* M10 打磨一套产品 — 4 个独立页面 */}
+                    {/* 打磨一套产品 — 4 个独立页面 */}
                     <Route path="/m/product-design" element={<ProductDesignEntry />} />
                     <Route path="/m/product-design/diagnosis" element={<ProductDesignDiagnosis />} />
                     <Route path="/m/product-design/target" element={<ProductDesignTarget />} />
                     <Route path="/m/product-design/finalize" element={<ProductDesignFinalize />} />
 
-                    {/* M11 交付一笔订单 — 3 个独立页面 */}
+                    {/* 交付一笔订单 — 3 个独立页面 */}
                     <Route path="/m/deliver-order" element={<OrderDeliveryEntry />} />
                     <Route path="/m/deliver-order/gantt" element={<OrderDeliveryGantt />} />
                     <Route path="/m/deliver-order/issues" element={<OrderDeliveryIssues />} />
 
-                    {/* M12 知识库 */}
+                    {/* 知识库 */}
                     <Route path="/m/knowledge-base" element={<KnowledgeHub />} />
                     <Route path="/m/knowledge-base/list" element={<KnowledgeList />} />
                     <Route path="/m/knowledge-base/export/:id" element={<KnowledgeExport />} />
                     <Route path="/m/knowledge-base/audit" element={<KnowledgeAudit />} />
 
-                    {/* M13 数据分析 */}
+                    {/* 数据分析 */}
                     <Route path="/m/data-analytics" element={<AnalyticsHome />} />
                     <Route path="/m/data-analytics/insight" element={<DataAnalytics />} />
 

@@ -1,102 +1,145 @@
 /**
- * P4 完成页 — 庆祝动画 + 统计总结。
+ * P4 完成页 — 庆祝动画 + 今日计划完成统计。
  * Route: /m/morning-plan/complete
- * 对齐 m1-p4.html 设计。
+ * 对齐 m1p4 设计。
  */
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { CelebrationOverlay } from '@rigeng/shared/components/plan/CelebrationOverlay';
 import { useMorningPlan } from '@rigeng/shared/context/MorningPlanContext';
+import { CelebrationOverlay } from '@rigeng/shared/components/plan/CelebrationOverlay';
 import './morning-plan.css';
 
 export function MorningPlanComplete() {
   const navigate = useNavigate();
-  const { getStats, plans } = useMorningPlan();
+  const { getStats, reset } = useMorningPlan();
   const stats = getStats();
+  const [showToast, setShowToast] = useState(true);
 
-  // 无数据时返回首页
+  // Toast auto-dismiss after 3s
   useEffect(() => {
-    if (plans.length === 0) {
-      navigate('/m/morning-plan/home', { replace: true });
+    const t = setTimeout(() => setShowToast(false), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Determine celebration message based on completion rate
+  const getCelebrationContent = () => {
+    if (stats.rate === 100) {
+      return {
+        icon: 'mingcute:celebrate-fill',
+        title: '太棒了！全部完成！',
+        sub: `今日完成 ${stats.completed} 项计划，收获满满`,
+      };
     }
-  }, [plans.length, navigate]);
+    if (stats.rate >= 80) {
+      return {
+        icon: 'mingcute:fire-fill',
+        title: '非常不错，继续加油！',
+        sub: `已完成 ${stats.completed}/${stats.total} 项，完成率 ${stats.rate}%`,
+      };
+    }
+    return {
+      icon: 'mingcute:seedling-fill',
+      title: '好的开始是成功的一半',
+      sub: `已完成 ${stats.completed}/${stats.total} 项，继续加油`,
+    };
+  };
+
+  const content = getCelebrationContent();
+
+  // 回到首页：reset context（清空今日计划） → P1，避免 P1 检测到全部完成又踢回 P4
+  const handleGoHome = () => {
+    reset();
+    navigate('/m/morning-plan/home', { replace: true });
+  };
 
   return (
-    <div className="mp-mobile-page">
+    <div className="mp-mobile-page" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Celebration overlay (petals + sparkles) — uses .mp-celebration class */}
       <CelebrationOverlay />
 
-      {/* 顶部栏 */}
-      <header className="mp-mobile-page__header">
-        <button
-          className="w-10 h-10 flex items-center justify-center text-gray-600"
-          onClick={() => navigate(-1)}
-        >
-          <Icon icon="solar:alt-arrow-left-linear" className="text-2xl" />
+      {/* Toast */}
+      {showToast && (
+        <div className="mp-toast">
+          今日计划已全部完成！
+        </div>
+      )}
+
+      {/* ===== Header ===== */}
+      <header className="mp-mobile-page__header" style={{ height: 48, position: 'relative', zIndex: 10 }}>
+        <button className="mp-header-btn" onClick={() => navigate(-1)}>
+          <Icon icon="mingcute:arrow-left-fill" style={{ fontSize: '24px' }} />
         </button>
-        <span className="text-lg font-bold text-[#C03A39]"
-          style={{ fontFamily: "'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif" }}>
+        <span className="font-zcool" style={{ fontSize: '18px', fontWeight: 700, color: '#C03A39' }}>
           完成
         </span>
-        <div className="w-10" />
+        <div className="mp-header-spacer" />
       </header>
 
-      {/* 内容区 */}
-      <main className="flex-1 overflow-y-auto px-4 py-6 text-center">
-        {/* 品牌标语 */}
-        <div className="mp-hero">
-          <div className="mp-hero__slogan">日耕朝夕，耕愈工作，耕暖生活</div>
-          <p className="mp-hero__title mb-4">晨起做规划，整日不慌忙</p>
-        </div>
+      {/* ===== Content ===== */}
+      <main className="mp-main-scroll" style={{ position: 'relative', zIndex: 10 }}>
+        <div className="mp-main-padding" style={{ textAlign: 'center' }}>
+          {/* Brand */}
+          <p style={{ fontSize: 15, fontWeight: 700, color: '#333', marginBottom: 4 }}>
+            日耕朝夕，耕愈工作，耕暖生活
+          </p>
+          <p className="font-zcool" style={{ fontSize: 17, fontWeight: 700, color: '#333', marginBottom: 24 }}>
+            晨起做规划，整日不慌忙
+          </p>
 
-        {/* 庆祝动画区 */}
-        <div className="mp-celebration">
-          <div className="z-10 space-y-2">
-            <h2 className="text-4xl celebrate-bounce"
-              style={{ fontFamily: `'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif` }}>
-              🎉
+          {/* Celebration Zone */}
+          <div className="mp-celebration-zone" style={{ marginBottom: 32 }}>
+            <Icon
+              icon={content.icon}
+              className="mp-celebrate-bounce"
+              style={{ fontSize: '48px', color: '#D4A574', position: 'relative', zIndex: 10 }}
+            />
+            <h2
+              className="font-zcool"
+              style={{ fontSize: 28, color: '#D4A574', fontWeight: 700, position: 'relative', zIndex: 10, margin: '12px 0 8px' }}
+            >
+              {content.title}
             </h2>
-            <h2 className="text-[28px] font-bold text-[#D4A574]"
-              style={{ fontFamily: `'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif` }}>
-              太棒了！全部完成！
-            </h2>
-            <p className="text-sm text-gray-500">
-              今日完成 {stats.completed} 项计划，收获满满 ✨
+            <p style={{ fontSize: 14, color: '#999', position: 'relative', zIndex: 10, margin: 0 }}>
+              {content.sub}
             </p>
           </div>
-        </div>
 
-        {/* 完成总结卡片 */}
-        <div className="mp-card max-w-sm mx-auto">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-[#F0FFF4] rounded-full flex items-center justify-center">
-              <Icon icon="solar:check-circle-bold" className="text-4xl text-[#22C55E]" />
+          {/* Stats Card */}
+          <div className="mp-card" style={{ position: 'relative', zIndex: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%',
+                background: '#F0FFF4',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon icon="mingcute:check-circle-fill" style={{ fontSize: '40px', color: '#22C55E' }} />
+              </div>
+            </div>
+            <div className="mp-stats">
+              <div className="mp-stat">
+                <div className="mp-stat-number">{stats.total}</div>
+                <div className="mp-stat__label">总任务</div>
+              </div>
+              <div className="mp-stat__divider" />
+              <div className="mp-stat">
+                <div className="mp-stat-number">{stats.completed}</div>
+                <div className="mp-stat__label">已确认</div>
+              </div>
+              <div className="mp-stat__divider" />
+              <div className="mp-stat">
+                <div className="mp-stat-number">{stats.rate}%</div>
+                <div className="mp-stat__label">完成率</div>
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-xl font-bold text-[#333] stat-number">{stats.total}</div>
-              <div className="text-[10px] text-[#999]">总任务</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-[#333] stat-number">{stats.completed}</div>
-              <div className="text-[10px] text-[#999]">已确认</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-[#333] stat-number">{stats.rate}%</div>
-              <div className="text-[10px] text-[#999]">完成率</div>
-            </div>
-          </div>
-        </div>
 
-        {/* 回到首页按钮 */}
-        <div className="mt-8 max-w-sm mx-auto">
-          <button
-            className="mp-btn-primary"
-            onClick={() => navigate('/m/morning-plan/home')}
-          >
-            回到首页
-          </button>
+          {/* Back to home */}
+          <div style={{ marginTop: 24, position: 'relative', zIndex: 10 }}>
+            <button className="mp-btn-primary" onClick={handleGoHome}>
+              回到首页
+            </button>
+          </div>
         </div>
       </main>
     </div>

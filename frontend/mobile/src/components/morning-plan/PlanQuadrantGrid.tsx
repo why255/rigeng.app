@@ -1,44 +1,61 @@
 /**
- * PlanQuadrantGrid — 桥接组件。
- * 将 MorningPlanContext 的 PlanItem[] 映射为 EisenhowerMatrix 需要的 PlanTask[]。
+ * PlanQuadrantGrid — 四象限任务网格（可拖拽）。
+ * 纯 BEM 类名 + 内联 style，无 Tailwind。
  */
 import { useMorningPlan, type PlanItem } from '@rigeng/shared/context/MorningPlanContext';
-import { EisenhowerMatrix } from '@rigeng/shared/components/plan/EisenhowerMatrix';
-import type { PlanTask, Quadrant } from '@rigeng/shared/api/plans';
+import type { Quadrant } from '@rigeng/shared/api/plans';
+import {
+  QUADRANT_SHORT_LABELS,
+  QUADRANT_COLORS,
+} from '@rigeng/shared/utils/quadrantMapping';
 
-/** 将 PlanItem (context) 转为 PlanTask (EisenhowerMatrix 接口) */
-function planItemToTask(item: PlanItem, index: number): PlanTask {
-  return {
-    id: item.id,
-    plan_id: '',
-    title: item.text,
-    description: null,
-    quadrant: item.quadrant,
-    source: 'user_input',
-    status: item.completed ? 'completed' : 'pending',
-    sort_order: index,
-    time_estimate: null,
-  };
-}
+const QUADRANTS: { key: Quadrant; label: string; colorClass: string }[] = [
+  { key: 'urgent_important', label: '重要且紧急', colorClass: 'mp-quadrant-card__header--red' },
+  { key: 'not_urgent_important', label: '重要不紧急', colorClass: 'mp-quadrant-card__header--gold' },
+  { key: 'urgent_not_important', label: '紧急不重要', colorClass: 'mp-quadrant-card__header--blue' },
+  { key: 'not_urgent_not_important', label: '不重要不紧急', colorClass: 'mp-quadrant-card__header--gray' },
+];
 
 export function PlanQuadrantGrid() {
   const { plans, updateQuadrant, deletePlan } = useMorningPlan();
 
-  const tasks: PlanTask[] = plans.map((item, i) => planItemToTask(item, i));
-
-  const handleTaskMove = (taskId: string, newQuadrant: Quadrant) => {
-    updateQuadrant(taskId, newQuadrant);
+  const grouped: Record<Quadrant, PlanItem[]> = {
+    urgent_important: [],
+    not_urgent_important: [],
+    urgent_not_important: [],
+    not_urgent_not_important: [],
   };
-
-  const handleDelete = (taskId: string) => {
-    deletePlan(taskId);
-  };
+  for (const p of plans) {
+    if (grouped[p.quadrant]) grouped[p.quadrant].push(p);
+  }
 
   return (
-    <EisenhowerMatrix
-      tasks={tasks}
-      onTaskMove={handleTaskMove}
-      onDelete={handleDelete}
-    />
+    <div className="mp-quadrant-grid">
+      {QUADRANTS.map(({ key, label, colorClass }) => {
+        const items = grouped[key];
+        return (
+          <div key={key} className={`mp-quadrant-card ${items.length > 0 ? 'has-items' : ''}`}>
+            <div className={`mp-quadrant-card__header ${colorClass}`}>{label} ({items.length})</div>
+            {items.length === 0 ? (
+              <div className="mp-quadrant-card__empty">拖拽任务到这里</div>
+            ) : (
+              items.map((p) => (
+                <div
+                  key={p.id}
+                  className="mp-task-item"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); updateQuadrant(p.id, key); }}
+                >
+                  <span>{p.text}</span>
+                  <button className="mp-task-item__delete" onClick={() => deletePlan(p.id)}>×</button>
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

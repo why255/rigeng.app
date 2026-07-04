@@ -1,469 +1,239 @@
 /**
  * 朝有规划 移动端样式（对齐 m1-p*.html 设计）。
- * 包含：布局、气泡、语音按钮、象限网格、庆祝动画、开关、弹窗。
  */
-
-/* ── 基础布局 ──────────────────────────────────────── */
-.mp-mobile-page {
-  width: 100%;
-  max-width: 680px;
-  margin: 0 auto;
-  min-height: 100dvh;
-  background: #F5F3EF;
-  display: flex;
-  flex-direction: column;
-}
-
-.mp-mobile-page__header {
-  flex: none;
-  height: 48px;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid #f0f0f0;
-  z-index: 10;
-}
-
-.mp-mobile-page__main {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.mp-mobile-page__main::-webkit-scrollbar { width: 0; }
-
-/* ── 品牌标语 ──────────────────────────────────────── */
-.mp-hero {
-  text-align: center;
-  margin-bottom: 8px;
-}
-.mp-hero__slogan {
-  font-size: 15px;
-  font-weight: 700;
-  color: #333;
-  margin-bottom: 4px;
-}
-.mp-hero__title {
-  font-size: 17px;
-  font-weight: 700;
-  color: #333;
-  font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif;
-}
-.mp-hero__divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #D4A574, transparent);
-  width: 66%;
-  margin: 10px auto;
-}
-
-/* ── 卡片 ──────────────────────────────────────────── */
-.mp-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 12px rgba(192, 58, 57, 0.06);
-  margin-bottom: 16px;
-}
-
-.mp-card__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.mp-card__header-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #333;
-}
-
-/* ── 统计数字 ──────────────────────────────────────── */
-.mp-stats {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.mp-stat {
-  text-align: center;
-}
-.mp-stat__number {
-  font-size: 24px;
-  font-weight: 700;
-  color: #333;
-}
-.mp-stat__label {
-  font-size: 12px;
-  color: #999;
-  margin-top: 4px;
-}
-.mp-stat__divider {
-  width: 1px;
-  height: 32px;
-  background: #f0f0f0;
-}
-
-/* ── 待办事项 ──────────────────────────────────────── */
-.mp-todo-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: #F9F9F9;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.mp-todo-item:active {
-  background: #F0F0F0;
-}
-.mp-todo-item__badge {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-  flex-shrink: 0;
-  margin-right: 10px;
-}
-.mp-todo-item__text {
-  font-size: 14px;
-  color: #333;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── 按钮 ──────────────────────────────────────────── */
-.mp-btn-primary {
-  display: block;
-  width: 100%;
-  padding: 14px 0;
-  background: #C03A39;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 500;
-  text-align: center;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  box-shadow: 0 4px 12px rgba(192, 58, 57, 0.2);
-}
-.mp-btn-primary:active {
-  opacity: 0.9;
-  transform: scale(0.98);
-}
-
-.mp-btn-outline {
-  display: block;
-  width: 100%;
-  padding: 14px 0;
-  background: transparent;
-  color: #C03A39;
-  border: 1px solid #C03A39;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 500;
-  text-align: center;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.mp-btn-outline:active {
-  background: rgba(192, 58, 57, 0.05);
-}
-
-/* ── 消息入场动画 ────────────────────────────────── */
-.message-enter {
-  animation: slideUp 0.3s ease-out;
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── 打字机光标 ──────────────────────────────────── */
-.typing-cursor::after {
-  content: '▮';
-  animation: blink 0.8s infinite;
-  color: #C03A39;
-}
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* ── 语音脉冲动画 ────────────────────────────────── */
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(1.55); opacity: 0; }
-}
-
-/* ── 弹窗动画 ────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes scaleIn {
-  from { transform: scale(0.9); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-/* ── 进度条 ──────────────────────────────────────── */
-.mp-progress {
-  width: 100%;
-  height: 8px;
-  background: #E8E0D6;
-  border-radius: 99px;
-  overflow: hidden;
-}
-.mp-progress__fill {
-  height: 100%;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #C03A39, #D4A574);
-  transition: width 0.8s ease-out;
-}
-
-/* ── 离线指示器 ──────────────────────────────────── */
-.mp-offline-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 14px;
-  background: #FFF3E0;
-  border: 1px solid #FFE0B2;
-  border-radius: 20px;
-  font-size: 11px;
-  color: #E65100;
-}
-
-/* ── 开关组件 ────────────────────────────────────── */
-.mp-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-.mp-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.mp-switch__slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #E0E0E0;
-  border-radius: 24px;
-  transition: 0.3s;
-}
-.mp-switch__slider::before {
-  content: '';
-  position: absolute;
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background: #fff;
-  border-radius: 50%;
-  transition: 0.3s;
-}
-.mp-switch input:checked + .mp-switch__slider {
-  background: #C03A39;
-}
-.mp-switch input:checked + .mp-switch__slider::before {
-  transform: translateX(20px);
-}
-
-/* ── 语音模式切换按钮 ────────────────────────────── */
-.mp-voice-mode-option {
-  flex: 1;
-  padding: 10px 0;
-  font-size: 14px;
-  font-weight: 500;
-  text-align: center;
-  border-radius: 20px;
-  background: #F0F0F0;
-  color: #666;
-  transition: all 0.2s;
-  cursor: pointer;
-  border: none;
-}
-.mp-voice-mode-option.active {
-  background: #C03A39;
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(192, 58, 57, 0.3);
-}
-
-/* ── 弹窗 ────────────────────────────────────────── */
-.mp-modal-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mp-modal {
-  background: #fff;
-  border-radius: 20px;
-  padding: 24px 20px 20px;
-  width: 280px;
-  text-align: center;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-}
-
-/* ── 隐藏底部导航（录音时） ───────────────────────── */
-.hide-nav {
-  display: none !important;
-}
-
-/* ── 象限网格（EisenhowerMatrix 复用） ──────────── */
-.mp-quadrant-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.mp-quadrant-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  padding: 12px;
-  min-height: 100px;
-  display: flex;
-  flex-direction: column;
-  border: 2px dashed #E8E0D6;
-}
-.mp-quadrant-card.has-items {
-  border-style: solid;
-}
-
-.mp-quadrant-card__header {
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.mp-quadrant-card__header--red  { color: #C03A39; }
+.mp-mobile-page { width: 100%; max-width: 680px; margin: 0 auto; min-height: 100dvh; background: #F5F3EF; display: flex; flex-direction: column; }
+.mp-mobile-page__header { flex: none; height: 48px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #f0f0f0; z-index: 10; }
+.mp-hero { text-align: center; margin-bottom: 8px; }
+.mp-hero__slogan { font-size: 15px; font-weight: 700; color: #333; margin-bottom: 4px; }
+.mp-hero__title { font-size: 17px; font-weight: 700; color: #333; font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif; }
+.mp-hero__divider { height: 1px; background: linear-gradient(90deg, transparent, #D4A574, transparent); width: 66%; margin: 10px auto; }
+.mp-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(192,58,57,0.06); margin-bottom: 16px; }
+.mp-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.mp-card__header-title { font-size: 15px; font-weight: 700; color: #333; }
+.mp-stats { display: flex; justify-content: space-around; align-items: center; margin-bottom: 16px; }
+.mp-stat { text-align: center; }
+.mp-stat__number { font-size: 24px; font-weight: 700; color: #333; }
+.mp-stat__label { font-size: 12px; color: #999; margin-top: 4px; }
+.mp-stat__divider { width: 1px; height: 32px; background: #f0f0f0; }
+.mp-todo-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #F9F9F9; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+.mp-todo-item:active { background: #F0F0F0; }
+.mp-todo-item__badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 500; flex-shrink: 0; margin-right: 10px; }
+.mp-todo-item__text { font-size: 14px; color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-btn-primary { display: block; width: 100%; padding: 14px 0; background: #C03A39; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 500; text-align: center; cursor: pointer; transition: opacity 0.15s; box-shadow: 0 4px 12px rgba(192,58,57,0.2); }
+.mp-btn-primary:active { opacity: 0.9; transform: scale(0.98); }
+.mp-btn-outline { display: block; width: 100%; padding: 14px 0; background: transparent; color: #C03A39; border: 1px solid #C03A39; border-radius: 10px; font-size: 15px; font-weight: 500; text-align: center; cursor: pointer; transition: background 0.15s; }
+.mp-btn-outline:active { background: rgba(192,58,57,0.05); }
+.message-enter { animation: slideUp 0.3s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+.mp-progress { width: 100%; height: 8px; background: #E8E0D6; border-radius: 99px; overflow: hidden; }
+.mp-progress__fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #C03A39, #D4A574); transition: width 0.8s ease-out; }
+.mp-offline-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 14px; background: #FFF3E0; border: 1px solid #FFE0B2; border-radius: 20px; font-size: 11px; color: #E65100; }
+.mp-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.mp-switch input { opacity: 0; width: 0; height: 0; }
+.mp-switch__slider { position: absolute; cursor: pointer; inset: 0; background: #E0E0E0; border-radius: 24px; transition: 0.3s; }
+.mp-switch__slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; }
+.mp-switch input:checked + .mp-switch__slider { background: #C03A39; }
+.mp-switch input:checked + .mp-switch__slider::before { transform: translateX(20px); }
+.mp-voice-mode-option { flex: 1; padding: 10px 0; font-size: 14px; font-weight: 500; text-align: center; border-radius: 20px; background: #F0F0F0; color: #666; transition: all 0.2s; cursor: pointer; border: none; }
+.mp-voice-mode-option.active { background: #C03A39; color: #fff; box-shadow: 0 4px 10px rgba(192,58,57,0.3); }
+.mp-modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.mp-modal { background: #fff; border-radius: 20px; padding: 24px 20px 20px; width: 280px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+.mp-quadrant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mp-quadrant-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 12px; min-height: 100px; display: flex; flex-direction: column; border: 2px dashed #E8E0D6; }
+.mp-quadrant-card.has-items { border-style: solid; }
+.mp-quadrant-card__header { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+.mp-quadrant-card__header--red { color: #C03A39; }
 .mp-quadrant-card__header--gold { color: #D4A574; }
 .mp-quadrant-card__header--blue { color: #6B8FBF; }
 .mp-quadrant-card__header--gray { color: #999; }
-
-.mp-quadrant-card__empty {
-  color: #ccc;
-  font-size: 11px;
-  text-align: center;
-  padding: 16px 0;
+.mp-quadrant-card__empty { color: #ccc; font-size: 11px; text-align: center; padding: 16px 0; }
+.mp-task-item { background: #F9F9F9; padding: 6px 10px; border-radius: 6px; font-size: 11px; color: #333; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: grab; }
+.mp-thinking { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #FFF0E5; border-radius: 16px; border-top-left-radius: 4px; color: #999; font-size: 13px; }
+.mp-chat-tasks { margin: 16px 0; padding: 16px; background: #fff; border-radius: 12px; border: 1px solid #f0f0f0; }
+.mp-chat-tasks__title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px; }
+.mp-chat-task-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #F9F9F9; border-radius: 8px; }
+.mp-chat-task-item__title { font-size: 13px; color: #333; }
+.mp-chat-task-item__quadrant { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #FFF0F0; color: #C03A39; }
+/* 空状态图标微动效 */
+.mp-empty-icon { opacity: 0.6; transition: all 0.3s; font-size: 32px; color: #D4A574; margin-bottom: 12px; }
+.mp-empty-icon:hover { opacity: 1; transform: scale(1.05); }
+.mp-empty-icon--lg { font-size: 48px; margin-bottom: 12px; }
+/* 自定义滚动条 */
+.custom-scrollbar::-webkit-scrollbar { width: 0px; }
+/* ZCOOL XiaoWei 字体工具类 */
+.font-zcool { font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif; }
+/* ── 移动端 home.tsx 专用样式 ── */
+.mp-header-spacer { width: 40px; }
+.mp-header-title { font-size: 18px; font-weight: 700; color: #C03A39; }
+.mp-header-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #666; background: none; border: none; cursor: pointer; }
+.mp-icon-24 { font-size: 24px; }
+.mp-icon-gold { color: #D4A574; }
+.mp-main-scroll { flex: 1; overflow-y: auto; }
+.mp-main-scroll::-webkit-scrollbar { width: 0; }
+.mp-main-padding { padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; }
+.mp-empty-state { text-align: center; padding: 12px 0; }
+.mp-empty-state--tall { padding: 24px 0; }
+.mp-empty-state__title { font-size: 14px; color: #666; }
+.mp-empty-state__sub { font-size: 12px; color: #999; margin-top: 4px; }
+.mp-done-state { text-align: center; padding: 12px 0; }
+.mp-done-state__text { font-size: 14px; color: #666; }
+.mp-todo-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.mp-todo-item__badge--done { background: #E8F5E9; color: #388E3C; }
+.mp-todo-item__badge--pending { background: #FFF0F0; color: #C03A39; }
+.mp-todo-more { font-size: 12px; color: #999; text-align: center; cursor: pointer; transition: color 0.15s; }
+.mp-todo-more:hover { color: #C03A39; }
+.mp-card-footer { margin-top: 16px; padding-top: 16px; border-top: 1px solid #F0EBE5; position: relative; }
+.mp-card-footer__inner { display: flex; justify-content: space-between; align-items: center; }
+.mp-card-footer__link { font-size: 12px; color: #999; text-decoration: underline; text-decoration-color: rgba(212,165,116,0.3); text-underline-offset: 4px; cursor: pointer; transition: color 0.15s; }
+.mp-card-footer__link:hover { color: #C03A39; }
+.mp-card-footer__brand { font-size: 10px; color: rgba(212,165,116,0.5); font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif; }
+.mp-voice-float { position: absolute; right: 16px; bottom: 96px; z-index: 30; }
+.mp-voice-float__btn { width: 32px; height: 32px; background: #C03A39; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: none; cursor: pointer; transition: background 0.15s; }
+.mp-voice-float__btn:active { background: #A32E2E; }
+.mp-voice-float__icon { color: #fff; font-size: 14px; }
+/* ── Chat Bubble ── */
+.mp-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.mp-avatar--geng { background: #C03A39; color: #fff; font-family: 'ZCOOL XiaoWei', '华文楷体', 'KaiTi', serif; font-size: 18px; }
+.mp-avatar--user { background: #E8D5B7; border: 1px solid rgba(212,165,116,0.3); color: #8B7A62; font-size: 14px; }
+.mp-bubble-row { display: flex; align-items: flex-start; gap: 8px; }
+.mp-bubble-row--user { flex-direction: row-reverse; }
+.mp-bubble-wrapper { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
+.mp-bubble-wrapper--user { align-items: flex-end; }
+.mp-bubble { padding: 12px; font-size: 14px; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,0.06); white-space: pre-line; }
+.mp-bubble--assistant { background: #FFF0E5; border-radius: 16px 4px 16px 16px; color: #333; }
+.mp-bubble--user { background: #F0F0F0; border-radius: 4px 16px 16px 16px; color: #333; }
+.mp-bubble-time { font-size: 10px; color: #999; margin-left: 4px; }
+.mp-bubble-time--user { margin-right: 4px; }
+.mp-bubble-voice { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 4px 16px 16px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; }
+.mp-bubble-voice--idle { background: #F0F0F0; }
+.mp-bubble-voice--playing { background: #FFE8E0; }
+.mp-bubble-voice__icon { font-size: 20px; color: #C03A39; flex-shrink: 0; }
+.mp-bubble-voice__label { font-size: 14px; font-weight: 500; }
+/* ── Voice Button ── */
+.mp-voice-wrap { display: flex; flex-direction: column; align-items: center; }
+.mp-voice-cancel { padding: 6px 18px; border-radius: 30px; font-size: 13px; font-weight: 500; border: 1px solid #F1D5C7; box-shadow: 0 1px 3px rgba(0,0,0,0.08); background: #fff; color: #C03A39; cursor: pointer; transition: all 0.2s; }
+.mp-voice-cancel--active { background: #C03A39; color: #fff; border-color: #C03A39; }
+.mp-voice-btn { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; transition: all 0.2s; touch-action: none; position: relative; user-select: none; }
+.mp-voice-btn--idle { background: #C03A39; box-shadow: 0 10px 25px rgba(192,58,57,0.4); }
+.mp-voice-btn--recording { background: #A0302E; box-shadow: 0 10px 40px rgba(192,58,57,0.7); }
+.mp-voice-pulse { position: absolute; inset: 0; border-radius: 50%; background: rgba(192,58,57,0.2); }
+.mp-voice-pulse--delay { animation: mpVoicePulse 1.8s 0.6s infinite; }
+.mp-voice-timer { font-size: 13px; color: #C03A39; font-weight: 600; font-family: monospace; margin-top: 2px; }
+@keyframes mpVoicePulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 0; }
 }
-
-.mp-quadrant-card__count {
-  font-size: 10px;
-  color: #999;
-  margin-left: 4px;
+/* ── Chat Input Area (m1p2: pill container + embedded button) ── */
+.mp-chat-input-area { flex: none; background: #F5F3EF; padding: 8px 16px 12px; border-top: 1px solid rgba(0,0,0,0.04); }
+.mp-chat-input-pill { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 16px; border: 1px solid #D4C5B0; padding: 4px 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); max-width: 680px; margin: 0 auto; }
+.mp-chat-input-pill input { flex: 1; background: transparent; padding: 12px 8px; font-size: 14px; outline: none; border: none; color: #333; min-width: 0; }
+.mp-chat-input-pill input::placeholder { color: #9CA3AF; }
+.mp-chat-mic-btn { width: 40px; height: 40px; border-radius: 50%; background: #C03A39; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; transition: all 0.15s; }
+.mp-chat-mic-btn:active { opacity: 0.9; transform: scale(0.95); }
+/* ── Voice Recording Overlay (fixed, covers TabBar) ── */
+.mp-voice-zone { position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; background: #F5F3EF; padding: 16px 16px 32px; text-align: center; }
+.mp-voice-hint { font-size: 13px; color: #999; margin-bottom: 16px; text-align: center; }
+.mp-voice-cancel-row { display: flex; justify-content: center; margin-bottom: 12px; }
+.mp-voice-cancel-pill { padding: 6px 18px; border-radius: 30px; font-size: 13px; font-weight: 500; background: #fff; color: #C03A39; border: 1px solid #F1D5C7; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s; }
+.mp-voice-cancel-pill:active { background: #FEE9E7; }
+.mp-voice-cancel-pill--active { background: #C03A39 !important; color: #fff !important; }
+/* Large voice button (m1p2: 72px with double pulse rings) */
+.mp-voice-large-btn { width: 72px; height: 72px; background: #C03A39; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 10px 25px rgba(192,58,57,0.4); position: relative; cursor: pointer; user-select: none; touch-action: none; border: none; transition: transform 0.15s; }
+.mp-voice-large-btn:active { transform: scale(0.94); }
+.mp-voice-large-btn--recording { background: #A0302E; box-shadow: 0 10px 40px rgba(192,58,57,0.7); }
+.mp-voice-pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; background: rgba(192,58,57,0.2); animation: mpVoicePulseLarge 1.8s infinite; }
+.mp-voice-pulse-ring:nth-child(2) { animation-delay: 0.6s; }
+@keyframes mpVoicePulseLarge {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.55); opacity: 0; }
 }
-
-/* ── 任务卡片（TaskCard 复用） ────────────────────── */
-.mp-task-item {
-  background: #F9F9F9;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: #333;
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: grab;
+.mp-voice-timer { font-size: 13px; color: #C03A39; font-weight: 600; font-family: monospace; margin-top: 8px; }
+/* Voice message bubble in chat */
+.mp-voice-msg { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #F0F0F0; border-radius: 4px 16px 16px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; user-select: none; }
+.mp-voice-msg__icon { font-size: 20px; color: #C03A39; flex-shrink: 0; }
+.mp-voice-msg__label { font-size: 14px; font-weight: 500; color: #333; }
+.mp-voice-msg__bars { font-size: 12px; color: #999; margin-left: 4px; letter-spacing: 2px; }
+.mp-voice-msg--playing { background: #FFE8E0; }
+/* Transcribe popup on long-press voice bubble */
+.mp-transcribe-popup { position: absolute; left: 50%; transform: translateX(-50%); bottom: 60px; background: #333; color: #fff; font-size: 12px; padding: 6px 16px; border-radius: 20px; white-space: nowrap; z-index: 50; }
+/* Welcome area in chat */
+.mp-welcome-hint { font-size: 12px; color: #999; margin-top: 4px; }
+/* ── Quadrant Grid DnD Enhancements ── */
+.mp-quadrant-card--over { border-color: #C03A39 !important; background: rgba(192,58,57,0.03); }
+.mp-task-item--dragging { opacity: 0.5; }
+.mp-task-item__delete { background: none; border: none; color: #ccc; font-size: 14px; cursor: pointer; padding: 0 4px; transition: color 0.15s; }
+.mp-task-item__delete:hover { color: #C03A39; }
+/* ── Complete / Celebration Page ── */
+/* Overlay container (CelebrationOverlay 组件使用) — 对齐 PC 端 */
+.mp-celebration { position: absolute; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+/* Content zone (我们自己的庆祝内容) */
+.mp-celebration-zone { position: relative; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.mp-celebrate-bounce { animation: mpBounce 1.2s ease-in-out infinite; }
+@keyframes mpBounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.mp-stat-number { display: inline-block; animation: mpCountUp 0.6s ease-out; }
+@keyframes mpCountUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+/* Toast — 对齐 PC 端 fixed 定位 */
+.mp-toast { position: fixed; top: 10%; left: 50%; transform: translateX(-50%); background: rgba(44,24,16,0.92); color: #D4A574; padding: 12px 24px; border-radius: 99px; border: 1px solid #D4A574; font-size: 14px; z-index: 60; pointer-events: none; white-space: nowrap; backdrop-filter: blur(8px); animation: mpToastFade 3s forwards; }
+@keyframes mpToastFade {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
-.mp-task-item:active { cursor: grabbing; }
-.mp-task-item.done {
-  opacity: 0.5;
-  text-decoration: line-through;
+/* ── Petals + Sparkles (CelebrationOverlay 注入的 DOM 元素) — 对齐 PC 端 ── */
+.mp-petal {
+  position: absolute;
+  border-radius: 150% 0 150% 0;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 50;
+  animation: mp-petal-fall linear forwards;
 }
-
-/* ── 庆祝动画 ────────────────────────────────────── */
-.mp-celebration {
-  position: relative;
-  height: 200px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+@keyframes mp-petal-fall {
+  0%   { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
 }
-
-@keyframes countUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.mp-sparkle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 49;
+  animation: mp-sparkle 1.5s ease-out forwards;
 }
-.stat-number {
-  display: inline-block;
-  animation: countUp 0.6s ease-out forwards;
+@keyframes mp-sparkle {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2) rotate(180deg); opacity: 0; }
 }
-
-.celebrate-bounce {
-  animation: bounce 1.2s ease-in-out infinite;
-}
-@keyframes bounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.06); }
-}
-
-/* ── 语音气泡播放 ────────────────────────────────── */
-.voice-message-bubble.playing {
-  background: #FFE8E0;
-}
-
-/* ── 思考动画 ────────────────────────────────────── */
-.mp-thinking {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #FFF0E5;
-  border-radius: 16px;
-  border-top-left-radius: 4px;
-  color: #999;
-  font-size: 13px;
-}
-.mp-thinking span {
-  animation: blink 1.2s infinite;
-}
-
-/* ── 计划提取预览 ────────────────────────────────── */
-.mp-chat-tasks {
-  margin: 16px 0;
-  padding: 16px;
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-}
-.mp-chat-tasks__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12px;
-}
-.mp-chat-task-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #F9F9F9;
-  border-radius: 8px;
-}
-.mp-chat-task-item__title {
-  font-size: 13px;
-  color: #333;
-}
-.mp-chat-task-item__quadrant {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: #FFF0F0;
-  color: #C03A39;
-}
+/* ── Settings Page ── */
+.mp-setting-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.04); }
+.mp-setting-label { font-size: 15px; color: #333; font-weight: 500; }
+.mp-setting-desc { font-size: 12px; color: #999; margin-top: 2px; }
+/* ── Offline Page ── */
+.mp-offline-indicator { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 16px; }
+.mp-offline-status-text { font-size: 16px; color: #666; font-weight: 500; }
+.mp-offline-hint { font-size: 13px; color: #999; }
+.mp-sync-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: #E8F5E9; border-radius: 8px; margin-bottom: 16px; }
+.mp-sync-indicator__text { font-size: 13px; color: #388E3C; }
+/* ── Confirm Dialog ── */
+.mp-modal-icon { font-size: 36px; color: #D4A574; margin-bottom: 12px; display: inline-block; }
+.mp-modal-title { font-size: 18px; font-weight: 700; color: #333; margin-bottom: 8px; }
+.mp-modal-text { font-size: 14px; color: #666; margin-bottom: 24px; }
+.mp-modal-actions { display: flex; gap: 12px; }
+/* ── Confirm Bubble (inside chat) ── */
+.mp-confirm-bubble { margin-top: 16px; padding: 16px; background: #fff; border-radius: 12px; border: 1px solid #f0f0f0; }
+.mp-confirm-bubble__title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px; }
+.mp-confirm-task { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #F9F9F9; border-radius: 8px; margin-bottom: 6px; }
+.mp-confirm-task__text { font-size: 13px; color: #333; flex: 1; }
+.mp-confirm-task__badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #FFF0F0; color: #C03A39; margin-left: 8px; white-space: nowrap; }
+.mp-confirm-btn { margin-top: 12px; display: block; width: 100%; padding: 12px 0; background: #C03A39; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+.mp-confirm-btn:active { opacity: 0.9; }
+/* ── Recorded Plans Count ── */
+.mp-plan-count-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 16px; background: #FFF0F0; border-radius: 20px; font-size: 13px; color: #C03A39; margin-bottom: 16px; }
+/* ── Quadrant Page Header ── */
+.mp-quadrant-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.mp-quadrant-header__title { font-size: 15px; font-weight: 700; color: #333; display: flex; align-items: center; }
+.mp-quadrant-header__hint { font-size: 11px; color: #999; }
+/* ── Progress Bar Large ── */
+.mp-progress-bar { width: 100%; height: 10px; background: #E8E0D6; border-radius: 99px; overflow: hidden; }
+.mp-progress-bar__fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #C03A39, #D4A574); transition: width 0.6s ease-out; }

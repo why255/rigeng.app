@@ -47,6 +47,7 @@ def converse(body: ConversationRequest, user: CurrentUser = Depends(get_current_
         conversation_id=body.conversation_id,
         module=body.module,
         context_meta=body.context_meta,
+        provider=body.provider,
     )
     return ok(result)
 

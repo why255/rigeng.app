@@ -4,6 +4,7 @@
 - 腾讯云 ASR（在线语音识别）
 - Vosk（离线语音识别）
 - 智谱AI GLM（大模型推理/生成）
+- Anthropic Claude（大模型推理/生成，推荐）
 - 多轮对话管理
 """
 from __future__ import annotations
@@ -301,17 +302,8 @@ MODULE_SYSTEM_PROMPTS: dict[str, str] = {
         "你的回答风格：温暖鼓励，专业务实，简洁有力。"
     ),
     "morning_plan": (
-        "你是朝有规划的AI助手小耕。朝有规划的品牌语：规划今日事，方向不迷失。"
-        "你帮助用户制定每日工作计划，进行四象限分类（重要紧急/重要不紧急/紧急不重要/不重要不紧急），"
-        "引导用户明确今日最重要的3件事。回复简洁，风格温暖坚定。"
-        "当用户描述完今日计划后，请在回复末尾附加一个任务提炼区块，格式严格如下：\n"
-        "```tasks\n"
-        "任务标题 | quadrant\n"
-        "...\n"
-        "```\n"
-        "quadrant 取值：urgent_important（重要且紧急）、not_urgent_important（重要不紧急）、"
-        "urgent_not_important（紧急不重要）、not_urgent_not_important（不重要不紧急）。"
-        "如果用户只做了简单描述，主动追问澄清，等用户确认后再输出任务提炼。"
+        "你是朝有规划的AI助手小耕，帮助用户梳理每日计划。回复风格温暖简洁。\n"
+        "收到用户计划后：先确认（1-2句），然后在末尾输出任务列表。"
     ),
     "evening_review": (
         "你是暮有复盘的AI助手小耕。暮有复盘的品牌语：经验可沉淀，行动成晶体。"
@@ -371,8 +363,200 @@ def _detect_hr_scope(text: str) -> bool:
     return any(kw in text for kw in non_hr_keywords)
 
 
+# ═══════════════════════════════════════════════
+# Anthropic Claude（推荐 LLM 提供商）
+# ═══════════════════════════════════════════════
+ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+
+
+def llm_generate_anthropic(prompt: str, system_prompt: str | None = None,
+                           context: list[dict[str, str]] | None = None,
+                           model: str | None = None, temperature: float | None = None,
+                           max_tokens: int | None = None) -> dict[str, Any]:
+    """A3/A4 LLM生成回答（Anthropic Claude）。
+
+    使用 Anthropic Messages API，支持 system prompt 和多轮对话上下文。
+    """
+    import urllib.request
+
+    if not settings.ANTHROPIC_API_KEY:
+        raise APIError(50020, "Anthropic API密钥未配置", 503)
+
+    model = model or settings.ANTHROPIC_MODEL
+    temperature = temperature if temperature is not None else settings.ANTHROPIC_TEMPERATURE
+    max_tokens = max_tokens or settings.ANTHROPIC_MAX_TOKENS
+
+    # 构建 messages（Anthropic 格式）
+    messages: list[dict[str, Any]] = []
+    if context:
+        for msg in context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    body = json.dumps({
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "system": system_prompt or "",
+        "messages": messages,
+    }).encode("utf-8")
+
+    headers = {
+        "x-api-key": settings.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        req = urllib.request.Request(ANTHROPIC_ENDPOINT, data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        if "content" not in result:
+            raise APIError(50020, "Claude返回为空", 502)
+
+        # 提取文本内容
+        text_blocks = [b for b in result["content"] if b.get("type") == "text"]
+        content = "\n".join(b.get("text", "") for b in text_blocks)
+
+        return {
+            "content": content,
+            "model_used": result.get("model", model),
+            "provider": "anthropic",
+            "usage": {
+                "prompt_tokens": result.get("usage", {}).get("input_tokens", 0),
+                "completion_tokens": result.get("usage", {}).get("output_tokens", 0),
+                "total_tokens": (
+                    result.get("usage", {}).get("input_tokens", 0)
+                    + result.get("usage", {}).get("output_tokens", 0)
+                ),
+            },
+        }
+
+    except APIError:
+        raise
+    except Exception as e:
+        logger.exception("Anthropic Claude调用异常")
+        raise E_LLM_TIMEOUT
+
+
+def llm_generate(prompt: str, system_prompt: str | None = None,
+                 context: list[dict[str, str]] | None = None,
+                 model: str | None = None, temperature: float | None = None,
+                 max_tokens: int | None = None, stream: bool = False,
+                 provider: str | None = None) -> dict[str, Any]:
+    """A3/A4 LLM生成回答（统一入口，支持多提供商）。
+
+    provider 优先级: 参数 > LLM_PROVIDER 配置 > "auto"
+    "auto" 模式: 优先 Anthropic Claude，不可用时降级到智谱AI GLM
+    """
+    provider = provider or settings.LLM_PROVIDER
+
+    # auto 模式：检测可用的提供商
+    if provider == "auto":
+        if settings.ANTHROPIC_API_KEY:
+            provider = "anthropic"
+        elif settings.ZHIPUAI_API_KEY:
+            provider = "zhipu"
+        else:
+            raise APIError(50020, "未配置任何LLM提供商（Anthropic/智谱AI）", 503)
+
+    # 按提供商分发
+    if provider == "anthropic":
+        try:
+            return llm_generate_anthropic(
+                prompt=prompt, system_prompt=system_prompt,
+                context=context, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+            )
+        except APIError:
+            # 如果配置了降级，尝试智谱AI
+            if settings.ZHIPUAI_API_KEY and settings.LLM_PROVIDER == "auto":
+                logger.warning("Anthropic调用失败，降级到智谱AI")
+                return _llm_generate_zhipu(
+                    prompt=prompt, system_prompt=system_prompt,
+                    context=context, model=None,
+                    temperature=temperature, max_tokens=max_tokens,
+                    stream=stream,
+                )
+            raise
+
+    # 智谱AI
+    return _llm_generate_zhipu(
+        prompt=prompt, system_prompt=system_prompt,
+        context=context, model=model,
+        temperature=temperature, max_tokens=max_tokens,
+        stream=stream,
+    )
+
+
+def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
+                         context: list[dict[str, str]] | None = None,
+                         model: str | None = None, temperature: float | None = None,
+                         max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
+    """智谱AI GLM 原始实现（内部函数）。"""
+    import urllib.request
+
+    if not settings.ZHIPUAI_API_KEY:
+        raise APIError(50020, "智谱AI API密钥未配置", 503)
+
+    model = model or settings.ZHIPUAI_MODEL
+    temperature = temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE
+    max_tokens = max_tokens or settings.ZHIPUAI_MAX_TOKENS
+
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    if context:
+        messages.extend(context)
+    messages.append({"role": "user", "content": prompt})
+
+    body = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": stream,
+    }).encode("utf-8")
+
+    headers = {
+        "Authorization": f"Bearer {settings.ZHIPUAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        req = urllib.request.Request(ZHIPUAI_ENDPOINT, data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        if "choices" not in result or not result["choices"]:
+            raise APIError(50020, "大模型返回为空", 502)
+
+        choice = result["choices"][0]
+        return {
+            "content": choice["message"]["content"],
+            "model_used": result.get("model", model),
+            "provider": "zhipu",
+            "usage": {
+                "prompt_tokens": result.get("usage", {}).get("prompt_tokens", 0),
+                "completion_tokens": result.get("usage", {}).get("completion_tokens", 0),
+                "total_tokens": result.get("usage", {}).get("total_tokens", 0),
+            },
+        }
+
+    except APIError:
+        raise
+    except Exception as e:
+        logger.exception("智谱AI调用异常")
+        raise E_LLM_TIMEOUT
+
+
 def converse(user_input: str, conversation_id: str | None = None,
-             module: str = "general", context_meta: dict[str, Any] | None = None) -> dict[str, Any]:
+             module: str = "general", context_meta: dict[str, Any] | None = None,
+             provider: str | None = None) -> dict[str, Any]:
     """A5 多轮对话统一入口。"""
     # 1. 情绪检测
     emotion = _detect_emotion(user_input)
@@ -394,12 +578,13 @@ def converse(user_input: str, conversation_id: str | None = None,
     if context_meta:
         system_prompt += f"\n当前上下文: {json.dumps(context_meta, ensure_ascii=False)}"
 
-    # 4. LLM推理
+    # 4. LLM推理（传递 provider 参数）
     try:
         llm_result = llm_generate(
             prompt=user_input,
             system_prompt=system_prompt,
             context=history,
+            provider=provider,
         )
     except APIError:
         # LLM超时/不可用→返回温和降级回复
@@ -409,6 +594,7 @@ def converse(user_input: str, conversation_id: str | None = None,
             "is_crisis": emotion["crisis_level"] >= 2,
             "is_hr_guided": is_non_hr,
             "suggestions": None,
+            "provider": None,
         }
 
     # 5. 更新对话历史（保留最近20轮）
@@ -435,4 +621,5 @@ def converse(user_input: str, conversation_id: str | None = None,
         "is_crisis": emotion["crisis_level"] >= 2,
         "is_hr_guided": is_non_hr,
         "suggestions": None,
+        "provider": llm_result.get("provider", "zhipu"),
     }

@@ -197,6 +197,7 @@ export interface ConverseResult {
   is_crisis: boolean;
   is_hr_guided: boolean;
   suggestions: string[] | null;
+  provider?: string | null;  // "anthropic" | "zhipu" | null
 }
 
 /** 调用小耕AI多轮对话（朝有规划模块） */

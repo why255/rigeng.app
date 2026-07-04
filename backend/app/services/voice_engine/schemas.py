@@ -48,6 +48,7 @@ class ConversationRequest(BaseModel):
     user_input: str = Field(..., min_length=1)
     module: str = Field(default="general")  # M1朝有规划 / M2暮有复盘 / M3情绪树洞 / M5智能问答
     context_meta: dict[str, Any] | None = None  # 模块特有上下文
+    provider: str | None = None  # LLM提供商: "anthropic" | "zhipu" | None=使用配置默认值
 
 
 class ConversationResponse(BaseModel):
@@ -56,6 +57,7 @@ class ConversationResponse(BaseModel):
     is_crisis: bool = False  # 是否触发危机检测
     is_hr_guided: bool = False  # 是否超出HR范围被温和引导
     suggestions: list[str] | None = None
+    provider: str | None = None  # 实际使用的LLM提供商
 
 
 # ═══════ 情绪/危机检测（内部）═══

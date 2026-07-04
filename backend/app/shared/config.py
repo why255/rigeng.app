@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     ZHIPUAI_MODEL: str = "glm-4-flash"
     ZHIPUAI_MAX_TOKENS: int = 4096
     ZHIPUAI_TEMPERATURE: float = 0.7
+    # Anthropic Claude（推荐 LLM 提供商）
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+    ANTHROPIC_MAX_TOKENS: int = 4096
+    ANTHROPIC_TEMPERATURE: float = 0.7
+    # LLM 提供商选择: "anthropic" | "zhipu" | "auto"
+    # "auto" = 优先 Anthropic，不可用时降级到智谱AI
+    LLM_PROVIDER: str = "auto"
 
     # ────────────────────────────────────────────
     # ④ 文件存储服务
