@@ -1,0 +1,1288 @@
+/**
+ * 暮有复盘 · 模块专属样式
+ * 对齐 m2-p1.html ~ m2-p4.html 新UI设计
+ *
+ * 色板：
+ *   页面底色 #F5F3EF   主强调色 #C03A39   金色点缀 #D4A574
+ *   橙色 #FFB74D         卡片背景 #FFFFFF    正文 #333
+ *   辅助文字 #999 / #666
+ *
+ * 复用 morning-plan.css 的基类（mp-page, mp-card, mp-btn, mp-chat 等），
+ * 本文件仅定义暮有复盘特有的样式。
+ */
+
+/* ══════════════════════════════════════════════════════════════
+   0. 页面容器覆盖
+   ══════════════════════════════════════════════════════════════ */
+.rg-page:has([data-module="evening-review"]) {
+  padding: 0;
+}
+.rg-page:has([data-module="evening-review"][data-page="chat"]) {
+  overflow: hidden;
+}
+[data-module="evening-review"] {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #F5F3EF;
+  min-height: 0;
+}
+[data-module="evening-review"][data-page="chat"] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 复用 morning-plan 的内容区域基类 */
+.er-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  width: 100%;
+}
+.er-page--chat {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.er-page--centered {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 32px 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   1. 品牌标语区
+   ══════════════════════════════════════════════════════════════ */
+.er-hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.er-hero__slogan {
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.6;
+}
+.er-hero__divider {
+  width: 96px;
+  height: 1px;
+  background: #E0D5C7;
+  margin: 16px auto;
+}
+.er-hero__title {
+  font-size: 26px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 800;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.er-hero__title--small {
+  font-size: 17px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 700;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.er-hero__subtitle {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 卡片（继承 mp-card 风格，增加暮有特有修饰）
+   ══════════════════════════════════════════════════════════════ */
+.er-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #E8E0D6;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.er-card--compact {
+  padding: 20px;
+}
+.er-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.er-card__header-icon {
+  font-size: 24px;
+}
+.er-card__header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 统计指标行
+   ══════════════════════════════════════════════════════════════ */
+.er-metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.er-metric + .er-metric {
+  border-top: 1px solid #F5F3EF;
+}
+.er-metric__label {
+  font-size: 14px;
+  color: #666;
+}
+.er-metric__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+.er-metric__value--accent {
+  color: #FFB74D;
+}
+.er-metric__value--brand {
+  color: #C03A39;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. 进度条
+   ══════════════════════════════════════════════════════════════ */
+.er-progress {
+  width: 100%;
+  height: 8px;
+  background: #F5EFE6;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.er-progress__fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.5s ease-out;
+}
+.er-progress__fill--orange {
+  background: #FFB74D;
+}
+.er-progress__fill--brand {
+  background: #C03A39;
+}
+.er-progress__fill--gradient {
+  background: linear-gradient(90deg, #C03A39, #FF6B6B);
+}
+
+/* 进度条 + 标签行 */
+.er-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.er-progress-row .er-progress {
+  flex: 1;
+  margin-top: 0;
+}
+.er-progress-row__text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #C03A39;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5. 按钮
+   ══════════════════════════════════════════════════════════════ */
+.er-btn-primary {
+  display: inline-block;
+  width: 100%;
+  padding: 14px 0;
+  background: #C03A39;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(192, 58, 57, 0.2);
+  transition: all 0.2s;
+}
+.er-btn-primary:hover {
+  background: #A52D2D;
+  box-shadow: 0 10px 24px rgba(192, 58, 57, 0.3);
+}
+.er-btn-primary:active {
+  transform: scale(0.98);
+}
+.er-btn-primary:disabled {
+  background: #ccc;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.er-btn-secondary {
+  display: inline-block;
+  padding: 10px 24px;
+  border: 1px solid #D4C5B0;
+  color: #666;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.er-btn-secondary:hover {
+  background: #F5F3EF;
+  color: #333;
+}
+
+.er-btn-outline {
+  display: inline-block;
+  padding: 10px 24px;
+  border: 1px solid #C03A39;
+  color: #C03A39;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.er-btn-outline:hover {
+  background: rgba(192, 58, 57, 0.05);
+}
+
+/* 操作按钮行 */
+.er-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-top: 24px;
+}
+.er-actions--vertical {
+  flex-direction: column;
+  gap: 12px;
+}
+.er-actions .er-btn-secondary,
+.er-actions .er-btn-outline {
+  flex: 1;
+  text-align: center;
+}
+.er-actions .er-btn-primary {
+  flex: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 昨日摘要卡片
+   ══════════════════════════════════════════════════════════════ */
+.er-yesterday-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.er-yesterday-summary__info {
+  flex: 1;
+  min-width: 0;
+}
+.er-yesterday-summary__title {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.er-yesterday-summary__meta {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+.er-yesterday-summary__badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: #FFB74D;
+  background: #FFF8F0;
+  padding: 4px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex: none;
+  margin-left: 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 五阶段进度指示器
+   ══════════════════════════════════════════════════════════════ */
+.er-stage-bar {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  padding: 16px 24px;
+  margin-bottom: 16px;
+}
+.er-stage-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.er-stage-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.er-stage-node__circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.3s;
+}
+.er-stage-node__circle--completed {
+  background: #22C55E;
+  color: #fff;
+}
+.er-stage-node__circle--active {
+  background: #FFB74D;
+  color: #fff;
+}
+.er-stage-node__circle--pending {
+  border: 2px solid #D4C5B0;
+  color: #BCAAA4;
+  background: transparent;
+}
+.er-stage-node__label {
+  font-size: 10px;
+  text-align: center;
+}
+.er-stage-node__label--completed {
+  color: #666;
+}
+.er-stage-node__label--active {
+  color: #FFB74D;
+  font-weight: 500;
+}
+.er-stage-node__label--pending {
+  color: #999;
+}
+.er-stage-connector {
+  flex: 1;
+  height: 2px;
+  margin: 0 4px;
+  border-radius: 1px;
+  transition: all 0.3s;
+  margin-bottom: 16px;
+}
+.er-stage-connector--completed {
+  background: #22C55E;
+}
+.er-stage-connector--active {
+  background: #FFB74D;
+}
+.er-stage-connector--pending {
+  background: #E8E0D6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 对话页（复用 mp-chat 基类，增加暮有特有修饰）
+   ══════════════════════════════════════════════════════════════ */
+.er-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.er-chat__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+.er-chat__scroll::-webkit-scrollbar { width: 4px; }
+.er-chat__scroll::-webkit-scrollbar-thumb {
+  background: #E8D5B7;
+  border-radius: 10px;
+}
+
+/* 气泡行 — 与 mp-bubble-row 等价 */
+.er-bubble-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.er-bubble-row--user {
+  flex-direction: row-reverse;
+}
+
+/* 头像 */
+.er-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.er-avatar--assistant {
+  background: #C03A39;
+  border: 1px solid #D4A574;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.er-avatar--assistant span {
+  color: #fff;
+  font-size: 12px;
+  font-family: 'ZCOOL XiaoWei', serif;
+  font-weight: 700;
+}
+.er-avatar--user {
+  background: #E8D5B7;
+  border: 1px solid rgba(212, 165, 116, 0.3);
+}
+.er-avatar--user img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 气泡 */
+.er-bubble {
+  padding: 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  max-width: 80%;
+}
+.er-bubble--assistant {
+  background: #FFF0E5;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.er-bubble--user {
+  background: #F5F5F5;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.er-bubble-time {
+  font-size: 10px;
+  color: #999;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* 思考动画 */
+.er-thinking {
+  padding: 16px 20px;
+  background: #FFF0E5;
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+  font-size: 13px;
+  color: #8D6E63;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  animation: er-breathe 1.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.er-thinking__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #E8D5B7;
+  border-top-color: #C03A39;
+  border-radius: 50%;
+  animation: er-spin 0.8s linear infinite;
+}
+
+@keyframes er-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes er-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 输入区
+   ══════════════════════════════════════════════════════════════ */
+.er-chat__composer {
+  padding: 16px 0;
+  flex: none;
+}
+.er-composer {
+  background: #fff;
+  border: 1px solid #D4C5B0;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  padding: 8px;
+  transition: border-color 0.2s;
+}
+.er-composer:focus-within {
+  border-color: #C03A39;
+}
+.er-composer textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  resize: none;
+  padding: 8px;
+  font-family: inherit;
+  color: #333;
+}
+.er-composer textarea::placeholder {
+  color: #BBB;
+}
+.er-composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 8px;
+}
+.er-composer__send {
+  width: 40px;
+  height: 40px;
+  background: #C03A39;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 16px;
+}
+.er-composer__send:hover {
+  background: #A0302E;
+}
+.er-composer__send:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* 语音按钮 */
+.er-voice-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.er-voice-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #C03A39, #D2691E);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 16px rgba(192, 58, 57, 0.3);
+  transition: all 0.2s;
+}
+.er-voice-btn:hover {
+  transform: scale(0.95);
+}
+.er-voice-btn:active {
+  transform: scale(0.9);
+}
+.er-voice-btn--recording {
+  background: #F44336;
+  animation: er-breathe 1.5s ease-in-out infinite;
+  box-shadow: 0 4px 24px rgba(244, 67, 54, 0.5);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10. 情绪评分滑块
+   ══════════════════════════════════════════════════════════════ */
+.er-emotion-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  border: 1px solid #E8E0D6;
+}
+.er-emotion-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.er-emotion-card__title-icon {
+  color: #C03A39;
+  font-size: 20px;
+}
+.er-emotion-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #E8E0D6;
+  border-radius: 99px;
+  outline: none;
+  cursor: pointer;
+}
+.er-emotion-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #C03A39;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(192, 58, 57, 0.3);
+}
+.er-emotion-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #C03A39;
+  cursor: pointer;
+  border: none;
+}
+.er-emotion-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #999;
+  margin-top: 8px;
+}
+.er-emotion-value {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #C03A39;
+  margin-top: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   11. 勇气值卡片
+   ══════════════════════════════════════════════════════════════ */
+.er-courage-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  border: 1px solid #E8E0D6;
+}
+.er-courage-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.er-courage-card__title-icon {
+  color: #C03A39;
+  font-size: 20px;
+}
+.er-courage-card__message {
+  font-size: 12px;
+  color: #999;
+  margin-top: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. SOP 预览卡片
+   ══════════════════════════════════════════════════════════════ */
+.er-sop-preview {
+  border-left: 4px solid #FFB74D;
+  padding-left: 16px;
+}
+.er-sop-step {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.er-sop-step:last-child {
+  margin-bottom: 0;
+}
+.er-sop-step__number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #FFB74D;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-top: 2px;
+}
+.er-sop-step__content {
+  flex: 1;
+}
+.er-sop-step__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+.er-sop-step__desc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+.er-sop-extra {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #F5F3EF;
+}
+.er-sop-extra__item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #666;
+}
+.er-sop-extra__item:last-child {
+  margin-bottom: 0;
+}
+.er-sop-extra__icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   13. 诊断问卷
+   ══════════════════════════════════════════════════════════════ */
+.er-diagnosis-q {
+  margin-bottom: 20px;
+}
+.er-diagnosis-q:last-child {
+  margin-bottom: 0;
+}
+.er-diagnosis-q__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+}
+.er-diagnosis-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.er-diagnosis-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  padding: 6px 12px;
+  border: 1px solid #E8E0D6;
+  border-radius: 8px;
+  transition: all 0.2s;
+  background: #fff;
+}
+.er-diagnosis-radio:hover {
+  border-color: #C03A39;
+}
+.er-diagnosis-radio--checked {
+  border-color: #C03A39;
+  background: rgba(192, 58, 57, 0.05);
+  color: #C03A39;
+}
+.er-diagnosis-radio input {
+  accent-color: #C03A39;
+}
+.er-diagnosis-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #E8E0D6;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  resize: vertical;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  background: #FAFAFA;
+}
+.er-diagnosis-textarea:focus {
+  border-color: #C03A39;
+}
+.er-diagnosis-textarea::placeholder {
+  color: #BBB;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   14. 周进度（甘特条 / 圆点矩阵）
+   ══════════════════════════════════════════════════════════════ */
+.er-week-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+.er-week-row__day {
+  font-size: 12px;
+  color: #666;
+  width: 32px;
+  flex: none;
+}
+.er-week-row__bar {
+  flex: 1;
+  height: 24px;
+  background: #F5F3EF;
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+.er-week-row__bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: #C03A39;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 11px;
+  color: #fff;
+  transition: width 0.5s ease-out;
+}
+.er-week-row__status {
+  font-size: 12px;
+  width: 48px;
+  flex: none;
+  text-align: right;
+}
+.er-week-row__status--completed {
+  color: #22C55E;
+}
+.er-week-row__status--in-progress {
+  color: #999;
+}
+.er-week-row__status--pending {
+  color: #BCAAA4;
+}
+
+/* 移动端圆点矩阵 */
+.er-week-dots {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.er-week-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.er-week-dot__circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+.er-week-dot__circle--completed {
+  background: #C03A39;
+}
+.er-week-dot__circle--in-progress {
+  background: #FFB74D;
+}
+.er-week-dot__circle--pending {
+  background: #E8E0D6;
+}
+.er-week-dot__label {
+  font-size: 10px;
+  color: #999;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   15. 历史列表
+   ══════════════════════════════════════════════════════════════ */
+.er-history-item {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  padding: 20px;
+  margin-bottom: 12px;
+  border: 1px solid #E8E0D6;
+}
+.er-history-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.er-history-item__date {
+  font-size: 14px;
+  color: #666;
+}
+.er-history-item__status {
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.er-history-item__status--completed {
+  color: #22C55E;
+}
+.er-history-item__status--skipped {
+  color: #F87171;
+}
+.er-history-item__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+.er-history-item__title--empty {
+  color: #999;
+  font-style: italic;
+}
+.er-history-item__stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 14px;
+  color: #FFB74D;
+}
+.er-history-item__stars-label {
+  font-size: 12px;
+  color: #999;
+  margin-left: 8px;
+}
+
+/* 星级颜色 */
+.er-star--filled {
+  color: #FFB74D;
+}
+.er-star--empty {
+  color: #E8E0D6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   16. 庆祝动画（复用 mp-celebration）
+   ══════════════════════════════════════════════════════════════ */
+.er-celebration-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  animation: er-fadeIn 0.3s ease-out;
+}
+.er-celebration-overlay__trophy {
+  font-size: 64px;
+  color: #D4A574;
+  animation: er-bounce 1s ease-in-out infinite;
+}
+.er-celebration-overlay__text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #D4A574;
+  margin-top: 16px;
+}
+@keyframes er-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes er-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-16px); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   17. 离线横幅
+   ══════════════════════════════════════════════════════════════ */
+.er-offline-banner {
+  background: #FFF3E0;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #E65100;
+  font-weight: 500;
+  border-bottom: 1px solid #FFE0B2;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   18. 快捷链接
+   ══════════════════════════════════════════════════════════════ */
+.er-nav-link {
+  display: inline-block;
+  font-size: 12px;
+  color: #999;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+.er-nav-link:hover {
+  color: #C03A39;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   19. Toast（CSS 层，与 useToast hook 并存）
+   ══════════════════════════════════════════════════════════════ */
+.er-toast {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(44, 24, 16, 0.9);
+  color: #D4A574;
+  padding: 12px 24px;
+  border-radius: 99px;
+  border: 1px solid #D4A574;
+  font-size: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: er-toast-in 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+@keyframes er-toast-in {
+  from { top: 0; opacity: 0; }
+  to { top: 10%; opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   20. 移动端响应式
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  .er-page {
+    padding: 24px 16px 120px;
+  }
+  .er-page--chat {
+    padding: 0 12px 100px;
+  }
+  .er-hero {
+    margin-bottom: 24px;
+  }
+  .er-hero__title {
+    font-size: 22px;
+  }
+  .er-hero__title--small {
+    font-size: 15px;
+  }
+  .er-hero__slogan {
+    font-size: 15px;
+  }
+  .er-card {
+    padding: 20px;
+  }
+  .er-btn-primary {
+    font-size: 16px;
+    padding: 14px 0;
+  }
+  .er-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .er-actions .er-btn-secondary,
+  .er-actions .er-btn-outline,
+  .er-actions .er-btn-primary {
+    width: 100%;
+  }
+  .er-diagnosis-radio-group {
+    flex-direction: column;
+  }
+  .er-diagnosis-radio {
+    width: 100%;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   21. PC 双栏对话布局
+   ══════════════════════════════════════════════════════════════ */
+.er-chat-dual {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+.er-chat-dual__left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.er-chat-dual__right {
+  width: 380px;
+  flex: none;
+  overflow-y: auto;
+  padding: 16px;
+  background: #FAFAFA;
+  border-left: 1px solid #E8E0D6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   22. SOP 编辑器弹窗
+   ══════════════════════════════════════════════════════════════ */
+.er-sop-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: er-fadeIn 0.2s ease-out;
+}
+.er-sop-editor {
+  background: #fff;
+  border-radius: 12px;
+  width: 640px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.er-sop-editor__step {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #FAFAFA;
+  border-radius: 8px;
+  border: 1px solid #E8E0D6;
+}
+.er-sop-editor__step:hover {
+  border-color: #C03A39;
+}
+
+@keyframes er-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   23. 表单控件
+   ══════════════════════════════════════════════════════════════ */
+.er-form-group {
+  margin-bottom: 16px;
+}
+.er-form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+.er-form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #E8E0D6;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+  background: #FAFAFA;
+  box-sizing: border-box;
+}
+.er-form-input:focus {
+  border-color: #C03A39;
+  background: #fff;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   24. 信息收集阶段
+   ══════════════════════════════════════════════════════════════ */
+.er-info-phase-hint {
+  text-align: center;
+  padding: 8px 0;
+  font-size: 12px;
+  color: #999;
+  animation: er-breathe 2s ease-in-out infinite;
+}
+
+@keyframes er-stageBarIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes er-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   25. 行动项
+   ══════════════════════════════════════════════════════════════ */
+.er-action-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #F5F3EF;
+}
+.er-action-item:last-child {
+  border-bottom: none;
+}
+.er-action-item__checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #C03A39;
+  cursor: pointer;
+}
+.er-action-item__text {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+}
+.er-action-item__text--completed {
+  color: #999;
+  text-decoration: line-through;
+}
+.er-action-item__badge {
+  font-size: 10px;
+  color: #22C55E;
+  background: #F0FFF0;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   26. 仪表盘空状态居中
+   ══════════════════════════════════════════════════════════════ */
+.er-page--centered {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  width: 100%;
+  text-align: center;
+}

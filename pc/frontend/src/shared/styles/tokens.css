@@ -1,0 +1,307 @@
+/* =============================================================
+ * 日耕 APP 全局设计令牌 (CSS Variables)
+ * 来源：步骤4《CSS变量定义表 V1.2》+《日耕品牌统一标准锁定书 V1.1》
+ * 规则：100% 引用锁定值，一处定义全局生效。
+ * 暗色模式：[data-theme="dark"]（仅情绪树洞）
+ * 模块专属色：[data-module="xxx"]
+ * ============================================================= */
+
+:root {
+  /* ===== 颜色系统 · 品牌色 ===== */
+  --color-brand-primary: #8B4513;          /* 品牌主色 - 按钮、导航选中、高亮 */
+  --color-brand-primary-hover: #A0522D;    /* 品牌主色悬停态 */
+  --color-brand-primary-active: #7A3D10;   /* 品牌主色按下态 */
+  --color-brand-primary-light: #FFF8F0;    /* 浅色背景 - 次按钮、选中背景 */
+  --color-brand-secondary: #D2691E;        /* 品牌辅色 */
+  --color-brand-bg: #F5EFE6;               /* 品牌底色 - 进度条底色 */
+  --color-brand-bg-page: #FDF8F3;          /* 页面背景色 */
+  --color-brand-white: #FFFFFF;            /* 白色 - 卡片背景、输入框背景 */
+
+  /* ===== 颜色系统 · 中性色 ===== */
+  --color-neutral-900: #2D1810;            /* 主文字色 - 标题、正文 */
+  --color-neutral-700: #5D4037;            /* 次要文字 - 辅助信息 */
+  --color-neutral-500: #8D6E63;            /* 辅助文字 - 标签、提示 */
+  --color-neutral-300: #BBBBBB;            /* 占位文字 - placeholder */
+  --color-neutral-200: #CCCCCC;            /* 禁用文字 - disabled */
+  --color-neutral-100: #E0D5C5;            /* 边框色 - 默认边框 */
+  --color-neutral-50: #F0F0F0;             /* 浅分割线 - Tab上边框/导航右边框 */
+  --color-neutral-25: #F5F5F5;             /* 极浅背景 - 用户气泡/禁用输入框 */
+
+  /* ===== 颜色系统 · 语义色 ===== */
+  --color-success: #4CAF50;
+  --color-success-bg: #E8F5E9;
+  --color-warning: #FF9800;
+  --color-warning-bg: #FFF3E0;
+  --color-error: #F44336;
+  --color-error-bg: #FFEBEE;
+  --color-error-hover: #E53935;
+  --color-error-active: #D32F2F;
+  --color-info: #2196F3;
+  --color-alert: #FF9800;                  /* 预警橙 */
+
+  /* ===== 对话气泡色 ===== */
+  --color-bubble-assistant: #FFF0E5;       /* 小耕气泡背景 */
+  --color-bubble-user: #F5F5F5;            /* 用户气泡背景 */
+  --color-bubble-agent-dark: #2d2d44;      /* 暗色小耕气泡 */
+  --color-bubble-user-dark: #3a3a5c;       /* 暗色用户气泡 */
+
+  /* ===== 语音相关色 ===== */
+  --color-voice-gradient-start: #8B4513;
+  --color-voice-gradient-end: #D2691E;
+  --color-voice-recording: #F44336;        /* 录音中常亮红 */
+
+  /* ===== 暗色模式强调色（情绪树洞） ===== */
+  --color-dark-accent: #FFCC80;
+  --color-dark-bg: #1a1a2e;
+
+  /* ===== 庆祝动画色 ===== */
+  --color-celebration-gold: #FFD700;
+  --color-celebration-orange: #FFA500;
+  --color-celebration-yellow: #FFCC00;
+
+  /* ===== Toast 中性色 ===== */
+  --color-toast-neutral: #F5F5F5;
+  --color-toast-neutral-text: #5D4037;
+
+  /* ===== 水印 / 遮罩 ===== */
+  --color-watermark: rgba(0, 0, 0, 0.08);
+  --color-overlay: rgba(0, 0, 0, 0.5);
+
+  /* ===== 字体栈（锁定书 6.2） ===== */
+  --font-family-base: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-family-guofeng: "ZCOOL XiaoWei", serif;
+
+  /* ===== 字体层级 L0~L7 ===== */
+  --font-size-l0: 26px;   /* 品牌名 / 页面大标题 - 800 */
+  --font-size-l1: 17px;   /* 导航大类 / 模块标题 - 700 */
+  --font-size-l2: 15px;   /* 功能子项 / 卡片标题 - 600 */
+  --font-size-l3: 19px;   /* 工作区主标题 - 700 */
+  --font-size-l4: 16px;   /* 正文 - 400 */
+  --font-size-l5: 14px;   /* 辅助/副标题 - 400 */
+  --font-size-l6: 13px;   /* 数据行/提示 - 400 */
+  --font-size-l7: 12px;   /* 状态栏/标签 - 400 */
+
+  --font-weight-black: 800;
+  --font-weight-bold: 700;
+  --font-weight-semi-bold: 600;
+  --font-weight-medium: 500;
+  --font-weight-regular: 400;
+
+  --line-height-l0: 36px;
+  --line-height-l1: 26px;
+  --line-height-l2: 22px;
+  --line-height-l3: 30px;
+  --line-height-l4: 26px;
+  --line-height-l5: 21px;
+  --line-height-l6: 18px;
+  --line-height-l7: 16px;
+
+  --letter-spacing-l0: -0.5px;
+  --letter-spacing-default: 0px;
+
+  /* ===== 间距系统 ===== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+
+  /* ===== 圆角系统 ===== */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 50%;
+
+  /* ===== 阴影系统 ===== */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md-hover: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.10);
+  --shadow-focus: 0 0 0 3px rgba(139, 69, 19, 0.12);
+  --shadow-focus-error: 0 0 0 3px rgba(244, 67, 54, 0.12);
+
+  /* ===== 动效参数 ===== */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-extra-slow: 400ms;
+  --duration-loading: 1.5s;
+  --duration-wave: 100ms;
+  --easing-default: ease;
+  --easing-out: ease-out;
+  --easing-in: ease-in;
+  --easing-in-out: ease-in-out;
+  --easing-linear: linear;
+  --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ===== 图标尺寸 ===== */
+  --icon-size-sm: 16px;
+  --icon-size-md: 24px;
+  --icon-size-lg: 32px;
+  --icon-size-xl: 80px;
+
+  /* ===== z-index 层级 ===== */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 500;
+  --z-modal: 600;
+  --z-toast: 700;
+  --z-celebration: 800;
+
+  /* ===== 组件专属尺寸 ===== */
+  --container-max-width-chat: 680px;
+  --container-max-width-dashboard: 960px;
+  --container-padding-mobile: 16px;
+  --sidebar-width: 240px;
+  --sidebar-logo-height: 64px;
+  --sidebar-item-height: 48px;
+  --tabbar-height: 80px;
+  --topbar-height: 64px;
+  --input-min-height: 44px;
+  --input-max-height: 120px;
+  --progress-height: 6px;
+  --progress-radius: 3px;
+  --voice-button-size: 80px;
+  --avatar-size-sm: 36px;
+  --avatar-size-lg: 48px;
+  --offline-banner-height: 40px;
+  --toast-bottom: 120px;
+  --toast-max-width: 80vw;
+  --toast-duration: 2000ms;
+
+  /* ===== 勇气值专属变量 ===== */
+  --courage-gradient-start: #FFB74D;
+  --courage-gradient-end: #FF8A65;
+  --courage-text: #FF8A65;
+
+  /* ===== 模块默认专属色（被 [data-module] 覆盖） ===== */
+  --module-color-primary: #8B4513;
+  --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;
+  --module-color-bar: #8B4513;
+}
+
+/* =============================================================
+ * 暗色模式覆盖（仅情绪树洞 · data-theme="dark"）
+ * 背景色基准：#1a1a2e（深蓝紫）
+ * ============================================================= */
+[data-theme="dark"] {
+  /* ── 页面底色 ── */
+  --color-brand-bg: #1a1a2e;
+  --color-brand-white: #16213e;
+  --color-brand-bg-page: #1a1a2e;
+
+  /* ── 品牌色暗色适配 ── */
+  --color-brand-primary: #D28A4A;
+  --color-brand-primary-hover: #E0A060;
+  --color-brand-primary-active: #C07838;
+  --color-brand-primary-light: #2a2a4e;
+  --color-brand-secondary: #E09550;
+
+  /* ── 中性色反转（暗底浅字）── */
+  --color-neutral-25: #1a1a2e;
+  --color-neutral-50: #0f3460;
+  --color-neutral-100: #2a2a4e;
+  --color-neutral-200: #4a4a6a;
+  --color-neutral-300: #6a6a8a;
+  --color-neutral-500: #9090a0;
+  --color-neutral-700: #B0B0C0;
+  --color-neutral-900: #E0E0E8;
+
+  /* ── 对话气泡 ── */
+  --color-bubble-assistant: #2a2a3e;
+  --color-bubble-user: #3a3a4e;
+  --color-bubble-agent-dark: #2d2d44;
+  --color-bubble-user-dark: #3a3a5c;
+
+  /* ── 阴影（暗色加重）── */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md-hover: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 3px rgba(210, 138, 74, 0.25);
+
+  /* ── 语义色暗色适配 ── */
+  --color-success: #66BB6A;
+  --color-success-bg: #1B3A1B;
+  --color-warning: #FFB74D;
+  --color-warning-bg: #3A2A1B;
+  --color-error: #EF5350;
+  --color-error-bg: #3A1B1B;
+  --color-error-hover: #E53935;
+  --color-error-active: #D32F2F;
+  --color-info: #42A5F5;
+
+  /* ── 语音按钮暗色适配 ── */
+  --color-voice-gradient-start: #D28A4A;
+  --color-voice-gradient-end: #E09550;
+
+  /* ── 其他组件 ── */
+  --color-brand-primary-light: #2a2a4e;
+  --color-toast-neutral: #3a3a4e;
+  --color-toast-neutral-text: #B0B0C0;
+  --color-watermark: rgba(255, 255, 255, 0.05);
+  --color-overlay: rgba(0, 0, 0, 0.7);
+
+  /* ── 模块色（情绪树洞暗色覆盖）── */
+  --module-color-primary: #D28A4A;
+  --module-color-accent: #FFCC80;
+  --module-color-light: #2a2a4e;
+  --module-color-bar: #D28A4A;
+  --module-dark-bg: #1a1a2e;
+  --module-dark-accent: #FFCC80;
+
+  /* ── 勇气值暗色适配 ── */
+  --courage-gradient-start: #FFB74D;
+  --courage-gradient-end: #FF8A65;
+  --courage-text: #FFB74D;
+}
+
+/* =============================================================
+ * 模块专属色（在页面根元素注入 data-module）
+ * ============================================================= */
+[data-module="morning-plan"] {      /* 朝有规划 — 新UI色板 */
+  --module-color-primary: #C03A39;  --module-color-accent: #D4A574;
+  --module-color-light: #FFF5F5;    --module-color-bar: #C03A39;
+  --module-bg-page: #F5F3EF;
+  /* 四象限色 */
+  --module-quadrant-urgent: #C03A39;
+  --module-quadrant-important: #D4A574;
+  --module-quadrant-delegate: #6B8FBF;
+  --module-quadrant-eliminate: #999999;
+}
+[data-module="evening-review"] {    /* 暮有复盘 - 暮色橙 */
+  --module-color-primary: #8B4513; --module-color-accent: #FFB74D;
+  --module-color-light: #FFF8F0;   --module-color-bar: #FFB74D;
+}
+[data-module="mood-haven"] {        /* 情绪树洞 - 暖黄 */
+  --module-color-primary: #8B4513; --module-color-accent: #FFCC80;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+  --module-dark-bg: #1a1a2e;       --module-dark-accent: #FFCC80;
+}
+[data-module="smart-record"] {      /* 智能记录 */
+  --module-color-primary: #8B4513; --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+}
+[data-module="smart-qa"] {          /* 智能问答 */
+  --module-color-primary: #8B4513; --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+}
+[data-module="smart-office"] {      /* 智能办公 */
+  --module-color-primary: #8B4513; --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+}
+[data-module="career-mentor"] {     /* 高维求职 - 军师蓝 */
+  --module-color-primary: #8B4513; --module-color-accent: #607D8B;
+  --module-color-light: #F5F7FA;   --module-color-bar: #607D8B;
+}
+[data-module="knowledge-base"] {    /* 公私智库 */
+  --module-color-primary: #8B4513; --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+}
+[data-module="data-analytics"] {    /* 数据分析 */
+  --module-color-primary: #8B4513; --module-color-accent: #8B4513;
+  --module-color-light: #FFF8F0;   --module-color-bar: #8B4513;
+}

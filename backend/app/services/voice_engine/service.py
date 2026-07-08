@@ -325,6 +325,16 @@ MODULE_SYSTEM_PROMPTS: dict[str, str] = {
         "答案包含四要素：操作要点+注意事项+沟通话术+达成标准。"
         "不知道就说不知道，绝不编造。"
     ),
+    "smart_office": (
+        "你是智能办公的AI助手小耕。智能办公的品牌语：告别碎片化，高效又专业。"
+        "你帮助用户生成HR专业文档（JD、薪酬方案、绩效制度、员工手册等），"
+        "结合用户输入的信息，生成结构化的专业文档。"
+    ),
+    "smart_job": (
+        "你是智能求职的AI助手小耕。智能求职的品牌语：求职有策略，步步有方向。"
+        "你帮助用户进行职业规划、简历优化、面试准备、offer对比等求职相关任务，"
+        "提供专业、实用的求职建议。"
+    ),
 }
 
 
@@ -556,8 +566,13 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
 
 def converse(user_input: str, conversation_id: str | None = None,
              module: str = "general", context_meta: dict[str, Any] | None = None,
-             provider: str | None = None) -> dict[str, Any]:
-    """A5 多轮对话统一入口。"""
+             provider: str | None = None,
+             db: Any | None = None) -> dict[str, Any]:
+    """A5 多轮对话统一入口。
+
+    当 db 传入时，自动检索该模块的算法文件并注入 system prompt，
+    实现「AI调用时优先检索管理员上传的算法文件」。
+    """
     # 1. 情绪检测
     emotion = _detect_emotion(user_input)
 
@@ -573,6 +588,17 @@ def converse(user_input: str, conversation_id: str | None = None,
 
     # 获取模块系统提示词
     system_prompt = MODULE_SYSTEM_PROMPTS.get(module, MODULE_SYSTEM_PROMPTS["general"])
+
+    # ★ 注入算法文件内容（管理员上传的模块算法优先检索）
+    if db is not None and module != "general":
+        try:
+            from ..algorithm_admin.service import get_algorithms_for_module
+            algo_content = get_algorithms_for_module(db, module)
+            if algo_content:
+                system_prompt += algo_content
+                logger.info("算法文件已注入 system prompt: module=%s len=%d", module, len(algo_content))
+        except Exception as e:
+            logger.warning("算法文件检索失败（不影响主流程）: module=%s error=%s", module, e)
 
     # 添加模块上下文
     if context_meta:

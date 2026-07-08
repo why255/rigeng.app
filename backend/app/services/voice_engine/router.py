@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
+from ...shared.database import get_db
 from ...shared.response import ok
 from ...shared.security import get_current_user, CurrentUser
 from . import service
@@ -40,14 +42,16 @@ def generate(body: LLMRequest, user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/converse")  # A5: 多轮对话
-def converse(body: ConversationRequest, user: CurrentUser = Depends(get_current_user)):
-    """多轮对话管理。自动维护上下文，支持各模块专属系统提示词。"""
+def converse(body: ConversationRequest, user: CurrentUser = Depends(get_current_user),
+             db: Session = Depends(get_db)):
+    """多轮对话管理。自动维护上下文，支持各模块专属系统提示词+算法文件检索。"""
     result = service.converse(
         user_input=body.user_input,
         conversation_id=body.conversation_id,
         module=body.module,
         context_meta=body.context_meta,
         provider=body.provider,
+        db=db,
     )
     return ok(result)
 

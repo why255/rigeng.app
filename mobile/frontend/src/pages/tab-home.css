@@ -1,0 +1,456 @@
+/* =============================================================
+ * Tab 首页视图样式（对齐 code.md 设计稿）
+ * 4 个板块首页：日耕、涨薪、智库、我的
+ * ============================================================= */
+
+/* ── 共享：sub-view 容器 ── */
+.sub-view {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--topbar-height) - var(--tabbar-height) - var(--spacing-2xl));
+}
+
+/* ── 共享：标题区 ── */
+.tab-title {
+  font-size: 24px;
+  font-weight: var(--font-weight-black);
+  color: var(--color-brand-primary);
+  margin-bottom: var(--spacing-sm);
+}
+.tab-subtitle {
+  font-size: var(--font-size-l5);
+  color: var(--color-neutral-500);
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* ── 卡片列表（纵向排列）── */
+.tab-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* ── 卡片网格（2 列）── */
+.tab-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+/* ── 卡片基底 ── */
+.tab-card {
+  background: var(--color-brand-white);
+  border: 1px solid var(--color-neutral-100);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--easing-default);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-card:hover {
+  box-shadow: var(--shadow-md-hover);
+  border-color: var(--color-brand-primary);
+}
+.tab-card:active {
+  transform: scale(0.98);
+}
+
+/* ── 横向卡片（图标左 + 文字右）── */
+.tab-card--row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+/* ── 纵向卡片（图标上 + 文字下，居中）── */
+.tab-card--col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-xl);
+}
+
+/* ── 带右箭头的卡片 ── */
+.tab-card--chevron {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tab-card__left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+.tab-chevron {
+  font-size: 20px;
+  color: var(--color-neutral-300);
+  flex: none;
+}
+
+/* ── 图标容器 · 圆形 ── */
+.tab-icon-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex: none;
+}
+.tab-icon-circle--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 28px;
+}
+
+/* ── 图标容器 · 方角 ── */
+.tab-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex: none;
+}
+.tab-icon-box--sm {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  font-size: 28px;
+}
+
+/* ── 卡片文字 ── */
+.tab-card__text {
+  min-width: 0;
+}
+.tab-card__title {
+  font-size: var(--font-size-l1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-neutral-900);
+}
+.tab-card__desc {
+  font-size: var(--font-size-l6);
+  color: var(--color-neutral-500);
+  margin-top: 2px;
+}
+.tab-card__desc--sm {
+  font-size: 10px;
+  margin-top: var(--spacing-xs);
+}
+
+/* ================================================================
+ * 板块一 · 日耕 (board1 / #tab-dialog) — 新版小耕对话首页
+ * ================================================================ */
+.tab-dialog {
+  padding: 0;
+  background: #f9f5ec;
+}
+
+/* ── Logo 区 ── */
+.tab-dialog__logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.tab-dialog__logo-icon {
+  width: 38px;
+  height: 38px;
+  background: #d62828;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-dialog__logo-icon span {
+  color: #fff;
+  font-size: 20px;
+  font-weight: var(--font-weight-black);
+}
+.tab-dialog__logo-text {
+  font-size: 20px;
+  color: #8c786a;
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── 标题区 ── */
+.tab-dialog__header {
+  margin-bottom: 22px;
+}
+.tab-dialog__title {
+  font-size: 26px;
+  font-weight: var(--font-weight-bold);
+  color: #7a685c;
+  margin-bottom: 4px;
+}
+.tab-dialog__subtitle {
+  font-size: 14px;
+  color: #a08e80;
+}
+
+/* ── 卡片列表 ── */
+.tab-dialog__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── 卡片基底 card-notebook ── */
+.card-notebook {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-brand-white);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--easing-default);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-notebook:active {
+  transform: scale(0.98);
+}
+
+/* ── 图标圆形容器 ── */
+.card-notebook__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.card-notebook__icon--orange {
+  background: #fff3e0;
+  color: #f57c00;
+}
+.card-notebook__icon--blue {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+.card-notebook__icon--purple {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+/* ── 卡片文字 ── */
+.card-notebook__text {
+  min-width: 0;
+}
+.card-notebook__title {
+  font-size: 16px;
+  font-weight: var(--font-weight-bold);
+  color: #554840;
+  margin-bottom: 2px;
+}
+.card-notebook__desc {
+  font-size: 13px;
+  color: #948478;
+}
+
+/* ── 底部装饰线 ── */
+.tab-dialog__footer-line {
+  width: 40px;
+  height: 3px;
+  background: #e2dad0;
+  border-radius: 2px;
+  margin: 24px auto 0;
+}
+
+/* ================================================================
+ * 板块二 · 涨薪 (board2 / #tab-career)
+ * ================================================================ */
+.tab-career {
+  padding: var(--spacing-md) 0;
+}
+.tab-career__header .tab-title {
+  margin-bottom: var(--spacing-xl);
+}
+
+/* ================================================================
+ * 板块三 · 智库 (board3 / #tab-knowledge)
+ * ================================================================ */
+.tab-knowledge {
+  padding: var(--spacing-md) 0;
+}
+.tab-knowledge__header .tab-title {
+  margin-bottom: var(--spacing-xl);
+}
+
+/* ================================================================
+ * 板块四 · 我的 (board4 / #tab-mine)
+ * ================================================================ */
+.tab-mine {
+  margin: calc(-1 * var(--spacing-lg));
+  margin-bottom: calc(-1 * var(--spacing-lg) - var(--tabbar-height));
+}
+
+/* ── 头部渐变背景 ── */
+.tab-mine__header {
+  background: linear-gradient(180deg, #8B4513 0%, #A0522D 100%);
+  padding: 36px var(--spacing-lg) var(--spacing-2xl);
+}
+.tab-mine__profile {
+  display: flex;
+  align-items: center;
+}
+.tab-mine__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: white;
+  flex: none;
+  margin-right: var(--spacing-lg);
+}
+.tab-mine__info {
+  flex: 1;
+  min-width: 0;
+}
+.tab-mine__name {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+  color: white;
+}
+.tab-mine__phone {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: var(--spacing-xs);
+}
+.tab-mine__badges {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+.tab-badge {
+  font-size: 12px;
+  padding: 2px 12px;
+  border-radius: var(--radius-full);
+  line-height: 20px;
+}
+.tab-badge--vip {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+.tab-badge--open {
+  font-size: 10px;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  padding: 1px 6px;
+}
+.tab-mine__settings-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  flex: none;
+  transition: color var(--duration-fast);
+}
+.tab-mine__settings-btn:hover {
+  color: white;
+}
+
+/* ── 统计卡片（悬浮在 header 下方）── */
+.tab-mine__stats {
+  background: var(--color-brand-white);
+  margin: -16px var(--spacing-lg) 0;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #E8DDD4;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--spacing-md);
+  position: relative;
+  z-index: 1;
+}
+.tab-mine__stat {
+  text-align: center;
+}
+.tab-mine__stat--bordered {
+  border-left: 1px solid #E8DDD4;
+  border-right: 1px solid #E8DDD4;
+}
+.tab-mine__stat-num {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-brand-primary);
+}
+.tab-mine__stat-label {
+  font-size: 11px;
+  color: var(--color-neutral-500);
+}
+
+/* ── 功能入口菜单 ── */
+.tab-mine__menu {
+  padding: var(--spacing-xl) var(--spacing-lg);
+  padding-bottom: 0;
+}
+.tab-mine__menu-item {
+  background: var(--color-brand-white);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+  border-bottom: 1px solid #F5F0EB;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-mine__menu-item:first-child {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border: 1px solid #E8DDD4;
+  border-bottom: 1px solid #F5F0EB;
+}
+.tab-mine__menu-item:not(:first-child):not(:last-child) {
+  border-left: 1px solid #E8DDD4;
+  border-right: 1px solid #E8DDD4;
+}
+.tab-mine__menu-item:last-child {
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border: 1px solid #E8DDD4;
+  border-top: 1px solid #F5F0EB;
+}
+.tab-mine__menu-item:active {
+  background: var(--color-neutral-25);
+}
+.tab-mine__menu-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+.tab-mine__menu-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex: none;
+}
+.tab-mine__menu-title {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-neutral-900);
+}
+.tab-mine__menu-sub {
+  font-size: 12px;
+  color: var(--color-neutral-500);
+}

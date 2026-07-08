@@ -1,0 +1,1513 @@
+/**
+ * 情绪树洞 · 模块专属样式
+ * 对齐 m3p1-mobile.html ~ m3p5-mobile.html 设计规范
+ *
+ * 色板：
+ *   页面底色 #F5F3EF   主强调色 #C03A39   金色点缀 #FFCC80 / #D4A574
+ *   卡片边框 #E8E0D6   卡片背景 #FFFFFF    正文 #333
+ *   辅助文字 #999 / #666
+ *
+ * 暗色主题（倾诉对话页 + 可选全局暗色）：
+ *   底色 #1a1a1a   卡片 #2d2d44   气泡-小耕 #2d2d44   气泡-用户 #3a3a5c
+ *   正文 #E0E0E0   辅助 #B0B0B0   强调 #FFCC80
+ *
+ * 无 Tailwind CSS，仅 mh-* BEM 类名 + 内联 style。
+ */
+
+/* ══════════════════════════════════════════════════════════════
+   1. 页面容器覆盖
+   ══════════════════════════════════════════════════════════════ */
+.rg-page:has([data-module="mood-haven"]) {
+  padding: 0;
+}
+.rg-page:has([data-module="mood-haven"][data-page="chat"]) {
+  overflow: hidden;
+}
+[data-module="mood-haven"] {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #F5F3EF;
+  min-height: 0;
+}
+[data-module="mood-haven"][data-page="chat"] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+:root[data-theme="dark"] [data-module="mood-haven"] {
+  background-color: #1a1a1a;
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 内容区域基类
+   ══════════════════════════════════════════════════════════════ */
+.mh-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  width: 100%;
+}
+.mh-page--chat {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 16px 100px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 品牌标语区
+   ══════════════════════════════════════════════════════════════ */
+.mh-hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.mh-hero__slogan {
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.6;
+}
+.mh-hero__divider {
+  width: 96px;
+  height: 1px;
+  background: #E0D5C7;
+  margin: 16px auto;
+}
+.mh-hero__title {
+  font-size: 26px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 800;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.mh-hero__title--small {
+  font-size: 17px;
+  font-family: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
+  font-weight: 700;
+  color: #333;
+  letter-spacing: 0.1em;
+}
+.mh-hero__subtitle {
+  font-size: 14px;
+  color: #999;
+  margin-top: 8px;
+}
+
+:root[data-theme="dark"] .mh-hero__slogan,
+:root[data-theme="dark"] .mh-hero__title,
+:root[data-theme="dark"] .mh-hero__title--small {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-hero__divider {
+  background: #3a3a5c;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. 卡片
+   ══════════════════════════════════════════════════════════════ */
+.mh-card {
+  background: #FFFFFF;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.mh-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.mh-card__header-icon {
+  font-size: 18px;
+}
+.mh-card__header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-card--link {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mh-card--link:hover {
+  border-color: #FFCC80;
+  box-shadow: 0 2px 8px rgba(255,204,128,0.2);
+}
+
+:root[data-theme="dark"] .mh-card {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-card__header-title {
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5. 安全承诺语气泡
+   ══════════════════════════════════════════════════════════════ */
+.mh-safe-promise {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.mh-safe-promise__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #FFF0E5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+.mh-safe-promise__bubble {
+  background: #FFF0E5;
+  border: 1px solid #FFE0D0;
+  border-radius: 16px 16px 16px 0;
+  padding: 20px;
+  max-width: 80%;
+}
+.mh-safe-promise__text {
+  color: #555;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.mh-safe-promise__text strong {
+  color: #333;
+}
+
+:root[data-theme="dark"] .mh-safe-promise__avatar {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-safe-promise__bubble {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-safe-promise__text {
+  color: #B0B0B0;
+}
+:root[data-theme="dark"] .mh-safe-promise__text strong {
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 情绪评分滑块
+   ══════════════════════════════════════════════════════════════ */
+.mh-emotion-slider-group {
+  margin-bottom: 16px;
+}
+.mh-emotion-slider-group__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mh-emotion-slider-group__label {
+  font-size: 14px;
+  color: #999;
+}
+.mh-emotion-slider-group__value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFCC80;
+}
+.mh-emotion-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #f0f0f0;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  accent-color: #FFCC80;
+}
+.mh-emotion-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFCC80;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.mh-emotion-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #ccc;
+  margin-top: 4px;
+}
+
+:root[data-theme="dark"] .mh-emotion-slider {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-emotion-slider-group__label {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 勇气值进度条
+   ══════════════════════════════════════════════════════════════ */
+.mh-courage-bar {
+  margin-bottom: 8px;
+}
+.mh-courage-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mh-courage-bar__label {
+  font-size: 14px;
+  color: #999;
+}
+.mh-courage-bar__value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-courage-bar__track {
+  width: 100%;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mh-courage-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #FFCC80 0%, #C03A39 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+:root[data-theme="dark"] .mh-courage-bar__track {
+  background: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-courage-bar__value {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-courage-bar__label {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 主按钮
+   ══════════════════════════════════════════════════════════════ */
+.mh-btn-primary {
+  display: block;
+  width: 100%;
+  padding: 16px 24px;
+  background: #C03A39;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(192,58,57,0.15);
+  transition: background 0.2s, transform 0.1s;
+}
+.mh-btn-primary:hover {
+  background: #A0302F;
+}
+.mh-btn-primary:active {
+  transform: scale(0.98);
+}
+.mh-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #E8E0D6;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mh-btn-secondary:hover {
+  background: #eee;
+  color: #333;
+}
+.mh-nav-link {
+  font-size: 14px;
+  color: #999;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.2s;
+}
+.mh-nav-link:hover {
+  color: #C03A39;
+}
+
+:root[data-theme="dark"] .mh-btn-secondary {
+  background: #3a3a5c;
+  border-color: #4a4a6c;
+  color: #B0B0B0;
+}
+:root[data-theme="dark"] .mh-btn-secondary:hover {
+  background: #4a4a6c;
+  color: #E0E0E0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 对话页（暗色主题）
+   ══════════════════════════════════════════════════════════════ */
+.mh-chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 气泡（无头像，纯文本对齐） */
+.mh-bubble-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px;
+}
+.mh-bubble-row--user {
+  align-items: flex-end;
+}
+.mh-bubble {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.mh-bubble--assistant {
+  align-self: flex-start;
+  background: #2d2d44;
+  color: #E0E0E0;
+  border-top-left-radius: 4px;
+}
+.mh-bubble--user {
+  align-self: flex-end;
+  background: #3a3a5c;
+  color: #E0E0E0;
+  border-top-right-radius: 4px;
+}
+/* 消息进入动画 */
+.mh-message-enter {
+  animation: mh-slide-up 0.3s ease-out;
+}
+@keyframes mh-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 思考动画 */
+.mh-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #B0B0B0;
+  font-size: 13px;
+}
+.mh-thinking__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #3a3a5c;
+  border-top: 2px solid #FFCC80;
+  border-radius: 50%;
+  animation: mh-spin 0.8s linear infinite;
+}
+@keyframes mh-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10. 计时器
+   ══════════════════════════════════════════════════════════════ */
+.mh-timer {
+  text-align: center;
+  padding: 8px 0;
+  font-size: 12px;
+  color: #FFCC80;
+  font-weight: 500;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   11. 大语音按钮（脉冲呼吸动画 + 取消录音）
+   ══════════════════════════════════════════════════════════════ */
+.mh-large-voice-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px 0;
+}
+.mh-large-voice-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFCC80 0%, #E8A94D 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 0 auto;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+.mh-large-voice-btn:active {
+  transform: scale(0.94);
+}
+/* 双脉冲环（绝对定位在大按钮内） */
+.mh-voice-pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(255, 204, 128, 0.2);
+  animation: mh-pulse-ring 1.8s infinite;
+  pointer-events: none;
+}
+.mh-voice-pulse-ring:nth-child(2) {
+  animation-delay: 0.6s;
+}
+@keyframes mh-pulse-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+/* 取消录音按钮 */
+.mh-cancel-recording-btn {
+  background: #333;
+  color: #FFCC80;
+  border: 1px solid #555;
+  border-radius: 30px;
+  padding: 6px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.mh-cancel-recording-btn:active {
+  background: #444;
+}
+/* 语音提示文字 */
+.mh-voice-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+}
+/* 设置按钮 */
+.mh-settings-icon-btn {
+  background: transparent;
+  border: none;
+  color: #FFCC80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.mh-settings-icon-btn:active {
+  background: rgba(255, 204, 128, 0.15);
+}
+/* 隐藏底部 TabBar（当大语音 UI 激活时） */
+.rg-shell-mobile:has(.mh-voice-active) .rg-tabbar {
+  display: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. 底部输入区
+   ══════════════════════════════════════════════════════════════ */
+.mh-chat__composer {
+  flex-shrink: 0;
+  padding: 6px 16px 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  position: relative;
+}
+/* 输入行相对容器（供结束倾诉按钮绝对定位） */
+.mh-input-row-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+/* 浮动结束倾诉按钮（输入框右上方） */
+.mh-end-session-btn {
+  position: absolute;
+  right: 0;
+  top: -34px;
+  background: #FFCC80;
+  color: #2C1810;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  box-shadow: 0 2px 8px rgba(255, 204, 128, 0.25);
+  z-index: 5;
+  font-family: inherit;
+}
+.mh-end-session-btn:active {
+  transform: scale(0.94);
+  background: #e8b85a;
+}
+/* 输入框 Pill（单行，圆角 30px） */
+.mh-input-pill {
+  background: #2a2a3a;
+  border-radius: 30px;
+  border: 1px solid #444;
+  padding: 2px 4px 2px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  transition: border-color 0.2s;
+}
+.mh-input-pill:focus-within {
+  border-color: #FFCC80;
+}
+.mh-input-pill input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #E0E0E0;
+  font-size: 14px;
+  padding: 10px 0;
+  font-family: inherit;
+}
+.mh-input-pill input::placeholder {
+  color: #888;
+}
+/* 合并话筒/发送按钮（黄色圆形） */
+.mh-mic-send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #FFCC80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: #2C1810;
+  transition: transform 0.2s, background 0.2s;
+}
+.mh-mic-send-btn:active {
+  transform: scale(0.90);
+  background: #e8b85a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   13. 危机干预弹窗
+   ══════════════════════════════════════════════════════════════ */
+.mh-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+  animation: mh-fade-in 0.3s ease;
+}
+@keyframes mh-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mh-modal {
+  background: #2d2d44;
+  border: 1px solid rgba(192,58,57,0.3);
+  border-radius: 24px;
+  padding: 32px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.mh-modal__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(192,58,57,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 32px;
+}
+.mh-modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.mh-modal__desc {
+  font-size: 14px;
+  color: #B0B0B0;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.mh-modal__hotline {
+  font-size: 28px;
+  font-weight: 700;
+  color: #C03A39;
+  letter-spacing: 0.1em;
+  margin-bottom: 20px;
+}
+.mh-modal__close {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255,255,255,0.05);
+  color: #B0B0B0;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.mh-modal__close:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   14. 30分钟温柔提醒
+   ══════════════════════════════════════════════════════════════ */
+.mh-time-alert {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background: #FFCC80;
+  color: #333;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: mh-slide-down 0.5s ease;
+}
+@keyframes mh-slide-down {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.mh-time-alert__icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mh-time-alert__text {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   15. 成长手册条目
+   ══════════════════════════════════════════════════════════════ */
+.mh-growth-entry {
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+/* 左侧彩色边框 */
+.mh-growth-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+.mh-growth-entry--growth::before {
+  background: #FFCC80;
+}
+.mh-growth-entry--emotion::before {
+  background: #C03A39;
+}
+.mh-growth-entry--cognition::before {
+  background: #9E9E9E;
+}
+.mh-growth-entry__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.mh-growth-entry__date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+}
+.mh-growth-entry__tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.mh-growth-entry__tag--growth {
+  background: #FFF3E0;
+  color: #E65100;
+  border: 1px solid #FFE0B2;
+}
+.mh-growth-entry__tag--emotion {
+  background: #FFEBEE;
+  color: #C62828;
+  border: 1px solid #FFCDD2;
+}
+.mh-growth-entry__tag--cognition {
+  background: #F5F5F5;
+  color: #616161;
+  border: 1px solid #E0E0E0;
+}
+.mh-growth-entry__content {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 12px;
+}
+.mh-growth-entry__meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #999;
+}
+.mh-growth-entry__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+:root[data-theme="dark"] .mh-growth-entry {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-growth-entry__content {
+  color: #B0B0B0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   16. 加载更多按钮
+   ══════════════════════════════════════════════════════════════ */
+.mh-load-more {
+  text-align: center;
+  padding: 32px 0;
+}
+.mh-load-more__btn {
+  font-size: 14px;
+  color: #999;
+  background: none;
+  border: 1px solid #E8E0D6;
+  border-radius: 12px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mh-load-more__btn:hover {
+  color: #C03A39;
+  border-color: #C03A39;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   17. 情绪趋势柱状图
+   ══════════════════════════════════════════════════════════════ */
+.mh-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 160px;
+  padding: 0 12px;
+  gap: 8px;
+}
+.mh-chart__bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.mh-chart__bar {
+  width: 100%;
+  max-width: 48px;
+  border-radius: 6px 6px 0 0;
+  transition: height 0.7s ease;
+  min-height: 4px;
+}
+.mh-chart__bar--positive {
+  background: #FFCC80;
+}
+.mh-chart__bar--negative {
+  background: #C03A39;
+}
+.mh-chart__label {
+  font-size: 10px;
+  color: #999;
+}
+.mh-chart__section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0 4px 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   18. 历史记录列表
+   ══════════════════════════════════════════════════════════════ */
+.mh-history-list {
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.mh-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #f5f5f5;
+}
+.mh-history-item:last-child {
+  border-bottom: none;
+}
+.mh-history-item:hover {
+  background: #fafaf8;
+}
+.mh-history-item__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.mh-history-item__emoji {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mh-history-item__emoji--happy {
+  background: #E8F5E9;
+}
+.mh-history-item__emoji--neutral {
+  background: #FFF3E0;
+}
+.mh-history-item__emoji--sad {
+  background: #FFEBEE;
+}
+.mh-history-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mh-history-item__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-history-item__title--negative {
+  color: #C03A39;
+}
+.mh-history-item__detail {
+  font-size: 12px;
+  color: #999;
+}
+.mh-history-item__arrow {
+  color: #ddd;
+  font-size: 18px;
+}
+
+:root[data-theme="dark"] .mh-history-list {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-history-item {
+  border-bottom-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-history-item:hover {
+  background: #35355a;
+}
+:root[data-theme="dark"] .mh-history-item__title {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-history-item__detail {
+  color: #888;
+}
+:root[data-theme="dark"] .mh-history-item__arrow {
+  color: #555;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   19. 暗色模式开关
+   ══════════════════════════════════════════════════════════════ */
+.mh-dark-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fff;
+  border: 1px solid #E8E0D6;
+  border-radius: 16px;
+}
+.mh-dark-toggle__icon {
+  font-size: 18px;
+  color: #999;
+}
+.mh-dark-toggle__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+.mh-dark-toggle__switch {
+  width: 48px;
+  height: 26px;
+  background: #E0E0E0;
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  border: none;
+}
+.mh-dark-toggle__switch--on {
+  background: #C03A39;
+}
+.mh-dark-toggle__switch-knob {
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.mh-dark-toggle__switch--on .mh-dark-toggle__switch-knob {
+  left: 24px;
+}
+
+:root[data-theme="dark"] .mh-dark-toggle {
+  background: #2d2d44;
+  border-color: #3a3a5c;
+}
+:root[data-theme="dark"] .mh-dark-toggle__label {
+  color: #E0E0E0;
+}
+:root[data-theme="dark"] .mh-dark-toggle__switch {
+  background: #555;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   20. 情绪概览标签
+   ══════════════════════════════════════════════════════════════ */
+.mh-mood-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.mh-mood-badge--calm {
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+.mh-mood-badge--happy {
+  background: #FFF3E0;
+  color: #E65100;
+}
+.mh-mood-badge--tired {
+  background: #FFF8E1;
+  color: #F57F17;
+}
+.mh-mood-badge--sad {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   21. 成长手册预览
+   ══════════════════════════════════════════════════════════════ */
+.mh-growth-preview__stats {
+  display: flex;
+  gap: 12px;
+}
+.mh-growth-preview__stat {
+  background: #fafaf8;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.mh-growth-preview__stat--count {
+  flex: 1;
+}
+.mh-growth-preview__stat--recent {
+  flex: 2;
+}
+.mh-growth-preview__stat-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+.mh-growth-preview__stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+}
+.mh-growth-preview__stat-value small {
+  font-size: 12px;
+  font-weight: 400;
+  color: #999;
+}
+.mh-growth-preview__recent-text {
+  font-size: 14px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   22. 底部链接区
+   ══════════════════════════════════════════════════════════════ */
+.mh-footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0;
+}
+.mh-footer-links__divider {
+  color: #ddd;
+  font-size: 12px;
+}
+.mh-footer-note {
+  text-align: center;
+  font-size: 12px;
+  color: #ccc;
+  padding-bottom: 16px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   23. 页面结构（对齐 MorningPlan mp-mobile-page 模式）
+   ══════════════════════════════════════════════════════════════ */
+.mh-mobile-page {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+}
+/* light theme overrides */
+:root:not([data-theme="dark"]) .mh-mobile-page {
+  background: #F5F3EF;
+}
+.mh-mobile-page__header {
+  flex: none;
+  height: 48px;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  z-index: 10;
+}
+:root:not([data-theme="dark"]) .mh-mobile-page__header {
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+}
+.mh-header-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #B0B0B0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mh-header-btn:active {
+  opacity: 0.7;
+}
+.mh-main-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+.mh-main-scroll::-webkit-scrollbar {
+  width: 0;
+}
+.mh-welcome-hint {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+}
+
+/* ── Chat Input Area (bottom-pinned) ── */
+.mh-chat-input-area {
+  flex: none;
+  background: #1a1a1a;
+  padding: 6px 16px 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  position: relative;
+}
+:root:not([data-theme="dark"]) .mh-chat-input-area {
+  background: #F5F3EF;
+  border-top: 1px solid rgba(0,0,0,0.04);
+}
+.mh-chat-input-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #2a2a3a;
+  border-radius: 30px;
+  border: 1px solid #444;
+  padding: 2px 4px 2px 16px;
+  max-width: 680px;
+  margin: 0 auto;
+  transition: border-color 0.2s;
+}
+:root:not([data-theme="dark"]) .mh-chat-input-pill {
+  background: #fff;
+  border: 1px solid #D4C5B0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.mh-chat-input-pill:focus-within {
+  border-color: #FFCC80;
+}
+:root:not([data-theme="dark"]) .mh-chat-input-pill:focus-within {
+  border-color: #C03A39;
+}
+.mh-chat-input-pill input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #E0E0E0;
+  font-size: 14px;
+  padding: 10px 0;
+  font-family: inherit;
+  min-width: 0;
+}
+:root:not([data-theme="dark"]) .mh-chat-input-pill input {
+  color: #333;
+}
+.mh-chat-input-pill input::placeholder {
+  color: #888;
+}
+:root:not([data-theme="dark"]) .mh-chat-input-pill input::placeholder {
+  color: #9CA3AF;
+}
+.mh-chat-mic-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #FFCC80;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2C1810;
+  flex-shrink: 0;
+  transition: transform 0.2s, background 0.2s;
+}
+:root:not([data-theme="dark"]) .mh-chat-mic-btn {
+  background: #C03A39;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(192,58,57,0.3);
+}
+.mh-chat-mic-btn:active {
+  transform: scale(0.90);
+  background: #e8b85a;
+}
+:root:not([data-theme="dark"]) .mh-chat-mic-btn:active {
+  background: #A0302E;
+}
+
+/* ── End Session Button (above input, right-aligned) ── */
+.mh-end-session-btn {
+  position: absolute;
+  right: 16px;
+  top: -34px;
+  background: #FFCC80;
+  color: #2C1810;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  box-shadow: 0 2px 8px rgba(255, 204, 128, 0.25);
+  z-index: 5;
+  font-family: inherit;
+}
+:root:not([data-theme="dark"]) .mh-end-session-btn {
+  background: #C03A39;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(192,58,57,0.25);
+}
+.mh-end-session-btn:active {
+  transform: scale(0.94);
+  background: #e8b85a;
+}
+:root:not([data-theme="dark"]) .mh-end-session-btn:active {
+  background: #A0302E;
+}
+
+/* ── Voice Recording Overlay (fixed, covers TabBar) ── */
+.mh-voice-zone {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: #1a1a1a;
+  padding: 16px 16px 32px;
+  text-align: center;
+}
+:root:not([data-theme="dark"]) .mh-voice-zone {
+  background: #F5F3EF;
+}
+.mh-voice-hint {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+  text-align: center;
+}
+:root:not([data-theme="dark"]) .mh-voice-hint {
+  color: #999;
+}
+.mh-voice-cancel-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.mh-voice-cancel-pill {
+  padding: 6px 18px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #333;
+  color: #FFCC80;
+  border: 1px solid #555;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+:root:not([data-theme="dark"]) .mh-voice-cancel-pill {
+  background: #fff;
+  color: #C03A39;
+  border: 1px solid #F1D5C7;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+.mh-voice-cancel-pill--active {
+  background: #FFCC80 !important;
+  color: #2C1810 !important;
+}
+:root:not([data-theme="dark"]) .mh-voice-cancel-pill--active {
+  background: #C03A39 !important;
+  color: #fff !important;
+}
+
+/* Large voice button (80px, yellow dark / red light, double pulse rings) */
+.mh-voice-large-btn {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #FFCC80 0%, #E8A94D 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 10px 25px rgba(255, 204, 128, 0.3);
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  border: none;
+  transition: transform 0.15s;
+}
+:root:not([data-theme="dark"]) .mh-voice-large-btn {
+  background: #C03A39;
+  box-shadow: 0 10px 25px rgba(192,58,57,0.4);
+}
+.mh-voice-large-btn:active {
+  transform: scale(0.94);
+}
+.mh-voice-pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(255, 204, 128, 0.2);
+  animation: mh-voice-pulse-large 1.8s infinite;
+  pointer-events: none;
+}
+:root:not([data-theme="dark"]) .mh-voice-pulse-ring {
+  background: rgba(192, 58, 57, 0.2);
+}
+.mh-voice-pulse-ring:nth-child(2) {
+  animation-delay: 0.6s;
+}
+@keyframes mh-voice-pulse-large {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+.mh-voice-timer {
+  font-size: 13px;
+  color: #FFCC80;
+  font-weight: 600;
+  font-family: monospace;
+  margin-top: 8px;
+}
+:root:not([data-theme="dark"]) .mh-voice-timer {
+  color: #C03A39;
+}
+
+/* ── Page header title area (for non-chat pages: light bg) ── */
+.mh-page-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex: none;
+}
+.mh-page-header__back {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  color: #333;
+}
+.mh-page-header__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2C1810;
+}
+.mh-page-header__spacer {
+  width: 32px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   24. 移动端适配
+   ══════════════════════════════════════════════════════════════ */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .mh-page {
+    padding: 32px 24px;
+  }
+  .mh-chart {
+    height: 140px;
+  }
+}
+
+@media (max-width: 767px) {
+  .mh-page {
+    padding: 24px 16px 120px;
+  }
+  .mh-page--chat {
+    padding: 0 12px 100px;
+  }
+  .mh-hero {
+    margin-bottom: 24px;
+  }
+  .mh-hero__title {
+    font-size: 22px;
+  }
+  .mh-hero__slogan {
+    font-size: 15px;
+  }
+  .mh-card {
+    padding: 16px;
+  }
+  .mh-chart {
+    height: 120px;
+  }
+  .mh-safe-promise {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .mh-safe-promise__bubble {
+    max-width: 100%;
+    border-radius: 16px;
+  }
+  .mh-growth-preview__stats {
+    flex-direction: column;
+  }
+  .mh-footer-links {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .mh-modal {
+    margin: 0 16px;
+  }
+  :root[data-theme="dark"] .mh-page--chat {
+    padding-bottom: 100px;
+  }
+}

@@ -49,3 +49,4 @@ from .acquire_client import (  # noqa: F401
     MeetingStrategy, ClientMeeting, NegotiationRound, RoleplaySession,
     ClientContract, ComplianceReminder,
 )
+from .algorithm import AlgorithmFile  # noqa: F401

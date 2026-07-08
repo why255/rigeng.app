@@ -1,0 +1,172 @@
+/**
+ * 智能记录（M4）API 封装。
+ *
+ * 对应后端路由：
+ *   GET    /api/recordings/today        今日录音统计
+ *   GET    /api/recordings/recent       最近录音列表
+ *   GET    /api/recordings              历史录音列表（分页）
+ *   GET    /api/recordings/search        搜索录音
+ *   POST   /api/recordings/start        开始录音
+ *   POST   /api/recordings/chunk         上传音频流（实时）
+ *   POST   /api/recordings/stop         停止录音
+ *   GET    /api/recordings/:id/transcript  获取转写文本
+ *   GET    /api/recordings/:id/audio       获取音频流
+ *   GET    /api/recordings/:id/extraction  获取萃取结果
+ *   POST   /api/recordings/:id/archive     归档到知识库
+ */
+
+import { apiGet, apiPost } from './api'
+
+/* ---------- 类型定义 ---------- */
+
+export type SceneType = '面试' | '会议' | '日常' | '自定义'
+export type RecordingStatus = 'recording' | 'completed' | 'transcribing' | 'extracting' | 'extracted' | 'failed'
+
+export interface Recording {
+  id: string
+  title: string
+  scene: SceneType
+  sceneColor: string
+  date: string
+  duration: string
+  durationSec: number
+  status: RecordingStatus
+  progress?: number
+}
+
+export interface TodayStats {
+  count: number
+  totalMinutes: number
+}
+
+export interface RecordingListResponse {
+  items: Recording[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface TranscriptSegment {
+  speaker: string
+  time: string
+  text: string
+  confidence: number
+  isCandidate?: boolean
+}
+
+export interface TranscriptResponse {
+  recordingId: string
+  segments: TranscriptSegment[]
+  totalDuration: string
+}
+
+export interface Competency {
+  label: string
+  stars: number
+}
+
+export interface ExtractionResult {
+  id: string
+  recordingId: string
+  name: string
+  role: string
+  avatarBg: string
+  years: string
+  school: string
+  skills: string[]
+  salary: string
+  onboard: string
+  competencies: Competency[]
+  scene: SceneType
+}
+
+export interface StartRecordingResponse {
+  recordingId: string
+  uploadUrl?: string
+}
+
+/* ---------- 首页 API ---------- */
+
+/** 获取今日录音统计 */
+export function fetchTodayStats(): Promise<TodayStats> {
+  return apiGet<TodayStats>('/recordings/today')
+}
+
+/** 获取最近录音列表 */
+export function fetchRecentRecordings(): Promise<Recording[]> {
+  return apiGet<Recording[]>('/recordings/recent')
+}
+
+/* ---------- 录音 API ---------- */
+
+/** 开始录音 */
+export function startRecording(scene: SceneType): Promise<StartRecordingResponse> {
+  return apiPost<StartRecordingResponse>('/recordings/start', { scene })
+}
+
+/** 上传音频流分片（实时） */
+export function uploadAudioChunk(recordingId: string, chunk: Blob): Promise<void> {
+  const formData = new FormData()
+  formData.append('chunk', chunk)
+  formData.append('recordingId', recordingId)
+  // 使用 fetch 直接发送 FormData（不走 JSON 封装）
+  return fetch('/api/v1/recordings/chunk', {
+    method: 'POST',
+    body: formData,
+    headers: { Authorization: `Bearer ${localStorage.getItem('rg_token') ?? ''}` },
+  }).then((res) => {
+    if (!res.ok) throw new Error(`上传失败 (${res.status})`)
+  })
+}
+
+/** 停止录音 */
+export function stopRecording(recordingId: string): Promise<{ recordingId: string }> {
+  return apiPost<{ recordingId: string }>('/recordings/stop', { recordingId })
+}
+
+/* ---------- 转写 API ---------- */
+
+/** 获取转写文本（分段、说话人标签、置信度） */
+export function fetchTranscript(recordingId: string): Promise<TranscriptResponse> {
+  return apiGet<TranscriptResponse>(`/recordings/${recordingId}/transcript`)
+}
+
+/** 获取音频流 URL */
+export function getAudioUrl(recordingId: string): string {
+  const token = localStorage.getItem('rg_token') ?? ''
+  return `/api/v1/recordings/${recordingId}/audio?token=${encodeURIComponent(token)}`
+}
+
+/* ---------- 萃取 API ---------- */
+
+/** 获取结构化萃取结果 */
+export function fetchExtraction(recordingId: string): Promise<ExtractionResult> {
+  return apiGet<ExtractionResult>(`/recordings/${recordingId}/extraction`)
+}
+
+/** 触发生成萃取（长耗时操作，轮询 extraction 接口直到完成） */
+export function generateExtraction(recordingId: string): Promise<{ taskId: string }> {
+  return apiPost<{ taskId: string }>(`/recordings/${recordingId}/extraction/generate`)
+}
+
+/* ---------- 归档 API ---------- */
+
+/** 归档到知识库 */
+export function archiveRecording(recordingId: string): Promise<{ knowledgeId: string }> {
+  return apiPost<{ knowledgeId: string }>(`/recordings/${recordingId}/archive`)
+}
+
+/* ---------- 历史列表 API ---------- */
+
+/** 获取录音历史列表（分页） */
+export function fetchHistory(page: number = 1, limit: number = 20): Promise<RecordingListResponse> {
+  return apiGet<RecordingListResponse>('/recordings', {
+    page: String(page),
+    limit: String(limit),
+  })
+}
+
+/** 搜索录音 */
+export function searchRecordings(query: string): Promise<Recording[]> {
+  return apiGet<Recording[]>('/recordings/search', { q: query })
+}
