@@ -1,6 +1,6 @@
 # 日耕（RiGeng）生产环境部署手册
 
-> **最后更新**: 2026-07-04
+> **最后更新**: 2026-07-08
 > **部署目标**: 阿里云 ECS `47.103.197.189`
 > **部署方式**: Docker Compose 全栈容器化
 
@@ -88,9 +88,9 @@ docker inspect rigengapp-nginx-1 --format '{{json .Mounts}}' | python3 -m json.t
 
 | 宿主机路径 | 容器内路径 | 说明 |
 |-----------|-----------|------|
-| `/opt/rigeng.app/frontend/nginx/rigeng.conf` | `/etc/nginx/conf.d/default.conf` | Nginx 配置（UA 分流） |
-| `/opt/rigeng.app/frontend/dist/pc/` | `/usr/share/nginx/html/pc/` | PC 端静态文件 |
-| `/opt/rigeng.app/frontend/dist/mobile/` | `/usr/share/nginx/html/mobile/` | Mobile 端静态文件 |
+| `/opt/rigeng.app/nginx/rigeng.conf` | `/etc/nginx/conf.d/default.conf` | Nginx 配置（UA 分流） |
+| `/opt/rigeng.app/pc/dist/pc/` | `/usr/share/nginx/html/pc/` | PC 端静态文件 |
+| `/opt/rigeng.app/mobile/dist/mobile/` | `/usr/share/nginx/html/mobile/` | Mobile 端静态文件 |
 
 > **这些是实时 bind mount** — 宿主机上更新 `dist/` 文件后 Nginx 立即可见，无需重启 Nginx 容器。但如果 Nginx 配置改了则需要 `docker restart rigengapp-nginx-1`。
 
@@ -145,9 +145,9 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./frontend/nginx/rigeng.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./frontend/dist/pc:/usr/share/nginx/html/pc:ro
-      - ./frontend/dist/mobile:/usr/share/nginx/html/mobile:ro
+      - ./nginx/rigeng.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./pc/dist/pc:/usr/share/nginx/html/pc:ro
+      - ./mobile/dist/mobile:/usr/share/nginx/html/mobile:ro
     depends_on:
       - backend
 
@@ -216,19 +216,19 @@ cd /opt/rigeng.app
 
 ```bash
 # PC 端
-cd /opt/rigeng.app/frontend/pc
+cd /opt/rigeng.app/pc/frontend
 npm install --legacy-peer-deps
 npx vite build
 
 # Mobile 端
-cd /opt/rigeng.app/frontend/mobile
+cd /opt/rigeng.app/mobile/frontend
 npm install --legacy-peer-deps
 npx vite build
 ```
 
 构建产物：
-- PC: `frontend/dist/pc/index.html` + `assets/index-XXXXXXXX.js` + `assets/index-XXXXXXXX.css`
-- Mobile: `frontend/dist/mobile/index.html` + `assets/index-XXXXXXXX.js` + `assets/index-XXXXXXXX.css`
+- PC: `pc/dist/pc/index.html` + `assets/index-XXXXXXXX.js` + `assets/index-XXXXXXXX.css`
+- Mobile: `mobile/dist/mobile/index.html` + `assets/index-XXXXXXXX.js` + `assets/index-XXXXXXXX.css`
 
 ### 4.3 启动全栈容器
 
@@ -283,13 +283,13 @@ git pull origin master
 
 # ② 构建 PC 前端
 echo "=== ② 构建 PC 前端 ==="
-cd "$DEPLOY_DIR/frontend/pc"
+cd "$DEPLOY_DIR/pc/frontend"
 npm install --legacy-peer-deps --quiet
 npx vite build
 
 # ③ 构建 Mobile 前端
 echo "=== ③ 构建 Mobile 前端 ==="
-cd "$DEPLOY_DIR/frontend/mobile"
+cd "$DEPLOY_DIR/mobile/frontend"
 npm install --legacy-peer-deps --quiet
 npx vite build
 
@@ -338,8 +338,8 @@ curl -s -o /dev/null -w 'Health: %{http_code}\n' http://localhost:8000/health
 
 ```bash
 cd /opt/rigeng.app && git pull origin master
-cd /opt/rigeng.app/frontend/pc && npm install --legacy-peer-deps --quiet && npx vite build
-cd /opt/rigeng.app/frontend/mobile && npm install --legacy-peer-deps --quiet && npx vite build
+cd /opt/rigeng.app/pc/frontend && npm install --legacy-peer-deps --quiet && npx vite build
+cd /opt/rigeng.app/mobile/frontend && npm install --legacy-peer-deps --quiet && npx vite build
 # bind mount 自动生效，无需重启 Nginx
 curl -s -o /dev/null -w 'PC: %{http_code}\n' http://localhost/
 ```
@@ -416,7 +416,7 @@ curl -s -H 'User-Agent: Mozilla/5.0 (iPhone)' http://localhost/ | grep -o 'asset
 
 **现象**：手机打开网站看到的仍是旧版，但 `/www/wwwroot/www.rigeng.com/` 代码和构建产物都是最新的。
 
-**原因**：Docker Nginx 容器的 bind mount 源是 `/opt/rigeng.app/frontend/dist/`，不是 `/www/wwwroot/www.rigeng.com/frontend/dist/`。服务器上有两套代码副本，我们在错误的目录操作。
+**原因**：Docker Nginx 容器的 bind mount 源是 `/opt/rigeng.app/pc/dist/pc/` 和 `/opt/rigeng.app/mobile/dist/mobile/`，不是 `/www/wwwroot/www.rigeng.com/` 下的任何路径。服务器上有两套代码副本，我们在错误的目录操作。
 
 **诊断方式**：
 ```bash
@@ -473,7 +473,7 @@ docker exec rigengapp-backend-1 alembic upgrade head
 
 **解决**：
 ```bash
-cd /opt/rigeng.app/frontend/mobile
+cd /opt/rigeng.app/mobile/frontend
 npm install --legacy-peer-deps
 npx vite build
 ```
@@ -554,8 +554,8 @@ docker exec -it rigengapp-db-1 psql -U rigeng -d rigeng -c "SELECT ..."
 
 ```bash
 # 查看当前 dist 构建时间
-ls -la /opt/rigeng.app/frontend/dist/pc/assets/
-ls -la /opt/rigeng.app/frontend/dist/mobile/assets/
+ls -la /opt/rigeng.app/pc/dist/pc/assets/
+ls -la /opt/rigeng.app/mobile/dist/mobile/assets/
 
 # 对比容器内文件
 docker exec rigengapp-nginx-1 ls -la /usr/share/nginx/html/mobile/assets/
@@ -632,13 +632,13 @@ docker system prune -a -f    # 清理所有未使用资源（包括镜像）
 │  │  │   ├── app/           ──docker cp──► 容器 backend:/app/    │   │
 │  │  │   ├── migrations/    ──docker cp──► 容器 backend:/app/    │   │
 │  │  │   └── requirements.txt                                    │   │
-│  │  └── frontend/                                               │   │
-│  │      ├── dist/                                               │   │
-│  │      │   ├── pc/        ──bind mount──► 容器 nginx html/pc   │   │
-│  │      │   └── mobile/    ──bind mount──► 容器 nginx html/mobile│   │
-│  │      ├── pc/            (源码 → vite build → dist/pc/)       │   │
-│  │      ├── mobile/        (源码 → vite build → dist/mobile/)   │   │
-│  │      └── nginx/rigeng.conf ──bind mount──► nginx conf.d/     │   │
+│  │  ├── pc/                                                       │   │
+│  │  │   ├── frontend/    (源码 → vite build → pc/dist/pc/)        │   │
+│  │  │   └── dist/pc/     ──bind mount──► 容器 nginx html/pc       │   │
+│  │  ├── mobile/                                                    │   │
+│  │  │   ├── frontend/    (源码 → vite build → mobile/dist/mobile/) │   │
+│  │  │   └── dist/mobile/ ──bind mount──► 容器 nginx html/mobile    │   │
+│  │  └── nginx/rigeng.conf ──bind mount──► nginx conf.d/            │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                    │
 │  外部访问:                                                         │
@@ -655,7 +655,8 @@ docker system prune -a -f    # 清理所有未使用资源（包括镜像）
 > ```bash
 > # 部署三步走
 > cd /opt/rigeng.app && git pull origin master                   # ① 拉代码
-> cd /opt/rigeng.app/frontend/mobile && npm install --legacy-peer-deps --quiet && npx vite build  # ② 构建前端
+> cd /opt/rigeng.app/pc/frontend && npm install --legacy-peer-deps --quiet && npx vite build  # ② 构建PC前端
+> cd /opt/rigeng.app/mobile/frontend && npm install --legacy-peer-deps --quiet && npx vite build  # ② 构建Mobile前端
 > docker cp /opt/rigeng.app/backend/app rigengapp-backend-1:/app/ && docker restart rigengapp-backend-1  # ③ 更新后端
 > ```
 >

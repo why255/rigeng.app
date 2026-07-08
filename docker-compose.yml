@@ -47,9 +47,9 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./frontend/nginx/rigeng.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./frontend/dist/pc:/usr/share/nginx/html/pc:ro
-      - ./frontend/dist/mobile:/usr/share/nginx/html/mobile:ro
+      - ./nginx/rigeng.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./pc/dist/pc:/usr/share/nginx/html/pc:ro
+      - ./mobile/dist/mobile:/usr/share/nginx/html/mobile:ro
     depends_on:
       - backend
 
