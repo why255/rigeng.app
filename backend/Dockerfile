@@ -1,10 +1,13 @@
-# 日耕（RiGeng）后端 Dockerfile
+# 日耕（RiGeng）后端 Dockerfile（使用阿里云镜像加速）
 # 构建：docker build -t rigeng-backend .
 # 运行：uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 FROM python:3.12-slim
 
 WORKDIR /app
+
+# 使用阿里云 Debian 镜像源（加速 apt）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
 
 # 安装系统依赖
 RUN apt-get update && \
@@ -13,9 +16,9 @@ RUN apt-get update && \
         gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 依赖
+# 安装 Python 依赖（使用阿里云 PyPI 镜像）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 
 # 复制应用代码
 COPY . .
