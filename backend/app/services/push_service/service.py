@@ -30,8 +30,8 @@ _sms_log: list[dict[str, Any]] = []
 _push_log: list[dict[str, Any]] = []
 
 # 阿里云API端点
-ALIYUN_PUSH_ENDPOINT = f"https://cloudpush.aliyuncs.com"
-ALIYUN_SMS_ENDPOINT = "https://dysmsapi.aliyuncs.com"
+ALIYUN_PUSH_ENDPOINT = "cloudpush.aliyuncs.com"
+ALIYUN_SMS_ENDPOINT = "dysmsapi.aliyuncs.com"
 
 
 def _aliyun_sign(method: str, params: dict[str, str], access_key_secret: str) -> str:
