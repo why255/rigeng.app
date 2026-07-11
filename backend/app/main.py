@@ -200,11 +200,18 @@ app.add_middleware(DeviceDetectMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # 本地开发服务器（Vite，各端口）
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:5180",
         "http://localhost:5181",
         "http://localhost:5182",
+        # Capacitor WebView（APK 壳）— androidScheme: 'http' 时 origin 为 http://localhost
+        "http://localhost",
+        # 生产域名 & 直连 IP
+        "http://rigeng365.com",
+        "http://47.103.197.189",
+        "http://47.96.187.229",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -280,6 +287,45 @@ def device_info(request: Request):
 def health():
     """健康检查。"""
     return ok({"env": settings.RIGENG_ENV, "version": __version__, "status": "up"})
+
+
+# ═══════════════════════════════════════════════
+# APK 版本检查（APP自主更新）
+# ═══════════════════════════════════════════════
+_LATEST_APK = {
+    "apk_version": "0.3.1",
+    "apk_version_code": 3,
+    "apk_url": "http://47.103.197.189/日耕-latest.apk",
+    "h5_version": "0.3.1",
+    "h5_build_time": "2026-07-11",
+    "release_notes": "多模型接入:豆包Seed2.0Pro/通义千问Qwen3.7/KimiK2.5/DeepSeekV4/通义听悟ASR/通义TTS-HD/智谱GLM4.5",
+    "min_apk_version_code": 1,
+}
+
+
+@app.get(f"{API}/version")
+def get_version():
+    """获取最新版本信息。"""
+    return ok(_LATEST_APK)
+
+
+@app.get(f"{API}/version/check")
+def check_version(apk_version_code: int = 0):
+    """检查 APK 是否需要更新。"""
+    needs_update = apk_version_code > 0 and apk_version_code < _LATEST_APK["apk_version_code"]
+    is_critical = apk_version_code > 0 and apk_version_code < _LATEST_APK["min_apk_version_code"]
+
+    return ok({
+        "needs_update": needs_update,
+        "update": {
+            "current_version": str(apk_version_code),
+            "latest_version": _LATEST_APK["apk_version"],
+            "download_url": _LATEST_APK["apk_url"],
+            "release_notes": _LATEST_APK["release_notes"],
+            "is_critical": is_critical,
+        } if needs_update else None,
+        "server_version": _LATEST_APK,
+    })
 
 
 @app.get(f"{API}/services")

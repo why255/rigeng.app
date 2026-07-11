@@ -14,6 +14,8 @@ from .persona import build_persona_prompt, MODULE_TONE_PROFILES
 from .llm_orchestrator import (
     llm_generate_with_orchestration,
     select_model,
+    get_provider_for_model,
+    MODULE_MODEL_MAP,
     MODULE_TEMPERATURE,
     TASK_COMPLEXITY,
 )
@@ -35,6 +37,8 @@ __all__ = [
     # llm_orchestrator
     "llm_generate_with_orchestration",
     "select_model",
+    "get_provider_for_model",
+    "MODULE_MODEL_MAP",
     "MODULE_TEMPERATURE",
     "TASK_COMPLEXITY",
     # session_context

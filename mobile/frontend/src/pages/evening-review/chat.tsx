@@ -1,5 +1,5 @@
 /**
- * P2 对话复盘页 — 移动端（对齐 m2-p2-mobile.html 完整语音交互设计）。
+ * P2 对话复盘页 — 移动端（对齐 m2-p2-mobile.html 完整语音交互设计 + 腾讯云ASR）。
  * Route: /m/evening-review/chat
  *
  * V2.0: 所有小耕输出内容由AI模型生成，AI按照五阶段算法引导用户完成复盘。
@@ -27,11 +27,10 @@ import {
   getTime,
   getCourageMessage,
 } from '@/shared/components/features/evening-review';
+import { useVoiceInput, type VoiceMode } from '@/shared/hooks/useVoiceInput';
 import '../morning-plan/morning-plan.css';
 
 /* ── Types ── */
-
-type VoiceMode = 'hold' | 'click';
 
 interface ChatMessage {
   key: string;
@@ -95,7 +94,7 @@ export function EveningReviewChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [thinking, setThinking] = useState(false);
-  const [initializing, setInitializing] = useState(true); // 正在加载初始AI问候
+  const [initializing, setInitializing] = useState(true);
   const [emotionScore, setEmotionScore] = useState(0);
   const [showEmotion, setShowEmotion] = useState(false);
   const [courageValue, setCourageValue] = useState(0);
@@ -106,15 +105,12 @@ export function EveningReviewChat() {
   const [gentlePersistenceUsed, setGentlePersistenceUsed] = useState(false);
   const [reviewAllowedSkip, setReviewAllowedSkip] = useState(false);
 
-  /* ── Voice state ── */
-  const [voiceUIActive, setVoiceUIActive] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [cancelZone, setCancelZone] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pressStartYRef = useRef(0);
+  /* ── Voice: 腾讯云 ASR ── */
+  const voice = useVoiceInput({
+    mode: voiceMode,
+    onResult: (text: string) => processUserInput(text, true),
+    onError: (err) => alert(err),
+  });
 
   /* ═══════════════════════════════════════════════
      Init — AI 生成初始问候
@@ -139,7 +135,6 @@ export function EveningReviewChat() {
         setInfoPhase(phase);
         if (phase === 'reviewing') setShowStageBar(true);
 
-        // 调用 AI 生成初始问候
         try {
           const result = await reviewsApi.reviewChat({
             message: '',
@@ -196,57 +191,13 @@ export function EveningReviewChat() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-
   /* ── Scroll ── */
   const scrollBottom = useCallback(() => {
     setTimeout(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }, 80);
   }, []);
-  useEffect(() => { scrollBottom(); }, [messages, thinking, showEmotion, voiceUIActive, initializing, scrollBottom]);
-
-  /* ═══════════════════════════════════════════════
-     Voice Recording (对照 morning-plan/chat.tsx)
-     ═══════════════════════════════════════════════ */
-
-  const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
-  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  const initRecognition = useCallback(() => {
-    if (recognitionRef.current) return recognitionRef.current;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('浏览器不支持语音识别'); return null; }
-    const r = new SpeechRecognition();
-    r.lang = 'zh-CN'; r.continuous = true; r.interimResults = true;
-    r.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++)
-        if (e.results[i].isFinal) transcriptRef.current += e.results[i][0].transcript;
-    };
-    r.onerror = (e: any) => { if (e.error === 'not-allowed') alert('请允许麦克风权限'); stopRecording(true); };
-    r.onend = () => { if (isRecording) { try { r.start(); } catch { /* */ } } };
-    recognitionRef.current = r;
-    return r;
-  }, [isRecording]);
-
-  const startRecording = useCallback(() => {
-    const r = initRecognition(); if (!r) return;
-    transcriptRef.current = ''; setCancelZone(false);
-    try { r.start(); setIsRecording(true); startTimer(); } catch { /* */ }
-  }, [initRecognition]);
-
-  const stopRecording = useCallback((cancelled = false) => {
-    if (!isRecording) return;
-    setIsRecording(false); stopTimer();
-    try { recognitionRef.current?.stop(); } catch { /* */ }
-    setVoiceUIActive(false);
-    if (cancelled || cancelZone) return;
-    const text = transcriptRef.current.trim();
-    if (text) processUserInput(text, true);
-  }, [isRecording, cancelZone]);
-
-  const cancelRecording = useCallback(() => { if (isRecording) stopRecording(true); }, [isRecording, stopRecording]);
+  useEffect(() => { scrollBottom(); }, [messages, thinking, showEmotion, voice.voiceUIActive, initializing, scrollBottom]);
 
   /* ═══════════════════════════════════════════════
      Core: process user input → AI 生成回复
@@ -260,11 +211,9 @@ export function EveningReviewChat() {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      // 构建上下文（包含刚添加的用户消息）
       const currentMessages = [...messages, userMsg];
       const context = buildContext(currentMessages);
 
-      // ── 调用 AI 生成回复 ──
       const phase = infoPhase === 'collecting' ? 'collecting' as const : 'reviewing' as const;
       const isRefusal = detectRefusal(text);
 
@@ -277,16 +226,13 @@ export function EveningReviewChat() {
         gentle_persistence_used: gentlePersistenceUsed,
       });
 
-      // ── 添加 AI 回复 ──
       const aiMsg: ChatMessage = { key: nextKey(), role: 'assistant', type: 'text', text: result.reply, time: getTime() };
       setMessages(prev => [...prev, aiMsg]);
 
-      // ═══════════════════ 段落一：信息收集 ═══════════════════
       if (infoPhase === 'collecting') {
         const newRounds = infoRounds + 1;
         setInfoRounds(newRounds);
 
-        // 收集足够信息 → 转入正式复盘
         const userTexts = currentMessages.filter(m => m.role === 'user').map(m => m.text);
         if (shouldAdvanceToReview(userTexts, newRounds * 2) && !transitionTriggered) {
           setTransitionTriggered(true);
@@ -294,7 +240,6 @@ export function EveningReviewChat() {
           setShowStageBar(true);
           setStage('greeting');
 
-          // AI 生成过渡消息 + 第一阶段引导
           setTimeout(async () => {
             try {
               const ctx2 = buildContext([...currentMessages, aiMsg]);
@@ -319,14 +264,10 @@ export function EveningReviewChat() {
             }
           }, 600);
         }
-      }
-      // ═══════════════════ 段落二：五阶段复盘 ═══════════════════
-      else {
-        // 温柔坚持处理
+      } else {
         if (isRefusal && stage === 'greeting') {
           if (!gentlePersistenceUsed) {
             setGentlePersistenceUsed(true);
-            // AI 已经生成了温柔坚持的回复，不需要额外处理
           } else {
             setReviewAllowedSkip(true);
             setThinking(false);
@@ -334,7 +275,6 @@ export function EveningReviewChat() {
           }
         }
 
-        // 保存对话记录到后端
         if (!isRefusal || gentlePersistenceUsed) {
           try {
             const ctx3 = buildContext([...currentMessages, aiMsg]);
@@ -347,11 +287,9 @@ export function EveningReviewChat() {
           } catch { /* silent */ }
         }
 
-        // 阶段推进 + AI 生成下一阶段引导
         if (!isRefusal || gentlePersistenceUsed) {
           const next = STAGE_TRANSITIONS[stage];
           if (next) {
-            // 阶段相关的 UI 状态
             if (next === 'extraction' && !showEmotion) setShowEmotion(true);
             if (next === 'improvement') {
               const nc = Math.min(100, Math.max(10, Math.round(emotionScore * 3 + 50)));
@@ -376,7 +314,6 @@ export function EveningReviewChat() {
 
             setStage(next);
 
-            // AI 生成下一阶段的引导语
             setTimeout(async () => {
               try {
                 const ctx4 = buildContext([...currentMessages, aiMsg]);
@@ -393,14 +330,13 @@ export function EveningReviewChat() {
                   text: sResult.reply, time: getTime(),
                 }]);
               } catch {
-                // 降级：无下一阶段引导语也OK，AI已在上一轮回复中自然过渡
+                // 降级：无下一阶段引导语也OK
               }
             }, 600);
           }
         }
       }
     } catch {
-      // AI 调用失败 → 兜底回复
       setMessages(prev => [...prev, {
         key: nextKey(), role: 'assistant', type: 'text',
         text: '姐，小耕正在努力思考中，稍等一下哦～',
@@ -419,37 +355,12 @@ export function EveningReviewChat() {
     processUserInput(text);
   }, [inputText, thinking, processUserInput]);
 
-  /* ── Voice UI (对照 morning-plan) ── */
-  const showVoiceUI = () => { setVoiceUIActive(true); inputRef.current?.blur(); };
+  /* ── Voice UI ── */
+  const showVoiceUI = () => { voice.setVoiceUIActive(true); inputRef.current?.blur(); };
 
   const handleMicSendClick = () => {
     if (inputText.trim()) { handleSendText(); }
-    else if (!isRecording) { showVoiceUI(); }
-  };
-
-  const handleLargeVoiceStart = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (isRecording) return;
-    startRecording();
-    pressStartYRef.current = e.clientY;
-  };
-
-  const handleLargeVoiceEnd = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (!isRecording) return;
-    if (voiceMode === 'hold') stopRecording(cancelZone);
-  };
-
-  const handleLargeVoiceMove = (e: React.PointerEvent) => {
-    if (!isRecording || voiceMode !== 'hold') return;
-    setCancelZone(pressStartYRef.current - e.clientY > 80);
-  };
-
-  const handleLargeVoiceClick = () => {
-    if (voiceMode === 'click') {
-      if (isRecording) stopRecording(false);
-      else startRecording();
-    }
+    else if (!voice.isRecording) { showVoiceUI(); }
   };
 
   /* ── Nav ── */
@@ -491,7 +402,7 @@ export function EveningReviewChat() {
   }
 
   /* ═══════════════════════════════════════════════
-     Render — 对照 morning-plan/chat.tsx 结构
+     Render
      ═══════════════════════════════════════════════ */
 
   return (
@@ -623,7 +534,7 @@ export function EveningReviewChat() {
           <input
             ref={inputRef} type="text" value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onFocus={() => setVoiceUIActive(false)}
+            onFocus={() => voice.setVoiceUIActive(false)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
             placeholder={reviewAllowedSkip ? '输入你的复盘，或点击跳过...' : '输入你的复盘...'}
             autoComplete="off"
@@ -639,28 +550,28 @@ export function EveningReviewChat() {
       </div>
 
       {/* Voice Overlay */}
-      {voiceUIActive && (
+      {voice.voiceUIActive && (
         <div className="mp-voice-zone">
           <div className="mp-voice-hint">
             {voiceMode === 'hold' ? '按住说话，松手发送' : '点击说话，再点一下发送'}
           </div>
           <div className="mp-voice-cancel-row">
-            {isRecording && (
+            {voice.isRecording && (
               <button
-                className={`mp-voice-cancel-pill ${cancelZone ? 'mp-voice-cancel-pill--active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); cancelRecording(); }}
+                className={`mp-voice-cancel-pill ${voice.cancelZone ? 'mp-voice-cancel-pill--active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); voice.cancelRecording(); }}
               >取消</button>
             )}
           </div>
           <div
-            className={`mp-voice-large-btn ${isRecording ? 'mp-voice-large-btn--recording' : ''}`}
-            onPointerDown={handleLargeVoiceStart} onPointerUp={handleLargeVoiceEnd}
-            onPointerMove={handleLargeVoiceMove} onClick={handleLargeVoiceClick}
+            className={`mp-voice-large-btn ${voice.isRecording ? 'mp-voice-large-btn--recording' : ''}`}
+            onPointerDown={voice.handlePointerDown} onPointerUp={voice.handlePointerUp}
+            onPointerMove={voice.handlePointerMove} onClick={voice.handleClick}
           >
-            {!isRecording && (<><div className="mp-voice-pulse-ring" /><div className="mp-voice-pulse-ring" /></>)}
+            {!voice.isRecording && (<><div className="mp-voice-pulse-ring" /><div className="mp-voice-pulse-ring" /></>)}
             <Icon icon="mingcute:mic-fill" style={{ fontSize: '30px', color: '#fff', position: 'relative', zIndex: 10 }} />
           </div>
-          {isRecording && <div className="mp-voice-timer">{fmtTime(recordingTime)}</div>}
+          {voice.isRecording && <div className="mp-voice-timer">{voice.formatTime(voice.recordingTime)}</div>}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 /**
- * P1 智能问答首页 — 品牌语 + 输入框 + 热门话题 + 语音输入。
+ * P1 智能问答首页 — 品牌语 + 输入框 + 热门话题 + 语音输入（腾讯云ASR）。
  * Route: /m/smart-qa (index)
  * 对齐 m5p1-mobile.html 设计。
  *
@@ -9,9 +9,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { fetchHotQuestions, type HotQuestion } from '@/shared/api/smartQa';
+import { useVoiceInput, type VoiceMode } from '@/shared/hooks/useVoiceInput';
 import './smart-qa.css';
-
-type VoiceMode = 'hold' | 'click';
 
 /* ── Helpers ── */
 function now() {
@@ -35,25 +34,17 @@ export function SmartQaHome() {
   const [question, setQuestion] = useState('');
   const [hotQuestions, setHotQuestions] = useState<HotQuestion[]>([]);
 
-  /* ── Voice state ── */
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>('hold');
-  const [voiceUIActive, setVoiceUIActive] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [cancelZone, setCancelZone] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
+  /* ── Voice mode ── */
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
+    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
+    return (saved === 'hold' || saved === 'click') ? saved : 'hold';
+  });
 
   /* ── Refs ── */
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pressStartYRef = useRef(0);
 
   /* ── Init ── */
   useEffect(() => {
-    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
-    if (saved === 'hold' || saved === 'click') setVoiceMode(saved);
-
     fetchHotQuestions()
       .then(setHotQuestions)
       .catch(() => setHotQuestions(FALLBACK_HOT));
@@ -63,7 +54,15 @@ export function SmartQaHome() {
     if (q) setQuestion(decodeURIComponent(q));
   }, [searchParams]);
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  /* ── Voice: 腾讯云 ASR ── */
+  const voice = useVoiceInput({
+    mode: voiceMode,
+    onResult: (text: string) => {
+      setQuestion(text);
+      inputRef.current?.focus();
+    },
+    onError: (err) => alert(err),
+  });
 
   /* ── Navigation ── */
   const hasText = question.trim().length > 0;
@@ -78,96 +77,17 @@ export function SmartQaHome() {
     navigate(`/m/smart-qa/chat?q=${encodeURIComponent(text)}`);
   };
 
-  /* ═══════════════════════════════════════════════
-     Voice Recording
-     ═══════════════════════════════════════════════ */
-
-  const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
-  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  const initRecognition = () => {
-    if (recognitionRef.current) return recognitionRef.current;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('浏览器不支持语音识别，请使用 Chrome 或 Edge。'); return null; }
-    const r = new SpeechRecognition();
-    r.lang = 'zh-CN'; r.continuous = true; r.interimResults = true;
-    r.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++)
-        if (e.results[i].isFinal) transcriptRef.current += e.results[i][0].transcript;
-    };
-    r.onerror = (e: any) => {
-      if (e.error === 'not-allowed') alert('请允许麦克风权限后重试');
-      stopRecording(true);
-    };
-    r.onend = () => { if (isRecording) { try { r.start(); } catch { /* */ } } };
-    recognitionRef.current = r;
-    return r;
-  };
-
-  const startRecording = () => {
-    const r = initRecognition(); if (!r) return;
-    transcriptRef.current = ''; setCancelZone(false);
-    try { r.start(); setIsRecording(true); startTimer(); } catch { /* */ }
-  };
-
-  const stopRecording = (cancelled = false) => {
-    if (!isRecording) return;
-    setIsRecording(false); stopTimer();
-    try { recognitionRef.current?.stop(); } catch { /* */ }
-    setVoiceUIActive(false);
-    if (cancelled || cancelZone) return;
-    const text = transcriptRef.current.trim();
-    if (text) {
-      setQuestion(text);
-      inputRef.current?.focus();
-    }
-  };
-
-  const cancelRecording = () => { if (isRecording) stopRecording(true); };
-
-  /* ── Voice UI ── */
-  const showVoiceUI = () => {
-    if (isRecording) return;
-    setVoiceUIActive(true);
-    inputRef.current?.blur();
-  };
-
+  /* ── Mic/Send button ── */
   const handleMicSendClick = () => {
     if (hasText) { handleSubmit(); }
-    else if (!isRecording) { showVoiceUI(); }
+    else if (!voice.isRecording) { voice.setVoiceUIActive(true); }
   };
 
-  const handleLargeVoiceStart = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (isRecording) return;
-    startRecording();
-    pressStartYRef.current = e.clientY;
-  };
-
-  const handleLargeVoiceEnd = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (!isRecording) return;
-    if (voiceMode === 'hold') stopRecording(cancelZone);
-  };
-
-  const handleLargeVoiceMove = (e: React.PointerEvent) => {
-    if (!isRecording || voiceMode !== 'hold') return;
-    setCancelZone(pressStartYRef.current - e.clientY > 80);
-  };
-
-  const handleLargeVoiceClick = () => {
-    if (voiceMode === 'click') {
-      if (isRecording) stopRecording(false);
-      else startRecording();
-    }
-  };
-
-  /* ── Settings ── */
+  /* ── Settings: toggle voice mode ── */
   const toggleVoiceMode = () => {
-    if (isRecording) stopRecording(true);
-    setVoiceUIActive(false);
-    const next = voiceMode === 'hold' ? 'click' : 'hold';
+    if (voice.isRecording) voice.stopRecording(true);
+    voice.setVoiceUIActive(false);
+    const next: VoiceMode = voiceMode === 'hold' ? 'click' : 'hold';
     setVoiceMode(next);
     localStorage.setItem('rg_voice_mode', next);
     alert(next === 'click' ? '已切换为「点击说话」模式\n点击话筒开始录音，再次点击发送' : '已切换为「按住说话」模式\n按住录音，松开发送');
@@ -212,7 +132,7 @@ export function SmartQaHome() {
               placeholder="输入你的 HR 问题…"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              onFocus={() => setVoiceUIActive(false)}
+              onFocus={() => voice.setVoiceUIActive(false)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); } }}
               autoComplete="off"
             />
@@ -246,30 +166,30 @@ export function SmartQaHome() {
       </main>
 
       {/* Voice Recording Overlay */}
-      {voiceUIActive && (
+      {voice.voiceUIActive && (
         <div className="sq-voice-zone">
           <div className="sq-voice-hint">
             {voiceMode === 'hold' ? '按住说话，松手发送' : '点击说话，再点一下发送'}
           </div>
           <div className="sq-voice-cancel-row">
-            {isRecording && (
+            {voice.isRecording && (
               <button
-                className={`sq-voice-cancel-btn ${cancelZone ? 'sq-voice-cancel-btn--active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); cancelRecording(); }}
+                className={`sq-voice-cancel-btn ${voice.cancelZone ? 'sq-voice-cancel-btn--active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); voice.cancelRecording(); }}
               >取消</button>
             )}
           </div>
           <div
-            className={`sq-voice-large-btn ${isRecording ? 'sq-voice-large-btn--recording' : ''}`}
-            onPointerDown={handleLargeVoiceStart}
-            onPointerUp={handleLargeVoiceEnd}
-            onPointerMove={handleLargeVoiceMove}
-            onClick={handleLargeVoiceClick}
+            className={`sq-voice-large-btn ${voice.isRecording ? 'sq-voice-large-btn--recording' : ''}`}
+            onPointerDown={voice.handlePointerDown}
+            onPointerUp={voice.handlePointerUp}
+            onPointerMove={voice.handlePointerMove}
+            onClick={voice.handleClick}
           >
-            {!isRecording && (<><div className="sq-voice-pulse-ring" /><div className="sq-voice-pulse-ring" /></>)}
+            {!voice.isRecording && (<><div className="sq-voice-pulse-ring" /><div className="sq-voice-pulse-ring" /></>)}
             <Icon icon="mingcute:microphone-fill" style={{ fontSize: '30px', color: '#fff', position: 'relative', zIndex: 10 }} />
           </div>
-          {isRecording && <div className="sq-voice-timer">{fmtTime(recordingTime)}</div>}
+          {voice.isRecording && <div className="sq-voice-timer">{voice.formatTime(voice.recordingTime)}</div>}
         </div>
       )}
     </div>

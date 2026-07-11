@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # ────────────────────────────────────────────
     # ③ 语音/智能引擎服务（P1）
     # ────────────────────────────────────────────
-    # 腾讯云语音识别
+    # ═══ 腾讯云语音识别（保留作为备用） ═══
     TENCENT_ASR_SECRET_ID: str = ""
     TENCENT_ASR_SECRET_KEY: str = ""
     TENCENT_ASR_APPID: str = ""  # 腾讯云账号 APPID（实时语音识别 WebSocket 需要）
@@ -39,22 +39,69 @@ class Settings(BaseSettings):
     # 离线语音（Vosk）
     ENABLE_OFFLINE_ASR: bool = True
     OFFLINE_ASR_MODEL_PATH: str = "./models/vosk-model-small-cn-0.22"
-    # 智谱AI（GLM推理）
+
+    # ═══ 阿里云 通义听悟 ASR（默认在线ASR — Excel #5） ═══
+    TINGWU_API_KEY: str = ""
+    TINGWU_APP_KEY: str = ""  # 通义听悟控制台→应用管理→AppKey
+    TINGWU_ENDPOINT: str = "https://tingwu.cn-beijing.aliyuncs.com"
+    TINGWU_POLL_INTERVAL: float = 1.0  # 轮询间隔(秒)
+
+    # ═══ 字节火山引擎 — 豆包 Seed 2.0 Pro（AI对话主模块 — Excel #1） ═══
+    VOLCANO_API_KEY: str = ""
+    VOLCANO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    VOLCANO_CHAT_MODEL: str = "doubao-seed-2-0-pro"
+    VOLCANO_MULTIMODAL_MODEL: str = "doubao-seed-2-0-pro-260215"
+    VOLCANO_MAX_TOKENS: int = 4096
+    VOLCANO_TEMPERATURE: float = 0.7
+
+    # ═══ 阿里云 DashScope — 通义千问 Qwen3.7-Max（HR模板 — Excel #2） ═══
+    DASHSCOPE_API_KEY: str = ""
+    DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    DASHSCOPE_CHAT_MODEL: str = "qwen3.7-max-preview"
+    DASHSCOPE_TTS_MODEL: str = "qwen-tts-hd"  # Excel #6 TTS
+    DASHSCOPE_MAX_TOKENS: int = 4096
+    DASHSCOPE_TEMPERATURE: float = 0.3
+
+    # ═══ 腾讯混元 Hy3（会议纪要 — Excel #3） ═══
+    HUNYUAN_SECRET_ID: str = ""
+    HUNYUAN_SECRET_KEY: str = ""
+    HUNYUAN_MODEL: str = "hy3-preview"
+    HUNYUAN_ENDPOINT: str = "https://api.hunyuan.cloud.tencent.com/v1"
+    HUNYUAN_MAX_TOKENS: int = 4096
+    HUNYUAN_TEMPERATURE: float = 0.2
+
+    # ═══ 月之暗面 Kimi K2.5（私有知识库问答 — Excel #4） ═══
+    KIMI_API_KEY: str = ""
+    KIMI_BASE_URL: str = "https://api.moonshot.cn/v1"
+    KIMI_MODEL: str = "kimi-k2.5"
+    KIMI_MAX_TOKENS: int = 4096
+    KIMI_TEMPERATURE: float = 0.3
+
+    # ═══ DeepSeek V4-Pro（工作诊断&成长分析 — Excel #9） ═══
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MAX_TOKENS: int = 4096
+    DEEPSEEK_TEMPERATURE: float = 0.3
+
+    # ═══ 智谱AI GLM-4.5（IP内容创作 — Excel #10，保留通用推理能力） ═══
     ZHIPUAI_API_KEY: str = ""
-    ZHIPUAI_MODEL: str = "GLM-4.7"
+    ZHIPUAI_MODEL: str = "glm-4.5"
     # 余额不足时按顺序降级尝试的备用模型
     ZHIPUAI_FALLBACK_MODELS: list[str] = [
-        "GLM-5.1", "GLM-5.2", "GLM-4.6V", "GLM-4.5-Air",
+        "GLM-4.7", "GLM-5.1", "GLM-4.5-Air",
     ]
     ZHIPUAI_MAX_TOKENS: int = 4096
     ZHIPUAI_TEMPERATURE: float = 0.7
-    # Anthropic Claude（推荐 LLM 提供商）
+
+    # ═══ Anthropic Claude（保留作为备用/特殊场景） ═══
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
     ANTHROPIC_MAX_TOKENS: int = 4096
     ANTHROPIC_TEMPERATURE: float = 0.7
-    # LLM 提供商选择: "anthropic" | "zhipu" | "auto"
-    # "auto" = 优先 Anthropic，不可用时降级到智谱AI
+
+    # LLM 提供商选择: "anthropic" | "zhipu" | "volcano" | "dashscope" | "hunyuan" | "kimi" | "deepseek" | "auto"
+    # "auto" = 按模块自动路由到对应模型（推荐）
     LLM_PROVIDER: str = "auto"
 
     # ────────────────────────────────────────────

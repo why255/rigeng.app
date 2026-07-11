@@ -2361,7 +2361,7 @@ R(Result/结果): 量化成果/可验证的描述
         result = llm_generate_with_orchestration(
             prompt=prompt,
             system_prompt=build_persona_prompt(module="career"),
-            module="career", task_complexity="complex", temperature=0.6,
+            module="growth_analysis", task_complexity="complex", temperature=0.6,
             user_id=user_id, db=db,
         )
         # Try to parse JSON from result

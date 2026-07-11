@@ -1,10 +1,14 @@
 /**
- * VoiceButton — 语音录制按钮（Web Speech API + MediaRecorder 双模式）。
+ * VoiceButton — 语音录制按钮（腾讯云ASR 在线转写 + 离线录音双模式）。
  * 纯 BEM 类名 + 内联 style，无 Tailwind。
+ *
+ * - 在线模式 (offline=false): getUserMedia → MediaRecorder → 腾讯云 ASR → onTranscript(text)
+ * - 离线模式 (offline=true):  getUserMedia → MediaRecorder → IndexedDB → onRecordingStored(recording)
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { storeRecording, type OfflineRecording } from '@/shared/utils/offlineRecordingsDB';
+import { speechToText } from '@/shared/api/voice';
 
 export type VoiceMode = 'hold' | 'click';
 
@@ -16,18 +20,21 @@ export interface VoiceButtonProps {
   className?: string;
 }
 
+/* ── Component ── */
+
 export function VoiceButton({ mode = 'hold', offline = false, onTranscript, onRecordingStored, className = '' }: VoiceButtonProps) {
   const [recording, setRecording] = useState(false);
   const [cancelZone, setCancelZone] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const recognitionRef = useRef<any>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const pressStartYRef = useRef<number>(0);
-  const transcriptRef = useRef<string>('');
+
+  const MAX_RECORDING_SECONDS = 60;  // 超过60s自动停止，避免Base64音频超Nginx 10M限制
 
   const cleanup = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -39,25 +46,68 @@ export function VoiceButton({ mode = 'hold', offline = false, onTranscript, onRe
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now(); setElapsed(0);
-    timerRef.current = setInterval(() => { setElapsed((Date.now() - startTimeRef.current) / 1000); }, 200);
+    timerRef.current = setInterval(() => {
+      const sec = (Date.now() - startTimeRef.current) / 1000;
+      setElapsed(sec);
+      // 达到最大时长自动停止（正常发送，不取消）
+      if (sec >= MAX_RECORDING_SECONDS) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setRecording(false);
+        // onstop 回调会自动发送 ASR 请求
+      }
+    }, 200);
   }, []);
 
-  const startOnlineRecognition = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('浏览器不支持语音识别'); return; }
-    transcriptRef.current = '';
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN'; recognition.continuous = true; recognition.interimResults = true;
-    recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) transcriptRef.current += event.results[i][0].transcript;
-      }
-    };
-    recognition.onend = () => { if (recording) { try { recognition.start(); } catch { /* */ } } };
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [recording]);
+  /* ── 在线模式: getUserMedia + MediaRecorder → 腾讯云 ASR ── */
+  const startOnlineRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream; audioChunksRef.current = [];
 
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data?.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop()); streamRef.current = null;
+        if (cancelZone) { audioChunksRef.current = []; return; }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        audioChunksRef.current = [];
+
+        if (audioBlob.size < 500) return;
+
+        try {
+          const result = await speechToText(audioBlob);
+          if (result.text?.trim()) {
+            onTranscript?.(result.text.trim());
+          }
+        } catch {
+          // ASR 失败静默处理
+        }
+      };
+
+      recorder.onerror = () => { cleanup(); };
+      recorder.start(100);
+    } catch (err: any) {
+      const msg = err?.name === 'NotAllowedError'
+        ? '麦克风权限被拒绝，请在设置中允许麦克风访问后重试'
+        : '录音启动失败，请检查设备权限后重试';
+      alert(msg);
+      cleanup();
+    }
+  }, [cancelZone, cleanup, onTranscript]);
+
+  /* ── 离线模式: getUserMedia + MediaRecorder → IndexedDB ── */
   const startOfflineRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -76,13 +126,20 @@ export function VoiceButton({ mode = 'hold', offline = false, onTranscript, onRe
       };
       mediaRecorderRef.current = recorder;
       recorder.start(100);
-    } catch { cleanup(); }
+    } catch (err: any) {
+      const msg = err?.name === 'NotAllowedError'
+        ? '麦克风权限被拒绝，请在设置中允许麦克风访问后重试'
+        : '录音启动失败，请检查设备权限后重试';
+      alert(msg);
+      cleanup();
+    }
   }, [cancelZone, cleanup, onRecordingStored]);
 
+  /* ── 通用录制控制 ── */
   const startRecording = useCallback(() => {
     setRecording(true); setCancelZone(false); startTimer();
-    offline ? startOfflineRecording() : startOnlineRecognition();
-  }, [offline, startTimer, startOfflineRecording, startOnlineRecognition]);
+    offline ? startOfflineRecording() : startOnlineRecording();
+  }, [offline, startTimer, startOfflineRecording, startOnlineRecording]);
 
   const stopRecording = useCallback((cancelled = false) => {
     if (!recording) return; setRecording(false);
@@ -91,12 +148,9 @@ export function VoiceButton({ mode = 'hold', offline = false, onTranscript, onRe
     if (offline) {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
     } else {
-      if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch { /* */ } }
-      const text = transcriptRef.current.trim();
-      if (text) onTranscript?.(text);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
     }
-    cleanup();
-  }, [recording, cancelZone, offline, cleanup, onTranscript]);
+  }, [recording, cancelZone, offline, cleanup]);
 
   const formatTime = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 

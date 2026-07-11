@@ -1254,7 +1254,7 @@ def process_office_chat(
         result = llm_generate_with_orchestration(
             prompt=prompt,
             system_prompt=system_prompt,
-            module="smart_office",
+            module="hr_template",
             task_complexity="medium",
             temperature=0.7,
             max_tokens=512,
@@ -1364,8 +1364,8 @@ Step 5: 模块间一致性校验(薪酬岗级=绩效考核等级, 招聘JD能力
     try:
         result = llm_generate_with_orchestration(
             prompt=prompt,
-            system_prompt=build_persona_prompt(module="smart_office"),
-            module="smart_office", task_complexity="complex", temperature=0.3,
+            system_prompt=build_persona_prompt(module="hr_template"),
+            module="hr_template", task_complexity="complex", temperature=0.3,
             user_id=user_id, db=db,
         )
         try:

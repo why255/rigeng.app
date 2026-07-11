@@ -1,5 +1,5 @@
 /**
- * 高维求职 P2·一盘 — 简历盘点与重构（对话模式 + 语音输入 + 文件上传）。
+ * 高维求职 P2·一盘 — 简历盘点与重构（对话模式 + 语音输入(腾讯云ASR) + 文件上传）。
  * Route: /m/career-mentor/yipan
  *
  * V3.0: 所有小耕输出内容由AI模型生成，AI按五大盘点算法引导：
@@ -12,9 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { uploadResumeFile, careerChat } from '@/shared/api/career';
 import type { ResumeFileUploadResult } from '@/shared/api/career';
+import { useVoiceInput, type VoiceMode } from '@/shared/hooks/useVoiceInput';
 import './career-mentor.css';
-
-type VoiceMode = 'hold' | 'click';
 
 interface Message {
   key: string;
@@ -48,27 +47,27 @@ export function CareerMentorYipan() {
   const [subIndex, setSubIndex] = useState(0); // 0-4: 履历梳理→STAR追问→技能晶体→人脉资源→岗位建议
   const [progressId, setProgressId] = useState('');
 
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>('hold');
-  const [voiceUIActive, setVoiceUIActive] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [cancelZone, setCancelZone] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
+    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
+    return (saved === 'hold' || saved === 'click') ? saved : 'hold';
+  });
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pressStartYRef = useRef(0);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initRef = useRef(false);
+
+  /* ── Voice: 腾讯云 ASR ── */
+  const voice = useVoiceInput({
+    mode: voiceMode,
+    onResult: (text: string) => processUserInput(text, true),
+    onError: (err) => alert(err),
+  });
 
   /* ── Init: AI 生成初始问候 ── */
   useEffect(() => {
     if (initRef.current) return; initRef.current = true;
-    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
-    if (saved === 'hold' || saved === 'click') setVoiceMode(saved);
 
     let cancelled = false;
     (async () => {
@@ -88,12 +87,10 @@ export function CareerMentorYipan() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-
   const scrollBottom = useCallback(() => {
     setTimeout(() => { chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' }); }, 80);
   }, []);
-  useEffect(() => { scrollBottom(); }, [messages, isLoading, isUploading, voiceUIActive, scrollBottom]);
+  useEffect(() => { scrollBottom(); }, [messages, isLoading, isUploading, voice.voiceUIActive, scrollBottom]);
 
   /* ═══════════════════════════════════════════════
      File Upload + AI 解析
@@ -122,7 +119,6 @@ export function CareerMentorYipan() {
       const result = await uploadResumeFile(file);
       setParseResult(result); setProgressId(result.career_progress_id);
 
-      // AI 生成上传成功的回复
       try {
         const ctx = buildCtx([...messages]);
         ctx.push({ role: 'user', text: `已上传简历：${result.parsed_summary}` });
@@ -135,7 +131,7 @@ export function CareerMentorYipan() {
         setMessages(prev => [...prev, { key: nextId(), role: 'assistant', type: 'text',
           text: `姐，简历解析完成！${result.parsed_summary}\n\n识别到核心技能：${result.key_skills.slice(0, 6).join('、')}\n关键经历：${result.key_experiences.slice(0, 3).map(e => `• ${e}`).join('\n')}\n\n✅ 已存入一盘·简历盘点。`, time: now() }]);
       }
-      setSubIndex(1); // 进入STAR追问
+      setSubIndex(1);
     } catch (err: any) {
       setMessages(prev => [...prev, { key: nextId(), role: 'assistant', type: 'text',
         text: `姐，简历解析出了点问题：${err.message || '请稍后重试'}\n\n要不直接跟我说说您的经历？小耕也能帮您梳理～`, time: now() }]);
@@ -144,29 +140,6 @@ export function CareerMentorYipan() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
-
-  /* ═══════════════════════════════════════════════
-     Voice Recording
-     ═══════════════════════════════════════════════ */
-
-  const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
-  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  const initRecognition = () => {
-    if (recognitionRef.current) return recognitionRef.current;
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert('浏览器不支持语音识别'); return null; }
-    const r = new SR(); r.lang = 'zh-CN'; r.continuous = true; r.interimResults = true;
-    r.onresult = (e: any) => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) transcriptRef.current += e.results[i][0].transcript; };
-    r.onerror = (e: any) => { if (e.error === 'not-allowed') alert('请允许麦克风权限'); stopRecording(true); };
-    r.onend = () => { if (isRecording) { try { r.start(); } catch { /* */ } } };
-    recognitionRef.current = r; return r;
-  };
-
-  const startRecording = () => { const r = initRecognition(); if (!r) return; transcriptRef.current = ''; setCancelZone(false); try { r.start(); setIsRecording(true); startTimer(); } catch { /* */ } };
-  const stopRecording = (cancelled = false) => { if (!isRecording) return; setIsRecording(false); stopTimer(); try { recognitionRef.current?.stop(); } catch { /* */ } setVoiceUIActive(false); if (cancelled || cancelZone) return; const t = transcriptRef.current.trim(); if (t) processUserInput(t, true); };
-  const cancelRecording = () => { if (isRecording) stopRecording(true); };
 
   /* ═══════════════════════════════════════════════
      Core: send user input → AI 生成回复
@@ -191,7 +164,6 @@ export function CareerMentorYipan() {
       const aiMsg: Message = { key: nextId(), role: 'assistant', type: 'text', text: result.reply, time: now() };
       setMessages(prev => [...prev, aiMsg]);
 
-      // 自动推进子阶段（根据用户输入长度和子阶段判断）
       if (subIndex < 4 && text.length > 30) {
         setSubIndex(prev => Math.min(4, prev + 1));
       }
@@ -206,23 +178,20 @@ export function CareerMentorYipan() {
 
   const handleSendText = () => { const t = inputText.trim(); if (!t || isLoading) return; setInputText(''); processUserInput(t); };
 
-  /* ═══════════════════════════════════════════════
-     Voice UI
-     ═══════════════════════════════════════════════ */
-
-  const showVoiceUI = () => { setVoiceUIActive(true); inputRef.current?.blur(); };
+  /* ── Mic/Send toggle ── */
   const hasText = inputText.trim().length > 0;
 
-  const handleMicSendClick = () => { if (hasText) handleSendText(); else if (!isRecording) showVoiceUI(); };
-  const handleLargeVoiceStart = (e: React.PointerEvent) => { e.preventDefault(); if (isRecording) return; startRecording(); pressStartYRef.current = e.clientY; };
-  const handleLargeVoiceEnd = (e: React.PointerEvent) => { e.preventDefault(); if (!isRecording) return; if (voiceMode === 'hold') stopRecording(cancelZone); };
-  const handleLargeVoiceMove = (e: React.PointerEvent) => { if (!isRecording || voiceMode !== 'hold') return; setCancelZone(pressStartYRef.current - e.clientY > 80); };
-  const handleLargeVoiceClick = () => { if (voiceMode === 'click') { if (isRecording) stopRecording(false); else startRecording(); } };
+  const showVoiceUI = () => { voice.setVoiceUIActive(true); inputRef.current?.blur(); };
+
+  const handleMicSendClick = () => {
+    if (hasText) handleSendText();
+    else if (!voice.isRecording) showVoiceUI();
+  };
 
   const toggleVoiceMode = () => {
-    const next = voiceMode === 'hold' ? 'click' : 'hold'; setVoiceMode(next);
+    const next: VoiceMode = voiceMode === 'hold' ? 'click' : 'hold'; setVoiceMode(next);
     localStorage.setItem('rg_voice_mode', next);
-    if (isRecording) stopRecording(true); setVoiceUIActive(false);
+    if (voice.isRecording) voice.stopRecording(true); voice.setVoiceUIActive(false);
   };
 
   const handleGoNext = () => {
@@ -230,6 +199,7 @@ export function CareerMentorYipan() {
     navigate(`/m/career-mentor/erding?progress_id=${encodeURIComponent(pid)}`);
   };
 
+  /* ── Voice bubble long-press transcribe ── */
   const [transcribeTarget, setTranscribeTarget] = useState<string | null>(null);
   const [transcribePos, setTranscribePos] = useState<{ x: number; y: number } | null>(null);
   const handleVoiceBubbleTouchStart = (transcript: string, e: React.TouchEvent | React.MouseEvent) => {
@@ -282,7 +252,6 @@ export function CareerMentorYipan() {
           <p className="cm-welcome-hint">告诉我您的职业经历，语音或文字都可以</p>
         </div>
 
-        {/* 上传区 */}
         {!parseResult && (
           <div className="cm-resume-upload cm-fade-up" style={{ marginBottom: 14, cursor: 'pointer' }} onClick={handleUploadClick}>
             <div className="cm-resume-upload__icon"><Icon icon="mingcute:upload-line" width={20} /></div>
@@ -304,7 +273,6 @@ export function CareerMentorYipan() {
           </div>
         )}
 
-        {/* Messages */}
         {messages.map(msg => msg.type === 'voice' ? (
           <div key={msg.key} className="cm-bubble-row cm-bubble-row--user cm-fade-up">
             <div className="cm-avatar cm-avatar--user">你</div>
@@ -351,24 +319,24 @@ export function CareerMentorYipan() {
 
       <div className="cm-chat-input-area">
         <div className="cm-chat-input-pill">
-          <input ref={inputRef} type="text" value={inputText} onChange={e => setInputText(e.target.value)} onFocus={() => setVoiceUIActive(false)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }} placeholder="输入您的职业经历..." autoComplete="off" />
+          <input ref={inputRef} type="text" value={inputText} onChange={e => setInputText(e.target.value)} onFocus={() => voice.setVoiceUIActive(false)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }} placeholder="输入您的职业经历..." autoComplete="off" />
           <button className="cm-chat-mic-btn" onClick={handleMicSendClick}>
             {hasText ? <Icon icon="mingcute:arrow-up-fill" style={{ fontSize: '20px' }} /> : <Icon icon="mingcute:mic-fill" style={{ fontSize: '20px' }} />}
           </button>
         </div>
       </div>
 
-      {voiceUIActive && (
+      {voice.voiceUIActive && (
         <div className="cm-voice-zone">
           <div className="cm-voice-hint">{voiceMode === 'hold' ? '按住说话，松手发送' : '点击说话，再点一下发送'}</div>
           <div className="cm-voice-cancel-row">
-            {isRecording && <button className={`cm-voice-cancel-pill ${cancelZone ? 'cm-voice-cancel-pill--active' : ''}`} onClick={e => { e.stopPropagation(); cancelRecording(); }}>取消</button>}
+            {voice.isRecording && <button className={`cm-voice-cancel-pill ${voice.cancelZone ? 'cm-voice-cancel-pill--active' : ''}`} onClick={e => { e.stopPropagation(); voice.cancelRecording(); }}>取消</button>}
           </div>
-          <div className={`cm-voice-large-btn ${isRecording ? 'cm-voice-large-btn--recording' : ''}`} onPointerDown={handleLargeVoiceStart} onPointerUp={handleLargeVoiceEnd} onPointerMove={handleLargeVoiceMove} onClick={handleLargeVoiceClick}>
-            {!isRecording && <><div className="cm-voice-pulse-ring" /><div className="cm-voice-pulse-ring" /></>}
+          <div className={`cm-voice-large-btn ${voice.isRecording ? 'cm-voice-large-btn--recording' : ''}`} onPointerDown={voice.handlePointerDown} onPointerUp={voice.handlePointerUp} onPointerMove={voice.handlePointerMove} onClick={voice.handleClick}>
+            {!voice.isRecording && <><div className="cm-voice-pulse-ring" /><div className="cm-voice-pulse-ring" /></>}
             <Icon icon="mingcute:mic-fill" style={{ fontSize: '30px', color: '#fff', position: 'relative', zIndex: 10 }} />
           </div>
-          {isRecording && <div className="cm-voice-timer">{fmtTime(recordingTime)}</div>}
+          {voice.isRecording && <div className="cm-voice-timer">{voice.formatTime(voice.recordingTime)}</div>}
         </div>
       )}
     </div>

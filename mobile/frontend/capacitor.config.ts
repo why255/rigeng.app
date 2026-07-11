@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: '日耕',
   webDir: '../dist/mobile',
   server: {
-    androidScheme: 'https',
+    androidScheme: 'http',
     cleartext: true,  // 允许 HTTP 访问服务器 47.103.197.189
   },
 };

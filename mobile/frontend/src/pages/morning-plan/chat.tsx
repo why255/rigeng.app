@@ -1,5 +1,5 @@
 /**
- * 朝有规划 — AI聊天（纯模型回复）。
+ * 朝有规划 — AI聊天（纯模型回复）+ 语音输入（腾讯云ASR）。
  * Route: /m/morning-plan/chat
  *
  * 用户说任何话都直接走小耕AI模型回复。
@@ -12,11 +12,10 @@ import { morningChat, extractPlan } from '@/shared/api/plans';
 import type { PlanItemOut } from '@/shared/api/plans';
 import { useMorningPlan } from '@/shared/context/MorningPlanContext';
 import type { Quadrant } from '@/shared/api/plans';
+import { useVoiceInput, type VoiceMode } from '@/shared/hooks/useVoiceInput';
 import './morning-plan.css';
 
 /* ── Types ── */
-
-type VoiceMode = 'hold' | 'click';
 
 interface Message {
   key: string;
@@ -51,77 +50,33 @@ export function MorningPlanChat() {
   const [showExtractConfirm, setShowExtractConfirm] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
 
-  /* ── Voice state ── */
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>('hold');
-  const [voiceUIActive, setVoiceUIActive] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [cancelZone, setCancelZone] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
+  /* ── Voice mode ── */
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
+    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
+    return (saved === 'hold' || saved === 'click') ? saved : 'hold';
+  });
 
   /* ── Refs ── */
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pressStartYRef = useRef(0);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /* ── Voice: 腾讯云 ASR ── */
+  const voice = useVoiceInput({
+    mode: voiceMode,
+    onResult: (text: string) => processUserInput(text, true),
+    onError: (err) => alert(err),
+  });
+
   /* ── Init ── */
-  useEffect(() => {
-    const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
-    if (saved === 'hold' || saved === 'click') setVoiceMode(saved);
-  }, []);
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  useEffect(() => () => { if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current); }, []);
 
   const scrollBottom = useCallback(() => {
     setTimeout(() => {
       chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
     }, 80);
   }, []);
-  useEffect(() => { scrollBottom(); }, [messages, isLoading, voiceUIActive, scrollBottom]);
-
-  /* ═══════════════════════════════════════════════
-     Voice Recording
-     ═══════════════════════════════════════════════ */
-
-  const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
-  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  const initRecognition = () => {
-    if (recognitionRef.current) return recognitionRef.current;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('浏览器不支持语音识别'); return null; }
-    const r = new SpeechRecognition();
-    r.lang = 'zh-CN'; r.continuous = true; r.interimResults = true;
-    r.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++)
-        if (e.results[i].isFinal) transcriptRef.current += e.results[i][0].transcript;
-    };
-    r.onerror = (e: any) => { if (e.error === 'not-allowed') alert('请允许麦克风权限'); stopRecording(true); };
-    r.onend = () => { if (isRecording) { try { r.start(); } catch { /* */ } } };
-    recognitionRef.current = r;
-    return r;
-  };
-
-  const startRecording = () => {
-    const r = initRecognition(); if (!r) return;
-    transcriptRef.current = ''; setCancelZone(false);
-    try { r.start(); setIsRecording(true); startTimer(); } catch { /* */ }
-  };
-
-  const stopRecording = (cancelled = false) => {
-    if (!isRecording) return;
-    setIsRecording(false); stopTimer();
-    try { recognitionRef.current?.stop(); } catch { /* */ }
-    setVoiceUIActive(false);
-    if (cancelled || cancelZone) return;
-    const text = transcriptRef.current.trim();
-    if (text) processUserInput(text, true);
-  };
-
-  const cancelRecording = () => { if (isRecording) stopRecording(true); };
+  useEffect(() => { scrollBottom(); }, [messages, isLoading, voice.voiceUIActive, scrollBottom]);
 
   /* ═══════════════════════════════════════════════
      Core: send user input → AI reply
@@ -170,7 +125,6 @@ export function MorningPlanChat() {
 
       const result = await extractPlan(chatMessages);
 
-      // 添加小耕的提炼回复气泡
       setMessages(prev => [...prev, {
         key: nextId(), role: 'assistant', type: 'text', text: result.reply, time: now(),
       }]);
@@ -191,7 +145,6 @@ export function MorningPlanChat() {
   };
 
   const handleConfirmExtract = () => {
-    // 将提炼的计划写入 context → 跳转列表页
     for (const item of extractedItems) {
       addPlan(item.title, (item.quadrant as Quadrant) || 'urgent_important');
     }
@@ -205,43 +158,20 @@ export function MorningPlanChat() {
     setExtractedItems([]);
   };
 
-  /* ═══════════════════════════════════════════════
-     Voice UI
-     ═══════════════════════════════════════════════ */
+  /* ── Voice UI ── */
 
-  const showVoiceUI = () => { setVoiceUIActive(true); inputRef.current?.blur(); };
   const hasText = inputText.trim().length > 0;
+  const showVoiceUI = () => { voice.setVoiceUIActive(true); inputRef.current?.blur(); };
+
   const handleMicSendClick = () => {
     if (hasText) { handleSendText(); }
-    else if (!isRecording) { showVoiceUI(); }
+    else if (!voice.isRecording) { showVoiceUI(); }
   };
 
-  const handleLargeVoiceStart = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (isRecording) return;
-    startRecording();
-    pressStartYRef.current = e.clientY;
-  };
+  /* ═══════════════════════════════════════════════
+     Voice bubble long-press → transcribe
+     ═══════════════════════════════════════════════ */
 
-  const handleLargeVoiceEnd = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (!isRecording) return;
-    if (voiceMode === 'hold') stopRecording(cancelZone);
-  };
-
-  const handleLargeVoiceMove = (e: React.PointerEvent) => {
-    if (!isRecording || voiceMode !== 'hold') return;
-    setCancelZone(pressStartYRef.current - e.clientY > 80);
-  };
-
-  const handleLargeVoiceClick = () => {
-    if (voiceMode === 'click') {
-      if (isRecording) stopRecording(false);
-      else startRecording();
-    }
-  };
-
-  /* Voice bubble long-press */
   const [transcribeTarget, setTranscribeTarget] = useState<string | null>(null);
   const [transcribePos, setTranscribePos] = useState<{ x: number; y: number } | null>(null);
 
@@ -423,7 +353,7 @@ export function MorningPlanChat() {
           <input
             ref={inputRef} type="text" value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onFocus={() => setVoiceUIActive(false)}
+            onFocus={() => voice.setVoiceUIActive(false)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
             placeholder="说点什么..." autoComplete="off"
           />
@@ -438,28 +368,28 @@ export function MorningPlanChat() {
       </div>
 
       {/* Voice Overlay */}
-      {voiceUIActive && (
+      {voice.voiceUIActive && (
         <div className="mp-voice-zone">
           <div className="mp-voice-hint">
             {voiceMode === 'hold' ? '按住说话，松手发送' : '点击说话，再点一下发送'}
           </div>
           <div className="mp-voice-cancel-row">
-            {isRecording && (
+            {voice.isRecording && (
               <button
-                className={`mp-voice-cancel-pill ${cancelZone ? 'mp-voice-cancel-pill--active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); cancelRecording(); }}
+                className={`mp-voice-cancel-pill ${voice.cancelZone ? 'mp-voice-cancel-pill--active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); voice.cancelRecording(); }}
               >取消</button>
             )}
           </div>
           <div
-            className={`mp-voice-large-btn ${isRecording ? 'mp-voice-large-btn--recording' : ''}`}
-            onPointerDown={handleLargeVoiceStart} onPointerUp={handleLargeVoiceEnd}
-            onPointerMove={handleLargeVoiceMove} onClick={handleLargeVoiceClick}
+            className={`mp-voice-large-btn ${voice.isRecording ? 'mp-voice-large-btn--recording' : ''}`}
+            onPointerDown={voice.handlePointerDown} onPointerUp={voice.handlePointerUp}
+            onPointerMove={voice.handlePointerMove} onClick={voice.handleClick}
           >
-            {!isRecording && (<><div className="mp-voice-pulse-ring" /><div className="mp-voice-pulse-ring" /></>)}
+            {!voice.isRecording && (<><div className="mp-voice-pulse-ring" /><div className="mp-voice-pulse-ring" /></>)}
             <Icon icon="mingcute:mic-fill" style={{ fontSize: '30px', color: '#fff', position: 'relative', zIndex: 10 }} />
           </div>
-          {isRecording && <div className="mp-voice-timer">{fmtTime(recordingTime)}</div>}
+          {voice.isRecording && <div className="mp-voice-timer">{voice.formatTime(voice.recordingTime)}</div>}
         </div>
       )}
     </div>

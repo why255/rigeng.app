@@ -1,0 +1,10 @@
+{
+  "apk_version": "0.2.0",
+  "apk_version_code": 2,
+  "apk_url": "http://47.103.197.189/日耕-v0.2.0-debug.apk",
+  "h5_version": "0.2.0",
+  "h5_build_time": "2026-07-11T19:33:00+08:00",
+  "release_notes": "修复短信验证码问题，支持自主更新",
+  "force_update": false,
+  "min_apk_version_code": 1
+}

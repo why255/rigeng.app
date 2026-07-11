@@ -1,5 +1,5 @@
 /**
- * P2 倾诉对话页 — 暗色/亮色双主题 · 计时器 · 合并话筒/发送按钮 · 大语音脉冲按钮。
+ * P2 倾诉对话页 — 暗色/亮色双主题 · 计时器 · 合并话筒/发送按钮 · 大语音脉冲按钮（腾讯云ASR）。
  * Route: /m/mood-haven/chat
  * 对齐 m3p2-mobile.html 设计，布局模仿 MorningPlan chat.tsx 模式。
  * 暗色模式默认开启；关闭后各颜色与朝有规划 chat 页一致。
@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import * as emotionsApi from '@/shared/api/emotions';
 import type { ChatMessage } from '@/shared/api/emotions';
+import { useVoiceInput, type VoiceMode } from '@/shared/hooks/useVoiceInput';
 import './mood-haven.css';
 
 const CRISIS_KEYWORDS = ['想死', '不想活', '自杀', '结束生命', '活不下去', '没有意义', '消失', '绝望'];
@@ -38,8 +39,6 @@ function readDarkMode(): boolean {
   const stored = localStorage.getItem('mh_darkMode');
   return stored === null ? true : stored === 'true';
 }
-
-type VoiceMode = 'hold' | 'click';
 
 export function MoodHavenChat() {
   const navigate = useNavigate();
@@ -136,22 +135,22 @@ export function MoodHavenChat() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
 
-  // ── 语音状态 ──
+  // ── 语音模式 ──
   const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
     const stored = localStorage.getItem('mh_voiceMode');
     return (stored === 'hold' || stored === 'click') ? stored : 'hold';
   });
-  const [voiceUIActive, setVoiceUIActive] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [cancelZone, setCancelZone] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const transcriptRef = useRef('');
-  const recognitionRef = useRef<any>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── 危机 + 提醒 ──
   const [showCrisis, setShowCrisis] = useState(false);
   const [showTimeAlert, setShowTimeAlert] = useState(false);
+
+  // ── 语音: 腾讯云 ASR ──
+  const voice = useVoiceInput({
+    mode: voiceMode,
+    onResult: (text: string) => addUserMessage(text),
+    onError: (err) => alert(err),
+  });
 
   /* ═══════════════════════════════════════════════
      Init — AI 生成初始问候
@@ -206,7 +205,7 @@ export function MoodHavenChat() {
     }, 80);
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, thinking, voiceUIActive, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [messages, thinking, voice.voiceUIActive, scrollToBottom]);
 
   // ── 危机检测 ──
   const checkCrisis = useCallback((text: string) => {
@@ -223,20 +222,16 @@ export function MoodHavenChat() {
     const time = getTime();
     const userMsg: ChatMessage = { role: 'user', text, time };
 
-    // 构建对话上下文（包含新用户消息）
     const currentMessages = [...messages, userMsg];
     setMessages(currentMessages);
     setThinking(true);
 
-    // 后台记录消息
     try {
       await emotionsApi.logEmotionMessage({ role: 'user', text, duration_seconds: elapsedSeconds });
     } catch { /* 静默 */ }
 
-    // 危机检测
     checkCrisis(text);
 
-    // ── 调用 AI 生成回复 ──
     try {
       const context = currentMessages
         .filter(m => m.text)
@@ -251,12 +246,10 @@ export function MoodHavenChat() {
       const assistantMsg: ChatMessage = { role: 'assistant', text: result.reply, time: getTime() };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // 后台记录 AI 回复
       try {
         await emotionsApi.logEmotionMessage({ role: 'assistant', text: result.reply, duration_seconds: elapsedSeconds });
       } catch { /* 静默 */ }
     } catch {
-      // AI 失败 → 回退到 suggest API
       let replyText: string;
       try {
         const suggest = await emotionsApi.fetchEmotionSuggest(text);
@@ -285,114 +278,25 @@ export function MoodHavenChat() {
     await addUserMessage(text);
   }, [draft, thinking, addUserMessage]);
 
-  /* ═══════════════════════════════════════════════
-     Voice Recording
-     ═══════════════════════════════════════════════ */
-
-  const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
-  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  const initRecognition = useCallback(() => {
-    if (recognitionRef.current) return recognitionRef.current;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
-    const rec = new SpeechRecognition();
-    rec.lang = 'zh-CN';
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          transcriptRef.current += event.results[i][0].transcript;
-        }
-      }
-    };
-    rec.onerror = (e: any) => {
-      console.warn('语音错误', e.error);
-      if (e.error === 'not-allowed') alert('请允许麦克风权限');
-      setIsRecording(false);
-      setVoiceUIActive(false);
-    };
-    rec.onend = () => {
-      if (isRecording) { try { rec.start(); } catch (_) { /* ignore */ } }
-    };
-    recognitionRef.current = rec;
-    return rec;
-  }, [isRecording]);
-
-  const startRecording = useCallback(() => {
-    const rec = initRecognition();
-    if (!rec) return;
-    transcriptRef.current = '';
-    setCancelZone(false);
-    try { rec.start(); setIsRecording(true); startTimer(); } catch (_) { /* ignore */ }
-  }, [initRecognition]);
-
-  const stopRecording = useCallback((cancelled: boolean = false) => {
-    if (!isRecording) return;
-    setIsRecording(false);
-    stopTimer();
-    try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
-    setVoiceUIActive(false);
-    if (cancelled || cancelZone || transcriptRef.current.trim() === '') {
-      transcriptRef.current = '';
-      return;
-    }
-    const userMsg = transcriptRef.current.trim();
-    transcriptRef.current = '';
-    addUserMessage(userMsg);
-  }, [isRecording, cancelZone, addUserMessage]);
-
-  const cancelRecording = useCallback(() => { stopRecording(true); }, [stopRecording]);
-
-  const handleLargeVoiceStart = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    if (isRecording) return;
-    startRecording();
-  }, [isRecording, startRecording]);
-
-  const handleLargeVoiceEnd = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    if (!isRecording) return;
-    if (voiceMode === 'hold') stopRecording(cancelZone);
-  }, [isRecording, voiceMode, cancelZone, stopRecording]);
-
-  const handleLargeVoiceMove = useCallback((e: React.PointerEvent) => {
-    if (!isRecording || voiceMode !== 'hold') return;
-    setCancelZone(e.clientY < window.innerHeight * 0.35);
-  }, [isRecording, voiceMode]);
-
-  const handleLargeVoiceClick = useCallback(() => {
-    if (voiceMode === 'click') {
-      if (isRecording) stopRecording(false);
-      else startRecording();
-    }
-  }, [voiceMode, isRecording, startRecording, stopRecording]);
-
+  /* ── 语音 UI ── */
   const hasText = draft.trim().length > 0;
 
   const handleMicSendClick = useCallback(() => {
     if (hasText) { handleSend(); }
-    else if (!isRecording) { setVoiceUIActive(true); }
-  }, [hasText, isRecording, handleSend]);
+    else if (!voice.isRecording) { voice.setVoiceUIActive(true); }
+  }, [hasText, voice.isRecording, voice.setVoiceUIActive, handleSend]);
 
   const handleSettingsClick = useCallback(() => {
-    if (isRecording) {
-      setIsRecording(false); stopTimer();
-      try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
-      setVoiceUIActive(false);
-      transcriptRef.current = '';
+    if (voice.isRecording) {
+      voice.stopRecording(true);
     }
     navigate('/m/mood-haven/settings');
-  }, [isRecording, navigate]);
+  }, [voice.isRecording, voice.stopRecording, navigate]);
 
   // ── 结束倾诉 ──
   const handleEndChat = useCallback(async () => {
-    if (isRecording) {
-      setIsRecording(false); stopTimer();
-      try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
-      setVoiceUIActive(false);
+    if (voice.isRecording) {
+      voice.stopRecording(true);
     }
     setTimerRunning(false);
 
@@ -406,16 +310,7 @@ export function MoodHavenChat() {
     } catch { /* 静默 */ }
 
     navigate('/m/mood-haven/growth');
-  }, [isRecording, messages, elapsedSeconds, navigate]);
-
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current && isRecording) {
-        try { recognitionRef.current.stop(); } catch (_) { /* ignore */ }
-      }
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRecording]);
+  }, [voice.isRecording, voice.stopRecording, messages, elapsedSeconds, navigate]);
 
   /* ═══════════════════════════════════════════════
      Render
@@ -486,37 +381,37 @@ export function MoodHavenChat() {
 
       {/* Input Area */}
       <div className="mh-chat-input-area">
-        {voiceUIActive && (
+        {voice.voiceUIActive && (
           <div className="mh-voice-zone">
             <div className="mh-voice-hint" style={{ color: P.voiceHintColor }}>
               {voiceMode === 'hold' ? '按住说话，松手发送' : '点击说话，再点一下发送'}
             </div>
             <div className="mh-voice-cancel-row">
-              {isRecording && (
+              {voice.isRecording && (
                 <button
-                  className={`mh-voice-cancel-pill ${cancelZone ? 'mh-voice-cancel-pill--active' : ''}`}
-                  style={cancelZone ? {} : { background: P.cancelBg, color: P.cancelColor, borderColor: P.cancelBorder }}
-                  onClick={(e) => { e.stopPropagation(); cancelRecording(); }}
+                  className={`mh-voice-cancel-pill ${voice.cancelZone ? 'mh-voice-cancel-pill--active' : ''}`}
+                  style={voice.cancelZone ? {} : { background: P.cancelBg, color: P.cancelColor, borderColor: P.cancelBorder }}
+                  onClick={(e) => { e.stopPropagation(); voice.cancelRecording(); }}
                 >取消</button>
               )}
             </div>
             <div
               className="mh-voice-large-btn"
               style={{ background: P.voiceBtnGradient, boxShadow: P.voiceBtnShadow }}
-              onPointerDown={handleLargeVoiceStart}
-              onPointerUp={handleLargeVoiceEnd}
-              onPointerMove={handleLargeVoiceMove}
-              onClick={handleLargeVoiceClick}
+              onPointerDown={voice.handlePointerDown}
+              onPointerUp={voice.handlePointerUp}
+              onPointerMove={voice.handlePointerMove}
+              onClick={voice.handleClick}
             >
               <div className="mh-voice-pulse-ring" style={{ background: P.voicePulseBg }} />
               <div className="mh-voice-pulse-ring" style={{ background: P.voicePulseBg }} />
               <Icon icon="solar:microphone-bold" style={{ fontSize: '30px', color: P.micIconColor, position: 'relative', zIndex: 10 }} />
             </div>
-            {isRecording && <div className="mh-voice-timer" style={{ color: P.voiceTimerColor }}>{fmtTime(recordingTime)}</div>}
+            {voice.isRecording && <div className="mh-voice-timer" style={{ color: P.voiceTimerColor }}>{voice.formatTime(voice.recordingTime)}</div>}
           </div>
         )}
 
-        {!voiceUIActive && (
+        {!voice.voiceUIActive && (
           <>
             <button
               className="mh-end-session-btn"

@@ -116,12 +116,15 @@ def asr_online(audio_base64: str, audio_format: str = "wav", sample_rate: int = 
     engine = engine or settings.TENCENT_ASR_ENGINE
     timestamp = int(time.time())
 
+    # 解码Base64获取原始音频字节长度（腾讯云API要求DataLen=原始字节数，非Base64字符串长度）
+    audio_bytes = base64.b64decode(audio_base64)
+
     payload = json.dumps({
         "EngSerViceType": engine,
         "SourceType": 1,  # 原始音频
         "VoiceFormat": audio_format,
         "Data": audio_base64,
-        "DataLen": len(audio_base64),
+        "DataLen": len(audio_bytes),
         "FilterDirty": 1,
         "FilterModal": 0,
         "ConvertNumMode": 1,
@@ -193,32 +196,52 @@ def asr_offline(audio_data: bytes, sample_rate: int = 16000) -> dict[str, Any]:
 
 def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000,
                      prefer_offline: bool = False, engine: str | None = None) -> dict[str, Any]:
-    """语音识别统一入口：优先在线，可切离线。"""
+    """语音识别统一入口：优先通义听悟在线 → 腾讯云在线备用 → Vosk离线。
+
+    引擎优先级（可自动降级）:
+    1. 通义听悟 ASR（阿里云，Excel #5 — 默认首选）
+    2. 腾讯云 ASR（备用在线引擎）
+    3. Vosk 离线 ASR（无网环境）
+    """
     # 离线优先模式
     if prefer_offline and settings.offline_asr_enabled:
         try:
             audio_data = base64.b64decode(audio_base64)
             result = asr_offline(audio_data, sample_rate)
-            if result["confidence"] > 0.3:  # 离线置信度够用则返回
+            if result["confidence"] > 0.3:
                 return result
         except (APIError, Exception):
-            pass  # 离线失败→降级到在线
+            pass
 
-    # 在线识别
-    if not settings.TENCENT_ASR_SECRET_ID:
-        # 未配置在线ASR→尝试离线
-        if settings.offline_asr_enabled:
-            audio_data = base64.b64decode(audio_base64)
-            return asr_offline(audio_data, sample_rate)
-        raise E_OFFLINE_UNAVAILABLE
+    # 在线识别：优先通义听悟（Excel #5）
+    if settings.TINGWU_API_KEY:
+        try:
+            result = asr_tingwu(audio_base64, audio_format, sample_rate)
+            if result["confidence"] >= 0.5 or result["text"].strip():
+                return result
+            logger.warning("通义听悟低置信度，尝试腾讯云ASR")
+        except (APIError, Exception) as e:
+            logger.warning("通义听悟不可用，降级到腾讯云ASR: %s", e)
 
-    result = asr_online(audio_base64, audio_format, sample_rate, engine)
+    # 备用在线：腾讯云 ASR
+    if settings.TENCENT_ASR_SECRET_ID:
+        try:
+            result = asr_online(audio_base64, audio_format, sample_rate, engine)
+            if result["confidence"] < 0.5:
+                logger.warning("ASR低置信度: %.2f, text=%s", result["confidence"], result["text"][:50])
+            return result
+        except APIError:
+            raise
+        except Exception as e:
+            logger.exception("腾讯云ASR调用异常")
+            raise APIError(50001, f"语音识别服务异常: {str(e)}", 503)
 
-    # 低置信度告警
-    if result["confidence"] < 0.5:
-        logger.warning("ASR低置信度: %.2f, text=%s", result["confidence"], result["text"][:50])
+    # 离线兜底
+    if settings.offline_asr_enabled:
+        audio_data = base64.b64decode(audio_base64)
+        return asr_offline(audio_data, sample_rate)
 
-    return result
+    raise E_OFFLINE_UNAVAILABLE
 
 
 # ═══════════════════════════════════════════════
@@ -283,70 +306,9 @@ def get_realtime_asr_auth() -> dict[str, Any]:
 
 
 # ═══════════════════════════════════════════════
-# 智谱AI GLM（大模型推理/生成）
+# 智谱AI GLM endpoint（保留用于 _call_zhipu_api）
 # ═══════════════════════════════════════════════
 ZHIPUAI_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-
-
-def llm_generate(prompt: str, system_prompt: str | None = None,
-                 context: list[dict[str, str]] | None = None,
-                 model: str | None = None, temperature: float | None = None,
-                 max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
-    """A3/A4 LLM生成回答（智谱AI GLM）。"""
-    import urllib.request
-
-    if not settings.ZHIPUAI_API_KEY:
-        raise APIError(50020, "AI引擎未配置API密钥", 503)
-
-    model = model or settings.ZHIPUAI_MODEL
-    temperature = temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE
-    max_tokens = max_tokens or settings.ZHIPUAI_MAX_TOKENS
-
-    # 构建 messages
-    messages: list[dict[str, str]] = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    if context:
-        messages.extend(context)
-    messages.append({"role": "user", "content": prompt})
-
-    body = json.dumps({
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": stream,
-    }).encode("utf-8")
-
-    headers = {
-        "Authorization": f"Bearer {settings.ZHIPUAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        req = urllib.request.Request(ZHIPUAI_ENDPOINT, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-
-        if "choices" not in result or not result["choices"]:
-            raise APIError(50020, "大模型返回为空", 502)
-
-        choice = result["choices"][0]
-        return {
-            "content": choice["message"]["content"],
-            "model_used": result.get("model", model),
-            "usage": {
-                "prompt_tokens": result.get("usage", {}).get("prompt_tokens", 0),
-                "completion_tokens": result.get("usage", {}).get("completion_tokens", 0),
-                "total_tokens": result.get("usage", {}).get("total_tokens", 0),
-            },
-        }
-
-    except APIError:
-        raise
-    except Exception as e:
-        logger.exception("智谱AI调用异常")
-        raise E_LLM_TIMEOUT
 
 
 # ═══════════════════════════════════════════════
@@ -538,7 +500,8 @@ def llm_generate(prompt: str, system_prompt: str | None = None,
     """A3/A4 LLM生成回答（统一入口，支持多提供商）。
 
     provider 优先级: 参数 > LLM_PROVIDER 配置 > "auto"
-    "auto" 模式: 优先 Anthropic Claude，不可用时降级到智谱AI GLM
+    "auto" 模式: 优先按模块路由（由 orchestrator 决定），否则按可用提供商自动选择
+    "volcano" / "dashscope" / "hunyuan" / "kimi" / "deepseek" / "zhipu" / "anthropic"
 
     user_id + db: 可选，传入后自动读取用户模型偏好（优先于全局默认模型）。
     """
@@ -553,42 +516,77 @@ def llm_generate(prompt: str, system_prompt: str | None = None,
 
     provider = provider or settings.LLM_PROVIDER
 
-    # auto 模式：检测可用的提供商
+    # ═══ 多提供商路由分发 ═══
+
+    # 显式指定 provider
+    if provider == "volcano":
+        return llm_generate_volcano(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "dashscope":
+        return llm_generate_dashscope(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "hunyuan":
+        return llm_generate_hunyuan(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "kimi":
+        return llm_generate_kimi(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "deepseek":
+        return llm_generate_deepseek(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "zhipu":
+        return _llm_generate_zhipu(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+            stream=stream,
+        )
+    elif provider == "anthropic":
+        return llm_generate_anthropic(
+            prompt=prompt, system_prompt=system_prompt,
+            context=context, model=model,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+
+    # auto 模式：优先火山引擎（豆包），按顺序尝试可用提供商
     if provider == "auto":
-        if settings.ANTHROPIC_API_KEY:
-            provider = "anthropic"
-        elif settings.ZHIPUAI_API_KEY:
-            provider = "zhipu"
-        else:
-            raise APIError(50020, "未配置任何LLM提供商（Anthropic/智谱AI）", 503)
+        providers = [
+            ("volcano", settings.VOLCANO_API_KEY, llm_generate_volcano),
+            ("dashscope", settings.DASHSCOPE_API_KEY, llm_generate_dashscope),
+            ("anthropic", settings.ANTHROPIC_API_KEY, llm_generate_anthropic),
+            ("zhipu", settings.ZHIPUAI_API_KEY, _llm_generate_zhipu),
+            ("deepseek", settings.DEEPSEEK_API_KEY, llm_generate_deepseek),
+            ("kimi", settings.KIMI_API_KEY, llm_generate_kimi),
+        ]
+        for prov_name, api_key, func in providers:
+            if api_key:
+                try:
+                    return func(
+                        prompt=prompt, system_prompt=system_prompt,
+                        context=context, model=model,
+                        temperature=temperature, max_tokens=max_tokens,
+                    )
+                except APIError:
+                    logger.warning("auto模式: %s 调用失败，尝试下一个提供商", prov_name)
+                    continue
+        raise APIError(50020, "所有LLM提供商均不可用，请检查API密钥配置", 503)
 
-    # 按提供商分发
-    if provider == "anthropic":
-        try:
-            return llm_generate_anthropic(
-                prompt=prompt, system_prompt=system_prompt,
-                context=context, model=model,
-                temperature=temperature, max_tokens=max_tokens,
-            )
-        except APIError:
-            # 如果配置了降级，尝试智谱AI
-            if settings.ZHIPUAI_API_KEY and settings.LLM_PROVIDER == "auto":
-                logger.warning("Anthropic调用失败，降级到智谱AI")
-                return _llm_generate_zhipu(
-                    prompt=prompt, system_prompt=system_prompt,
-                    context=context, model=None,
-                    temperature=temperature, max_tokens=max_tokens,
-                    stream=stream,
-                )
-            raise
-
-    # 智谱AI
-    return _llm_generate_zhipu(
-        prompt=prompt, system_prompt=system_prompt,
-        context=context, model=model,
-        temperature=temperature, max_tokens=max_tokens,
-        stream=stream,
-    )
+    raise APIError(50020, f"不支持的LLM提供商: {provider}", 400)
 
 
 def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
@@ -708,6 +706,363 @@ def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
             "total_tokens": result.get("usage", {}).get("total_tokens", 0),
         },
     }
+
+
+# ═══════════════════════════════════════════════
+# 通用 OpenAI 兼容 API 客户端
+# 豆包(火山引擎) / 通义千问(阿里云) / Kimi(月之暗面) / DeepSeek
+# 均使用 OpenAI 兼容的 /v1/chat/completions 接口
+# ═══════════════════════════════════════════════
+
+def _openai_compatible_generate(
+    prompt: str,
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    provider_name: str = "openai_compatible",
+) -> dict[str, Any]:
+    """通用 OpenAI 兼容接口调用。
+
+    适用于: 火山引擎(豆包)、阿里云DashScope(通义千问)、月之暗面(Kimi)、DeepSeek
+    """
+    import urllib.request
+
+    if not api_key:
+        raise APIError(50020, f"{provider_name} API密钥未配置", 503)
+
+    # 构建 messages
+    messages: list[dict[str, Any]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    if context:
+        for msg in context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role in ("user", "assistant", "system"):
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    endpoint = f"{base_url.rstrip('/')}/chat/completions"
+    body = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }).encode("utf-8")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        req = urllib.request.Request(endpoint, data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        if "choices" not in result or not result["choices"]:
+            raise APIError(50020, f"{provider_name}返回为空", 502)
+
+        choice = result["choices"][0]
+        return {
+            "content": choice["message"]["content"],
+            "model_used": result.get("model", model),
+            "provider": provider_name,
+            "usage": {
+                "prompt_tokens": result.get("usage", {}).get("prompt_tokens", 0),
+                "completion_tokens": result.get("usage", {}).get("completion_tokens", 0),
+                "total_tokens": result.get("usage", {}).get("total_tokens", 0),
+            },
+        }
+
+    except APIError:
+        raise
+    except Exception as e:
+        logger.exception("%s调用异常", provider_name)
+        raise E_LLM_TIMEOUT
+
+
+# ═══════════════════════════════════════════════
+# 字节火山引擎 — 豆包 Seed 2.0 Pro（Excel #1 AI对话主模块）
+# ═══════════════════════════════════════════════
+
+def llm_generate_volcano(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """豆包 Seed 2.0 Pro — AI对话主模块（小耕人设/晨间/暮省/树洞/问答）。"""
+    return _openai_compatible_generate(
+        prompt=prompt,
+        base_url=settings.VOLCANO_BASE_URL,
+        api_key=settings.VOLCANO_API_KEY,
+        model=model or settings.VOLCANO_CHAT_MODEL,
+        system_prompt=system_prompt,
+        context=context,
+        temperature=temperature if temperature is not None else settings.VOLCANO_TEMPERATURE,
+        max_tokens=max_tokens or settings.VOLCANO_MAX_TOKENS,
+        provider_name="volcano",
+    )
+
+
+# ═══════════════════════════════════════════════
+# 阿里云 DashScope — 通义千问 Qwen3.7-Max（Excel #2 HR模板）
+# ═══════════════════════════════════════════════
+
+def llm_generate_dashscope(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """通义千问 Qwen3.7-Max — HR专业模板生成、实时语音对话。"""
+    return _openai_compatible_generate(
+        prompt=prompt,
+        base_url=settings.DASHSCOPE_BASE_URL,
+        api_key=settings.DASHSCOPE_API_KEY,
+        model=model or settings.DASHSCOPE_CHAT_MODEL,
+        system_prompt=system_prompt,
+        context=context,
+        temperature=temperature if temperature is not None else settings.DASHSCOPE_TEMPERATURE,
+        max_tokens=max_tokens or settings.DASHSCOPE_MAX_TOKENS,
+        provider_name="dashscope",
+    )
+
+
+# ═══════════════════════════════════════════════
+# 月之暗面 Kimi K2.5（Excel #4 私有知识库问答）
+# ═══════════════════════════════════════════════
+
+def llm_generate_kimi(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """Kimi K2.5 — 私有知识库问答，超大上下文窗口。"""
+    return _openai_compatible_generate(
+        prompt=prompt,
+        base_url=settings.KIMI_BASE_URL,
+        api_key=settings.KIMI_API_KEY,
+        model=model or settings.KIMI_MODEL,
+        system_prompt=system_prompt,
+        context=context,
+        temperature=temperature if temperature is not None else settings.KIMI_TEMPERATURE,
+        max_tokens=max_tokens or settings.KIMI_MAX_TOKENS,
+        provider_name="kimi",
+    )
+
+
+# ═══════════════════════════════════════════════
+# DeepSeek V4-Pro（Excel #9 工作诊断&成长分析）
+# ═══════════════════════════════════════════════
+
+def llm_generate_deepseek(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """DeepSeek V4-Pro — 工作诊断、成长分析、逻辑推理。"""
+    return _openai_compatible_generate(
+        prompt=prompt,
+        base_url=settings.DEEPSEEK_BASE_URL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        model=model or settings.DEEPSEEK_MODEL,
+        system_prompt=system_prompt,
+        context=context,
+        temperature=temperature if temperature is not None else settings.DEEPSEEK_TEMPERATURE,
+        max_tokens=max_tokens or settings.DEEPSEEK_MAX_TOKENS,
+        provider_name="deepseek",
+    )
+
+
+# ═══════════════════════════════════════════════
+# 腾讯混元 Hy3（Excel #3 智能会议纪要）
+# ═══════════════════════════════════════════════
+
+def llm_generate_hunyuan(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """腾讯混元 Hy3 — 智能会议纪要（使用腾讯云API v3签名）。"""
+    import urllib.request
+
+    if not settings.HUNYUAN_SECRET_ID or not settings.HUNYUAN_SECRET_KEY:
+        raise APIError(50020, "腾讯混元API密钥未配置（HUNYUAN_SECRET_ID/SECRET_KEY）", 503)
+
+    model = model or settings.HUNYUAN_MODEL
+    temperature = temperature if temperature is not None else settings.HUNYUAN_TEMPERATURE
+    max_tokens = max_tokens or settings.HUNYUAN_MAX_TOKENS
+
+    # 构建 messages
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    if context:
+        messages.extend(context)
+    messages.append({"role": "user", "content": prompt})
+
+    timestamp = int(time.time())
+    payload = json.dumps({
+        "Model": model,
+        "Messages": messages,
+        "Temperature": temperature,
+        "TopP": 0.8,
+    })
+
+    # 使用腾讯云API v3签名
+    service = "hunyuan.tencentcloudapi.com"
+    headers = _tencent_sign(service, "ChatCompletions", payload, timestamp)
+    headers["X-TC-Version"] = "2023-09-01"
+
+    try:
+        req = urllib.request.Request(
+            f"https://{service}",
+            data=payload.encode("utf-8"),
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        if "Error" in result.get("Response", {}):
+            err = result["Response"]["Error"]
+            raise APIError(50020, f"腾讯混元错误: {err.get('Message', '未知错误')}", 502)
+
+        choices = result["Response"].get("Choices", [])
+        if not choices:
+            raise APIError(50020, "腾讯混元返回为空", 502)
+
+        content = choices[0]["Message"]["Content"]
+        usage = result["Response"].get("Usage", {})
+        return {
+            "content": content,
+            "model_used": result["Response"].get("Model", model),
+            "provider": "hunyuan",
+            "usage": {
+                "prompt_tokens": usage.get("PromptTokens", 0),
+                "completion_tokens": usage.get("CompletionTokens", 0),
+                "total_tokens": usage.get("TotalTokens", 0),
+            },
+        }
+
+    except APIError:
+        raise
+    except Exception as e:
+        logger.exception("腾讯混元调用异常")
+        raise E_LLM_TIMEOUT
+
+
+# ═══════════════════════════════════════════════
+# 阿里云 通义听悟 ASR（Excel #5 语音识别）
+# ═══════════════════════════════════════════════
+
+def asr_tingwu(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000) -> dict[str, Any]:
+    """阿里云通义听悟 — 语音转文字（替换腾讯云ASR为默认在线引擎）。
+
+    通义听悟使用异步任务模式：
+    1. POST /api/v1/tasks 创建离线转写任务
+    2. 轮询 GET /api/v1/tasks/{task_id} 获取结果
+
+    也支持实时推流模式（WebSocket），但离线转写更适合大多数场景。
+    """
+    import urllib.request
+
+    if not settings.TINGWU_API_KEY:
+        raise APIError(50001, "通义听悟API密钥未配置（TINGWU_API_KEY）", 503)
+
+    endpoint = f"{settings.TINGWU_ENDPOINT.rstrip('/')}/api/v1/tasks"
+
+    # 解码 Base64 音频
+    audio_bytes = base64.b64decode(audio_base64)
+
+    # 构建请求体
+    body = json.dumps({
+        "AppKey": settings.TINGWU_APP_KEY,
+        "Input": {
+            "SourceType": "BASE64",
+            "Data": audio_base64,
+            "FileFormat": audio_format,
+            "SampleRate": sample_rate,
+        },
+        "Parameters": {
+            "Transcription": {
+                "DiarizationEnabled": False,
+                "MaxSpeakerCount": 1,
+            },
+        },
+    }).encode("utf-8")
+
+    headers = {
+        "Authorization": f"Bearer {settings.TINGWU_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        # Step 1: 创建转写任务
+        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            create_result = json.loads(resp.read().decode("utf-8"))
+
+        task_id = create_result.get("Data", {}).get("TaskId")
+        if not task_id:
+            err_msg = create_result.get("Message", "未知错误")
+            logger.error("通义听悟任务创建失败: %s", err_msg)
+            raise APIError(50001, f"通义听悟任务创建失败: {err_msg}", 502)
+
+        # Step 2: 轮询等待结果
+        poll_url = f"{settings.TINGWU_ENDPOINT.rstrip('/')}/api/v1/tasks/{task_id}"
+        max_polls = 30  # 最多等30秒
+        for _ in range(max_polls):
+            time.sleep(settings.TINGWU_POLL_INTERVAL)
+            poll_req = urllib.request.Request(poll_url, headers=headers)
+            with urllib.request.urlopen(poll_req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+                poll_result = json.loads(resp.read().decode("utf-8"))
+
+            status = poll_result.get("Data", {}).get("TaskStatus", "")
+            if status == "SUCCESS":
+                transcription = poll_result["Data"].get("Result", {}).get("Transcription", "")
+                # 如果有细分句子，拼接所有句子文本
+                sentences = poll_result["Data"].get("Result", {}).get("Sentences", [])
+                if sentences:
+                    transcription = "".join(s.get("Text", "") for s in sentences)
+
+                return {
+                    "text": transcription,
+                    "confidence": 0.9,  # 通义听悟不返回置信度，使用默认值
+                    "duration_ms": poll_result["Data"].get("Result", {}).get("AudioDuration", 0),
+                    "engine_used": "tingwu_online",
+                }
+            elif status == "FAILED":
+                err = poll_result.get("Message", "转写失败")
+                raise APIError(50001, f"通义听悟转写失败: {err}", 502)
+            # 其他状态(CREATED/RUNNING)继续轮询
+
+        raise APIError(50001, "通义听悟转写超时", 504)
+
+    except APIError:
+        raise
+    except Exception as e:
+        logger.exception("通义听悟ASR调用异常")
+        raise APIError(50001, f"语音识别服务异常: {str(e)}", 503)
 
 
 def converse(user_input: str, conversation_id: str | None = None,
@@ -912,25 +1267,116 @@ class VoiceInterruptionHandler:
 # TTS语音合成（小耕说话）
 # ═══════════════════════════════════════════════
 
-def tts_speak(text: str, emotion_context: str = "neutral") -> dict:
-    """TTS语音合成 — 小耕说话。
+def tts_speak(text: str, emotion_context: str = "neutral", voice: str = "zhitian_emo",
+              audio_format: str = "mp3") -> dict:
+    """TTS语音合成 — 小耕说话（阿里云通义TTS-HD — Excel #6）。
 
-    根据情绪上下文选择语音参数：
-    - 负面情绪时语速放慢 (speed=0.9)
-    - 正常情绪时正常语速 (speed=1.0)
+    使用阿里云 DashScope 通义千问 TTS-HD 模型：
+    - 小耕专属温柔治愈女声
+    - 支持情绪语调适配
+    - 高清人声输出
 
-    MVP阶段返回参数供前端TTS引擎使用。
-    生产环境接入阿里云TTS API。
+    Args:
+        text: 要合成的文本
+        emotion_context: 情绪上下文 (neutral/sad/anxious/low/happy)
+        voice: 音色标识 (默认: zhitian_emo 温柔女声)
+        audio_format: 输出格式 (mp3/wav/pcm)
+
+    Returns:
+        {
+            "audio_base64": str,   # Base64编码的音频数据
+            "audio_format": str,   # 音频格式
+            "engine": str,         # 引擎名称
+            "text": str,           # 原始文本
+            "speed": float,        # 实际语速
+        }
     """
-    params = {
-        "text": text,
-        "speed": 0.9 if emotion_context in ("sad", "anxious", "low") else 1.0,
-        "pitch": 0.0,
-        "volume": 1.0,
-        "engine": "aliyun_tts",  # 阿里云语音合成，中文自然度高
+    import urllib.request
+
+    # 情绪→语速映射
+    emotion_speed_map = {
+        "sad": 0.85,
+        "anxious": 0.9,
+        "low": 0.9,
+        "neutral": 1.0,
+        "happy": 1.05,
     }
-    logger.info("TTS合成: text_len=%d emotion=%s", len(text), emotion_context)
-    return params
+    speed = emotion_speed_map.get(emotion_context, 1.0)
+
+    if not settings.DASHSCOPE_API_KEY:
+        # 未配置阿里云API → 降级返回参数给前端
+        logger.warning("DashScope API未配置，TTS降级为参数模式")
+        return {
+            "audio_base64": "",
+            "audio_format": audio_format,
+            "engine": "aliyun_tts_params_only",
+            "text": text,
+            "speed": speed,
+            "pitch": 0.0,
+            "volume": 1.0,
+        }
+
+    # 调用阿里云 DashScope TTS API
+    endpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    body = json.dumps({
+        "model": settings.DASHSCOPE_TTS_MODEL,  # qwen-tts-hd
+        "input": {
+            "messages": [{
+                "role": "user",
+                "content": [{"text": text}],
+            }],
+        },
+        "parameters": {
+            "text_type": "PlainText",
+            "voice": voice,
+            "format": audio_format,
+            "sample_rate": 24000,
+            "speed": speed,
+            "volume": 50,
+        },
+    }).encode("utf-8")
+
+    headers = {
+        "Authorization": f"Bearer {settings.DASHSCOPE_API_KEY}",
+        "Content-Type": "application/json",
+        "X-DashScope-OssResourceResolve": "enable",  # 返回可下载URL而非Base64
+    }
+
+    try:
+        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        output = result.get("output", {})
+        audio_url = output.get("audio", {}).get("url", "")
+
+        logger.info(
+            "TTS合成成功: text_len=%d emotion=%s voice=%s speed=%.2f",
+            len(text), emotion_context, voice, speed,
+        )
+
+        return {
+            "audio_url": audio_url,      # 音频文件OSS URL（有效期24h）
+            "audio_format": audio_format,
+            "engine": "aliyun_tts_hd",
+            "text": text,
+            "speed": speed,
+            "voice": voice,
+            "request_id": result.get("request_id", ""),
+        }
+
+    except Exception as e:
+        logger.exception("阿里云TTS调用异常，降级为参数模式")
+        # 降级：返回参数让前端自行合成
+        return {
+            "audio_base64": "",
+            "audio_format": audio_format,
+            "engine": "aliyun_tts_fallback",
+            "text": text,
+            "speed": speed,
+            "pitch": 0.0,
+            "volume": 1.0,
+        }
 
 
 def build_voice_system_prompt(module: str, enable_dialect: bool = True) -> str:
