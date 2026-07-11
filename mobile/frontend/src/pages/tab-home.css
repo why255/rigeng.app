@@ -139,7 +139,7 @@
   margin-top: 2px;
 }
 .tab-card__desc--sm {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: var(--spacing-xs);
 }
 
@@ -572,8 +572,8 @@
   flex-shrink: 0;
 }
 .tab-mine__badge {
-  padding: 2px 8px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
   font-weight: 600;
   border-radius: 4px;
   white-space: nowrap;
@@ -680,4 +680,12 @@
   background: #e2dad0;
   border-radius: 2px;
   margin: 32px auto 0;
+}
+
+/* 窄屏适配：双列网格折叠为单列 */
+@media (max-width: 400px) {
+  .tab-card-grid,
+  .tab-career__cards {
+    grid-template-columns: 1fr;
+  }
 }

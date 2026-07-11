@@ -370,7 +370,7 @@
   background: transparent;
 }
 .er-stage-node__label {
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
 }
 .er-stage-node__label--completed {
@@ -484,7 +484,7 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .er-bubble-time {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   margin-top: 4px;
   padding: 0 4px;
@@ -868,7 +868,7 @@
   align-items: center;
   justify-content: flex-end;
   padding-right: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: #fff;
   transition: width 0.5s ease-out;
 }
@@ -916,7 +916,7 @@
   background: #E8E0D6;
 }
 .er-week-dot__label {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1268,10 +1268,10 @@
   text-decoration: line-through;
 }
 .er-action-item__badge {
-  font-size: 10px;
+  font-size: 12px;
   color: #22C55E;
   background: #F0FFF0;
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 99px;
   white-space: nowrap;
 }

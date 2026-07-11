@@ -2,6 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
+<!-- Capacitor 原生平台 API 地址 -->
+<script>
+  window.__RIGENG_API__ = '';
+  try {
+    if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+      window.__RIGENG_API__ = 'http://47.103.197.189';
+    }
+  } catch(e) {}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#2C1810" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -86,7 +95,7 @@ function handlePreloadLogin(e) {
   if (pwd.length < 6) { err.textContent = '密码至少6位'; return false; }
   err.textContent = ' ';
   btn.disabled = true; btn.textContent = '登录中…';
-  fetch('/api/v1/auth/login', {
+  fetch((window.__RIGENG_API__ || '') + '/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone: phone, password: pwd })

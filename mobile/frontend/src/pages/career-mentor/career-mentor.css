@@ -26,7 +26,7 @@
   border-bottom: 1px solid #f0f0f0;
   z-index: 10;
 }
-.cm-header-spacer { width: 40px; }
+.cm-header-spacer { width: 44px; }
 .cm-header-title {
   font-size: 18px;
   font-weight: 700;
@@ -42,12 +42,14 @@
   color: #333;
 }
 .cm-header-subtitle-sub {
-  font-size: 9px;
+  font-size: 12px;
   color: #607D8B;
 }
 .cm-header-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -101,8 +103,8 @@
 }
 .cm-chat-input-pill input::placeholder { color: #9CA3AF; }
 .cm-chat-mic-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #C03A39;
   border: none;
@@ -217,7 +219,7 @@
 }
 .cm-welcome__text {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   color: #666666;
   line-height: 1.6;
 }
@@ -264,8 +266,8 @@
   gap: 6px;
 }
 .cm-step-node__dot {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -285,11 +287,11 @@
   border-radius: 50%;
   background: #C03A39;
 }
-.cm-step-node__number { font-size: 10px; color: #BCAAA4; }
-.cm-step-node__name { font-size: 10px; font-weight: 700; }
+.cm-step-node__number { font-size: 12px; color: #BCAAA4; }
+.cm-step-node__name { font-size: 12px; font-weight: 700; }
 .cm-step-node__name--active { color: #C03A39; }
 .cm-step-node__name--inactive { color: #BCAAA4; }
-.cm-step-node__desc { font-size: 8px; color: #999999; }
+.cm-step-node__desc { font-size: 12px; color: #999999; }
 
 /* ── 快速入口卡片 ── */
 .cm-entry-cards {
@@ -323,7 +325,7 @@
 .cm-entry-card__icon--blue { background: rgba(96,125,139,0.1); color: #607D8B; }
 .cm-entry-card__body { flex: 1; }
 .cm-entry-card__title { font-size: 14px; font-weight: 700; color: #333; }
-.cm-entry-card__desc { font-size: 10px; color: #999; margin-top: 2px; }
+.cm-entry-card__desc { font-size: 12px; color: #999; margin-top: 4px; }
 .cm-entry-card__arrow { color: #BCAAA4; flex-shrink: 0; }
 .cm-entry-card__arrow--active { color: #C03A39; }
 
@@ -338,8 +340,8 @@
   gap: 8px;
 }
 .cm-data-hint__icon { color: #607D8B; margin-top: 2px; flex-shrink: 0; }
-.cm-data-hint__title { font-size: 11px; font-weight: 700; color: #607D8B; }
-.cm-data-hint__desc { font-size: 10px; color: rgba(96,125,139,0.7); margin-top: 4px; line-height: 1.5; }
+.cm-data-hint__title { font-size: 12px; font-weight: 700; color: #607D8B; }
+.cm-data-hint__desc { font-size: 12px; color: rgba(96,125,139,0.7); margin-top: 4px; line-height: 1.5; }
 .cm-data-hint__desc strong { color: #607D8B; }
 
 /* ═══════════════════════════ P2 一盘 ═══════════════════════════ */
@@ -352,26 +354,26 @@
   border-bottom: 1px solid #E8E0D6;
 }
 .cm-sub-progress__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.cm-sub-progress__label { font-size: 10px; font-weight: 700; color: #333; }
-.cm-sub-progress__count { font-size: 10px; color: #607D8B; }
+.cm-sub-progress__label { font-size: 12px; font-weight: 700; color: #333; }
+.cm-sub-progress__count { font-size: 12px; color: #607D8B; }
 .cm-sub-progress__bar { display: flex; gap: 4px; }
 .cm-sub-progress__seg { flex: 1; height: 3px; border-radius: 2px; background: #E8E0D6; }
 .cm-sub-progress__seg--done { background: #C03A39; }
 .cm-sub-progress__labels { display: flex; justify-content: space-between; margin-top: 6px; }
-.cm-sub-progress__seg-label { font-size: 8px; color: #BCAAA4; }
+.cm-sub-progress__seg-label { font-size: 12px; color: #BCAAA4; }
 
 /* ── 对话气泡（对齐 mp-bubble 系统） ── */
-.cm-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.cm-avatar { flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
 .cm-avatar--geng { background: #C03A39; color: #fff; font-size: 18px; }
 .cm-avatar--user { background: #E8D5B7; border: 1px solid rgba(212,165,116,0.3); color: #8B7A62; font-size: 14px; }
 .cm-bubble-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
 .cm-bubble-row--user { flex-direction: row-reverse; }
 .cm-bubble-wrapper { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
 .cm-bubble-wrapper--user { align-items: flex-end; }
-.cm-bubble { padding: 12px; font-size: 14px; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,0.06); white-space: pre-line; }
+.cm-bubble { padding: 12px; font-size: 14px; line-height: 1.6; box-shadow: 0 1px 3px rgba(0,0,0,0.06); white-space: pre-line; word-break: break-word; overflow-wrap: break-word; }
 .cm-bubble--assistant { background: #FFF0E5; border-radius: 16px 4px 16px 16px; color: #333; }
 .cm-bubble--user { background: #F0F0F0; border-radius: 4px 16px 16px 16px; color: #333; }
-.cm-bubble-time { font-size: 10px; color: #999; margin-left: 4px; }
+.cm-bubble-time { font-size: 12px; color: #999; margin-left: 4px; }
 .cm-bubble-time--user { margin-right: 4px; }
 .cm-thinking { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #FFF0E5; border-radius: 16px 4px 16px 16px; color: #999; font-size: 13px; }
 .cm-welcome-hint { font-size: 13px; color: #999; margin-top: 4px; }
@@ -388,7 +390,7 @@
 .cm-confirm-bubble__title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px; }
 .cm-confirm-task { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #F9F9F9; border-radius: 8px; margin-bottom: 8px; }
 .cm-confirm-task__text { font-size: 13px; color: #333; flex: 1; }
-.cm-confirm-task__badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: #FFF0F0; color: #C03A39; font-weight: 500; margin-left: 8px; flex-shrink: 0; }
+.cm-confirm-task__badge { font-size: 12px; padding: 4px 10px; border-radius: 4px; background: #FFF0F0; color: #C03A39; font-weight: 500; margin-left: 8px; flex-shrink: 0; }
 .cm-confirm-btn { display: block; width: 100%; padding: 12px 0; background: #C03A39; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 12px; box-shadow: 0 4px 12px rgba(192,58,57,0.2); }
 .cm-confirm-btn:active { opacity: 0.9; }
 
@@ -415,17 +417,18 @@
   flex-shrink: 0;
 }
 .cm-resume-upload__body { flex: 1; }
-.cm-resume-upload__title { font-size: 11px; font-weight: 700; color: #333; }
-.cm-resume-upload__hint { font-size: 9px; color: #999; }
+.cm-resume-upload__title { font-size: 12px; font-weight: 700; color: #333; }
+.cm-resume-upload__hint { font-size: 12px; color: #999; }
 .cm-resume-upload__btn {
   padding: 6px 12px;
   background: #607D8B;
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   border-radius: 8px;
   border: none;
   cursor: pointer;
+  min-height: 44px;
 }
 
 /* ── 空状态 ── */
@@ -442,10 +445,10 @@
   color: #BCAAA4;
 }
 .cm-empty-state__title { font-size: 12px; font-weight: 700; color: #BCAAA4; }
-.cm-empty-state__desc { font-size: 10px; color: #999; margin-top: 6px; line-height: 1.5; }
+.cm-empty-state__desc { font-size: 12px; color: #999; margin-top: 6px; line-height: 1.5; }
 
 /* ═══════════════════════════ 语音区域（对齐 mp-voice-zone） ═══════════════════════════ */
-.cm-voice-zone { position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; background: #F5F3EF; padding: 16px 16px 32px; text-align: center; }
+.cm-voice-zone { position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; background: #F5F3EF; padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px)); text-align: center; }
 .cm-voice-hint { font-size: 13px; color: #999; margin-bottom: 16px; text-align: center; }
 .cm-voice-cancel-row { display: flex; justify-content: center; margin-bottom: 12px; min-height: 36px; }
 .cm-voice-cancel-pill { padding: 6px 18px; border-radius: 30px; font-size: 13px; font-weight: 500; background: #fff; color: #C03A39; border: 1px solid #F1D5C7; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s; }
@@ -479,7 +482,7 @@
   background: #E8E0D6;
   z-index: 0;
 }
-.cm-mini-steps__dot { position: relative; z-index: 1; font-size: 9px; font-weight: 700; }
+.cm-mini-steps__dot { position: relative; z-index: 1; font-size: 12px; font-weight: 700; }
 .cm-mini-steps__dot--done { color: #607D8B; }
 .cm-mini-steps__dot--active { color: #C03A39; }
 .cm-mini-steps__dot--pending { color: #BCAAA4; }
@@ -491,8 +494,8 @@
   margin-bottom: 12px;
 }
 .cm-xiaogeng-bubble__avatar {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   background: #C03A39;
   display: flex;
@@ -501,7 +504,7 @@
   flex-shrink: 0;
   margin-top: 4px;
 }
-.cm-xiaogeng-bubble__avatar-text { color: #fff; font-weight: 900; font-size: 10px; }
+.cm-xiaogeng-bubble__avatar-text { color: #fff; font-weight: 900; font-size: 12px; }
 .cm-xiaogeng-bubble__body {
   background: #fff;
   padding: 10px 12px;
@@ -509,7 +512,7 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   max-width: 260px;
 }
-.cm-xiaogeng-bubble__body p { font-size: 11px; color: #333; line-height: 1.6; margin: 0; }
+.cm-xiaogeng-bubble__body p { font-size: 12px; color: #333; line-height: 1.6; margin: 0; word-break: break-word; overflow-wrap: break-word; }
 
 /* ── 板块空状态 ── */
 .cm-block__header {
@@ -538,8 +541,8 @@
   margin: 0 auto 12px;
   color: #BCAAA4;
 }
-.cm-block__empty-title { font-size: 11px; font-weight: 700; color: #BCAAA4; }
-.cm-block__empty-desc { font-size: 9px; color: #999; margin-top: 4px; }
+.cm-block__empty-title { font-size: 12px; font-weight: 700; color: #BCAAA4; }
+.cm-block__empty-desc { font-size: 12px; color: #999; margin-top: 4px; }
 
 /* ═══════════════════════════ P4 三投 ═══════════════════════════ */
 
@@ -557,7 +560,7 @@
   text-align: center;
 }
 .cm-stat-card__num { font-size: 20px; font-weight: 900; color: #BCAAA4; }
-.cm-stat-card__label { font-size: 9px; color: #999; margin-top: 2px; }
+.cm-stat-card__label { font-size: 12px; color: #999; margin-top: 4px; }
 
 .cm-guide-tip {
   padding: 10px 12px;
@@ -570,8 +573,8 @@
 }
 .cm-guide-tip__icon { color: #607D8B; margin-top: 1px; flex-shrink: 0; }
 .cm-guide-tip__body { flex: 1; }
-.cm-guide-tip__title { font-size: 10px; font-weight: 700; color: #607D8B; }
-.cm-guide-tip__desc { font-size: 9px; color: rgba(96,125,139,0.7); margin-top: 2px; }
+.cm-guide-tip__title { font-size: 12px; font-weight: 700; color: #607D8B; }
+.cm-guide-tip__desc { font-size: 12px; color: rgba(96,125,139,0.7); margin-top: 4px; }
 
 .cm-add-btn {
   width: 100%;
@@ -599,13 +602,14 @@
 .cm-filter-row__title { font-size: 14px; font-weight: 700; color: #333; }
 .cm-filter-tags { display: flex; gap: 6px; }
 .cm-filter-tag {
-  padding: 2px 8px;
+  padding: 6px 12px;
   background: #F5F3EF;
   border-radius: 20px;
-  font-size: 9px;
+  font-size: 12px;
   color: #999;
   border: none;
   cursor: pointer;
+  min-height: 32px;
 }
 .cm-list-empty { padding: 40px 10px; text-align: center; }
 .cm-list-empty__icon {
@@ -620,7 +624,7 @@
   color: #BCAAA4;
 }
 .cm-list-empty__title { font-size: 12px; font-weight: 700; color: #BCAAA4; }
-.cm-list-empty__desc { font-size: 10px; color: #999; margin-top: 6px; line-height: 1.5; }
+.cm-list-empty__desc { font-size: 12px; color: #999; margin-top: 6px; line-height: 1.5; }
 
 /* ═══════════════════════════ P5 四面 ═══════════════════════════ */
 
@@ -634,7 +638,7 @@
   flex: 1;
   padding: 10px 0;
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   border: none;
   background: transparent;
@@ -652,8 +656,8 @@
 .cm-module-card__header-icon { color: #607D8B; flex-shrink: 0; }
 .cm-module-card__header-title { font-size: 12px; font-weight: 700; color: #333; }
 .cm-module-card__header-badge {
-  font-size: 9px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
   background: rgba(96,125,139,0.1);
   color: #607D8B;
   border-radius: 20px;
@@ -676,8 +680,8 @@
   margin: 0 auto 12px;
   color: #BCAAA4;
 }
-.cm-module-card__empty-title { font-size: 11px; font-weight: 700; color: #BCAAA4; }
-.cm-module-card__empty-desc { font-size: 9px; color: #999; margin-top: 4px; }
+.cm-module-card__empty-title { font-size: 12px; font-weight: 700; color: #BCAAA4; }
+.cm-module-card__empty-desc { font-size: 12px; color: #999; margin-top: 4px; }
 
 .cm-interview-card {
   margin-top: 16px;
@@ -699,8 +703,8 @@
   color: #C03A39;
 }
 .cm-interview-card__title { margin-top: 14px; font-size: 14px; font-weight: 700; color: #333; }
-.cm-interview-card__subtitle { font-size: 10px; color: #999; margin-top: 4px; }
-.cm-interview-card__desc { font-size: 10px; color: #999; margin-top: 10px; line-height: 1.5; }
+.cm-interview-card__subtitle { font-size: 12px; color: #999; margin-top: 4px; }
+.cm-interview-card__desc { font-size: 12px; color: #999; margin-top: 10px; line-height: 1.5; }
 
 .cm-teleprompter {
   margin-top: 20px;
@@ -710,8 +714,8 @@
   border: 1px solid rgba(96,125,139,0.1);
   text-align: left;
 }
-.cm-teleprompter__label { font-size: 9px; color: #607D8B; font-weight: 700; margin-bottom: 8px; }
-.cm-teleprompter__empty { font-size: 10px; color: #999; text-align: center; padding: 10px 0; }
+.cm-teleprompter__label { font-size: 12px; color: #607D8B; font-weight: 700; margin-bottom: 8px; }
+.cm-teleprompter__empty { font-size: 12px; color: #999; text-align: center; padding: 10px 0; }
 
 .cm-record-btn {
   margin-top: 20px;
@@ -751,12 +755,12 @@
   align-items: center;
   gap: 6px;
   color: #BCAAA4;
-  font-size: 11px;
+  font-size: 12px;
 }
 .cm-input-bar__mic { color: #999; flex-shrink: 0; }
 .cm-input-bar__send {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #C03A39;
   border: none;

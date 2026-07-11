@@ -23,7 +23,7 @@
   background: #F5F3EF;
 }
 .sr-page-header__back {
-  width: 32px;
+  width: 44px;
   text-align: left;
   color: #999;
   font-size: 18px;
@@ -41,7 +41,7 @@
   color: #333;
 }
 .sr-page-header__spacer {
-  width: 32px;
+  width: 44px;
 }
 .sr-page-body {
   flex: 1;
@@ -241,9 +241,9 @@
   opacity: 0.8;
 }
 .sr-recording-item__tag {
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   color: #FFFFFF;
   flex-shrink: 0;
@@ -386,7 +386,7 @@
   border: 1px solid #E8E0D6;
 }
 .sr-transcript-preview__title {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: #999;
   margin: 0 0 6px 0;
@@ -395,6 +395,8 @@
   font-size: 12px;
   color: #999;
   margin: 0 0 2px 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .sr-transcript-preview__wait {
   display: flex;
@@ -411,7 +413,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: #C03A39;
   margin-top: 6px;
 }
@@ -432,7 +434,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: #C03A39;
   background: #FEF0F0;
   padding: 4px 8px;
@@ -451,8 +453,8 @@
   gap: 12px;
 }
 .sr-play-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   background: #C03A39;
   border-radius: 50%;
   display: flex;
@@ -484,7 +486,7 @@
   border-radius: 2px;
 }
 .sr-audio-time {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   font-family: monospace;
 }
@@ -504,12 +506,12 @@
   margin-bottom: 8px;
 }
 .sr-segment__speaker {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: #999;
 }
 .sr-segment__time {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   margin-left: auto;
 }
@@ -532,8 +534,8 @@
 .sr-segment__confidence {
   display: inline-block;
   margin-top: 4px;
-  font-size: 9px;
-  padding: 2px 4px;
+  font-size: 12px;
+  padding: 3px 6px;
   border-radius: 4px;
 }
 
@@ -624,9 +626,9 @@
   gap: 12px;
 }
 .sr-extract-field__label {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
-  margin: 0 0 2px 0;
+  margin: 0 0 4px 0;
 }
 .sr-extract-field__value {
   font-size: 14px;
@@ -643,7 +645,7 @@
   padding: 3px 8px;
   background: #F5F3EF;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
 }
 .sr-extract-competencies {
@@ -664,7 +666,7 @@
   margin-bottom: 8px;
 }
 .sr-competency-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #999;
 }
 .sr-stars {
@@ -712,7 +714,7 @@
   background: #F5F5F5;
 }
 .sr-btn-link {
-  font-size: 11px;
+  font-size: 12px;
   color: #999;
   background: none;
   border: none;
@@ -776,9 +778,9 @@
   gap: 6px;
 }
 .sr-history-item__tag {
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
   color: #FFFFFF;
   flex-shrink: 0;
@@ -790,7 +792,7 @@
   margin: 0;
 }
 .sr-history-item__date {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 .sr-history-item__bottom {
@@ -799,15 +801,15 @@
   justify-content: space-between;
 }
 .sr-history-item__duration {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   font-family: monospace;
 }
 .sr-history-item__status {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 10px;
+  gap: 4px;
+  font-size: 12px;
 }
 .sr-history-item__progress {
   width: 100%;
@@ -822,7 +824,7 @@
   border-radius: 2px;
 }
 .sr-history-item__progress-text {
-  font-size: 9px;
+  font-size: 12px;
   color: #999;
   margin-top: 4px;
   display: block;

@@ -92,10 +92,10 @@
   flex: 1;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  gap: 2px;
+  gap: 4px;
   padding: 12px 0 8px;
   color: #BCAAA4;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
   position: relative;
   transition: color var(--duration-normal);

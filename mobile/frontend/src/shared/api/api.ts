@@ -5,7 +5,12 @@
  * 错误抛出标准 ApiError。
  */
 
-const BASE_URL = '/api/v1';
+import { Capacitor } from '@capacitor/core';
+
+/** Capacitor 原生平台使用绝对地址，浏览器使用相对路径（走 Vite 代理或 Nginx 反代） */
+const BASE_URL = Capacitor.isNativePlatform()
+  ? 'http://47.103.197.189/api/v1'
+  : '/api/v1';
 
 export class ApiError extends Error {
   code: number;

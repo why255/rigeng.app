@@ -28,12 +28,12 @@
 }
 
 .kb-header-spacer {
-  width: 40px;
+  width: 44px;
 }
 
 .kb-header-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -322,7 +322,7 @@
 }
 
 .kb-voice-indicator__hint {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   margin-left: auto;
 }
@@ -336,7 +336,8 @@
 }
 
 .kb-hot-tag {
-  padding: 6px 14px;
+  padding: 8px 16px;
+  min-height: 36px;
   background: #fff;
   border: 1px solid #E8E0D6;
   border-radius: 20px;
@@ -409,7 +410,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -444,8 +445,8 @@
 }
 
 .kb-lib-card__icon {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -499,7 +500,7 @@
 }
 
 .kb-lib-card__storage {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   margin-bottom: 12px;
 }
@@ -511,7 +512,7 @@
 }
 
 .kb-lib-card__tag {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -571,8 +572,8 @@
 }
 
 .kb-audit-entry__badge {
-  font-size: 10px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
   background: rgba(192,58,57,0.1);
   color: #C03A39;
   border-radius: 20px;
@@ -586,7 +587,7 @@
 }
 
 .kb-audit-entry__status {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -735,7 +736,7 @@
 }
 
 .kb-category-count {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
   background: #F5F3EF;
   padding: 1px 6px;
@@ -778,8 +779,8 @@
 }
 
 .kb-doc-item__cat {
-  font-size: 10px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
   background: #F5F3EF;
   color: #666;
   border-radius: 10px;
@@ -812,7 +813,7 @@
 }
 
 .kb-doc-item__date {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -830,7 +831,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -878,7 +879,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -930,7 +931,7 @@
 }
 
 .kb-loading__text {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1079,7 +1080,7 @@
 }
 
 .kb-analytics-entry__desc {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1120,12 +1121,12 @@
 }
 
 .kb-stats-bar__title-sub {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
 .kb-stats-bar__link {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #C03A39;
   text-decoration: none;
@@ -1154,7 +1155,7 @@
 }
 
 .kb-stats-bar__metric-label {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1228,9 +1229,10 @@
 }
 
 .kb-source-filter__btn {
-  padding: 4px 10px;
+  padding: 6px 12px;
+  min-height: 32px;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   border: none;
   background: transparent;
@@ -1438,7 +1440,7 @@
 }
 
 .kb-format-card__hint {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1497,7 +1499,7 @@
 }
 
 .kb-watermark-option__desc {
-  font-size: 11px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1555,7 +1557,7 @@
 }
 
 .kb-engine-status__desc {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -1660,7 +1662,7 @@
   padding: 4px 12px;
   background: #C03A39;
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   border-radius: 0 0 0 12px;
 }
@@ -1695,12 +1697,12 @@
 }
 
 .kb-audit-item__meta-text {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
 .kb-audit-item__meta-tag {
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 6px;
   background: #F5F3EF;
   border-radius: 8px;
@@ -1760,7 +1762,7 @@
   padding: 8px 12px;
   background: #FFF5F5;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: #C03A39;
 }
 
@@ -1831,7 +1833,7 @@
 }
 
 .kb-setting-row__desc {
-  font-size: 10px;
+  font-size: 12px;
   color: #999;
 }
 
@@ -2012,12 +2014,12 @@
 }
 
 .kb-public-doc-item__copyright {
-  font-size: 10px;
+  font-size: 12px;
   color: #E8A94D;
 }
 
 .kb-public-doc-item__tag {
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 6px;
   background: rgba(232,169,77,0.1);
   color: #E8A94D;
@@ -2025,11 +2027,11 @@
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .kb-public-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #999;
 }
