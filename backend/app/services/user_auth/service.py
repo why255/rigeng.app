@@ -86,8 +86,10 @@ def send_verification_code(db: Session, *, phone: str, purpose: str) -> dict:
     if settings.ALIYUN_SMS_ACCESS_KEY_ID and settings.ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY:
         try:
             from ..push_service.service import send_sms
-            result = send_sms(phone, settings.ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY, {"code": code})
+            result = send_sms(phone, settings.ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY, {"code": code}, skip_quota_check=True)
             sms_sent = result.get("sent", False)
+            if not sms_sent:
+                sms_error = result.get("reason") or result.get("error") or "短信发送失败"
         except Exception as e:
             sms_error = str(e)
     else:
@@ -107,8 +109,11 @@ def send_verification_code(db: Session, *, phone: str, purpose: str) -> dict:
     db.add(log_entry)
     db.commit()
 
+    if not sms_sent and sms_error:
+        raise errors.APIError(errors.E_SMS_DISABLED.code, f"短信发送失败: {sms_error}", 503)
+
     return {
-        "message": "验证码已发送" if sms_sent or not sms_error else "验证码发送中，请稍候",
+        "message": "验证码已发送",
         "expires_in": 300,
     }
 

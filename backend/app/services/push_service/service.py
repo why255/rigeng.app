@@ -57,13 +57,14 @@ def _percent_encode(s: str) -> str:
 
 
 def _aliyun_call(endpoint: str, action: str, params: dict[str, str],
-                 access_key_id: str, access_key_secret: str) -> dict[str, Any]:
+                 access_key_id: str, access_key_secret: str,
+                 version: str = "2016-08-01") -> dict[str, Any]:
     """阿里云通用API调用。"""
     import urllib.request
 
     common_params = {
         "Format": "JSON",
-        "Version": "2016-08-01",
+        "Version": version,
         "AccessKeyId": access_key_id,
         "SignatureMethod": "HMAC-SHA1",
         "SignatureVersion": "1.0",
@@ -213,14 +214,19 @@ def send_batch_push(user_ids: list[str], title: str, body: str,
 # 短信（阿里云短信）
 # ═══════════════════════════════════════════════
 def send_sms(phone: str, template_code: str,
-             template_params: dict[str, str] | None = None) -> dict[str, Any]:
-    """发送短信验证码/提醒通知。"""
+             template_params: dict[str, str] | None = None,
+             skip_quota_check: bool = False) -> dict[str, Any]:
+    """发送短信验证码/提醒通知。
+
+    skip_quota_check=True 时跳过夜间静默等频控（用于用户主动请求的验证码）。
+    """
     if not settings.ALIYUN_SMS_ACCESS_KEY_ID:
         raise APIError(80003, "短信服务未配置", 503)
 
-    can_send, reason = _check_push_quota(phone, "sms")
-    if not can_send:
-        return {"sent": False, "reason": reason}
+    if not skip_quota_check:
+        can_send, reason = _check_push_quota(phone, "sms")
+        if not can_send:
+            return {"sent": False, "reason": reason}
 
     params = {
         "PhoneNumbers": phone,
@@ -235,6 +241,7 @@ def send_sms(phone: str, template_code: str,
         params,
         settings.ALIYUN_SMS_ACCESS_KEY_ID,
         settings.ALIYUN_SMS_ACCESS_KEY_SECRET,
+        version="2017-05-25",
     )
 
     log_entry = {
