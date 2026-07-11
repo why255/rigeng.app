@@ -70,19 +70,28 @@ def get_me(db: Session, user_id: str) -> dict:
     bal = db.scalar(select(ContributionBalance).where(ContributionBalance.user_id == user_id))
     return {
         "user_id": user.id, "phone": user.phone, "nickname": user.nickname,
-        "role": user.role, "voice_type": user.voice_type, "addressing": user.addressing,
+        "gender": user.gender, "addressing": user.addressing,
+        "avatar": user.avatar,
+        "role": user.role, "voice_type": user.voice_type,
         "care_mode": user.care_mode,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "trial_start_at": user.trial_start_at.isoformat() if user.trial_start_at else None,
+        "preferred_model": user.preferred_model,
         "vip": _vip_dict(vip), "trial": _trial_dict(vip),
         "contribution": {"balance": bal.balance if bal else 0, "level": bal.level if bal else "青铜"},
     }
 
 
-def update_profile(db: Session, user_id: str, *, voice_type, addressing, care_mode) -> dict:
+def update_profile(db: Session, user_id: str, *, nickname, gender, voice_type, addressing, care_mode) -> dict:
     _enum_guard(voice_type, VOICE_TYPES, "voice_type")
     _enum_guard(care_mode, CARE_MODES, "care_mode")
     user = db.get(User, user_id)
     if not user:
         raise errors.E_USER_NOT_FOUND
+    if nickname is not None:
+        user.nickname = nickname
+    if gender is not None:
+        user.gender = gender
     if voice_type is not None:
         user.voice_type = voice_type
     if addressing is not None:
@@ -90,7 +99,9 @@ def update_profile(db: Session, user_id: str, *, voice_type, addressing, care_mo
     if care_mode is not None:
         user.care_mode = care_mode
     db.commit()
-    return {"voice_type": user.voice_type, "addressing": user.addressing, "care_mode": user.care_mode}
+    return {"nickname": user.nickname, "gender": user.gender,
+            "voice_type": user.voice_type, "addressing": user.addressing,
+            "care_mode": user.care_mode}
 
 
 def set_care_mode(db: Session, user_id: str, care_mode: str) -> dict:
@@ -101,6 +112,18 @@ def set_care_mode(db: Session, user_id: str, care_mode: str) -> dict:
     user.care_mode = care_mode
     db.commit()
     return {"care_mode": user.care_mode}
+
+
+def change_password(db: Session, user_id: str, old_password: str, new_password: str) -> dict:
+    """修改密码：验证旧密码后更新为新密码。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    if not verify_password(old_password, user.password_hash):
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "旧密码错误", 400)
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    return {"message": "密码已更新"}
 
 
 def _vip_dict(vip: VipMembership | None) -> dict:
@@ -183,3 +206,34 @@ def assign_teacher(db: Session, *, teacher_id: str, student_id: str, assigned_by
     db.add(a)
     db.commit()
     return {"assignment_id": a.id, "teacher_id": teacher_id, "student_id": student_id}
+
+
+def get_preferred_model(db: Session, user_id: str) -> dict:
+    """获取用户模型偏好，未设置时返回全局默认。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    from ...shared.config import settings
+    model = user.preferred_model or settings.ZHIPUAI_MODEL
+    return {"model": model, "is_custom": user.preferred_model is not None}
+
+
+def set_preferred_model(db: Session, user_id: str, model: str) -> dict:
+    """设置用户模型偏好。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    user.preferred_model = model
+    db.commit()
+    return {"model": model}
+
+
+def upload_avatar(db: Session, user_id: str, content: bytes, filename: str) -> dict:
+    """上传用户头像：存入文件存储并更新 user.avatar。"""
+    from ..file_storage.service import upload_file as storage_upload
+    result = storage_upload(db, user_id, content, file_type="image", filename=filename)
+    user = db.get(User, user_id)
+    if user:
+        user.avatar = result.get("file_id") or result.get("path", "")
+        db.commit()
+    return {"avatar": user.avatar if user else "", "file": result}

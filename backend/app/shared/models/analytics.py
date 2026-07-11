@@ -55,6 +55,36 @@ class SmsSendLog(TimestampMixin, Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class AuditLog(TimestampMixin, Base):
+    """全链路审计日志（不可删除，保留90天）。
+
+    每个模块的 execute() 调用记录:
+    - 输入内容(脱敏后)
+    - 输出内容
+    - SOP步骤执行状态
+    - 自检结果
+    - 耗时
+    - 使用的模型和Token数
+    """
+
+    __tablename__ = "audit_log"
+
+    user_id: Mapped[str] = mapped_column(GUID, index=True)
+    module: Mapped[str | None] = mapped_column(String(32))
+    action: Mapped[str | None] = mapped_column(String(64))
+    detail: Mapped[dict | None] = mapped_column(PortableJSON())
+    # detail 结构:
+    # {
+    #   "input_preview": str,      # 脱敏后输入(截断500字)
+    #   "output_preview": str,     # 输出(截断1000字)
+    #   "model_used": str,
+    #   "tokens": int,
+    #   "duration_ms": int,
+    #   "sop_step": str,           # SOP步骤
+    #   "self_check_passed": bool, # 自检结果
+    # }
+
+
 class PushRuleTemplate(TimestampMixin, Base):
     """推送规则模板。"""
 

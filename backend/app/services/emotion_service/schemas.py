@@ -34,6 +34,15 @@ class EmotionSuggestRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
 
 
+# ── AI 情绪树洞对话 ──
+
+class EmotionChatIn(BaseModel):
+    """情绪树洞 AI 对话请求 — 所有小耕回复由AI模型生成。"""
+    message: str = Field(default="", max_length=5000, description="用户当前消息（初始问候可为空）")
+    context: list[dict] = Field(default_factory=list, description="对话历史 [{role, text}]")
+    elapsed_seconds: int = Field(default=0, description="已倾诉秒数")
+
+
 class EmotionSuggestResponse(BaseModel):
     """小耕共情回复。"""
     text: str

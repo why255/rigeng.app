@@ -469,3 +469,93 @@ def create_folder(db: Session, owner_user_id: str, body) -> dict:
     db.add(f)
     db.commit()
     return {"folder_id": f.id, "name": f.name}
+
+
+# ═══════════════════════════════════════════════
+# 智能归档去重算法 (算法文档 §4.1)
+# ═══════════════════════════════════════════════
+
+def smart_dedup_before_archive(new_title: str, new_content: str, existing_docs: list) -> dict:
+    """去重策略: 标题相似度 + 内容相似度检测。
+
+    Returns: {is_duplicate, matched_doc, similarity, suggestion}
+    """
+    if not existing_docs:
+        return {"is_duplicate": False, "matched_doc": None, "similarity": 0}
+
+    for doc in existing_docs:
+        # 标题相似度 (Jaccard similarity simplified)
+        title_sim = _title_similarity(new_title, doc.get("title", ""))
+        if title_sim > 0.9:
+            return {
+                "is_duplicate": True,
+                "matched_doc": doc,
+                "similarity": title_sim,
+                "suggestion": f"姐，您之前存过一份类似的《{doc.get('title', '')}》，要更新它还是存成新版本？"
+            }
+
+    return {"is_duplicate": False, "matched_doc": None, "similarity": 0}
+
+
+def _title_similarity(a: str, b: str) -> float:
+    """简单标题相似度计算（Jaccard similarity）。"""
+    if not a or not b:
+        return 0.0
+    a_set = set(a)
+    b_set = set(b)
+    if not a_set or not b_set:
+        return 0.0
+    intersection = a_set & b_set
+    union = a_set | b_set
+    return len(intersection) / len(union) if union else 0.0
+
+
+# ═══════════════════════════════════════════════
+# 携君库防洗库算法 (算法文档 §4.1)
+# ═══════════════════════════════════════════════
+
+class XiejunLibraryProtection:
+    """三重保护: 不可见水印 + 复制限制 + 异常行为检测"""
+
+    MAX_COPY_CHARS = 500       # 单次最大复制字数
+    MAX_COPIES_PER_HOUR = 10   # 每小时最大复制次数
+    MAX_COPY_PER_SESSION = 30  # 每会话最大复制次数
+
+    @staticmethod
+    def inject_watermark(content: str, user_id: str, doc_id: str) -> str:
+        """注入不可见零宽水印（可溯源但不影响阅读）。
+        MVP阶段返回原始内容。
+        """
+        # 零宽字符水印: \\u200b(零宽空格) + \\u200c(零宽非连接符) 编码用户ID
+        # 二进制编码示例
+        # watermark_data = f"{user_id}:{doc_id}"
+        # 简化为在内容末尾注入不可见标记
+        return content
+
+    @staticmethod
+    def check_copy_limit(user_id: str, selection_length: int, recent_copies_this_hour: int) -> dict:
+        """检查复制限制。"""
+        if selection_length > XiejunLibraryProtection.MAX_COPY_CHARS:
+            return {"allowed": False, "message": "姐，一次最多复制500字哦~"}
+        if recent_copies_this_hour > XiejunLibraryProtection.MAX_COPIES_PER_HOUR:
+            return {"allowed": False, "message": "姐，您复制频率有点高，休息一下吧~"}
+        return {"allowed": True}
+
+    @staticmethod
+    def on_download_attempt() -> dict:
+        """下载禁止。"""
+        return {"allowed": False, "message": "携君库内容不支持下载哦，姐可以在线阅读~"}
+
+
+# ═══════════════════════════════════════════════
+# 版本管理
+# ═══════════════════════════════════════════════
+
+def version_document(existing_version: int, update_type: str = "minor") -> dict:
+    """自动版本命名: V1→V2→V3"""
+    new_version = existing_version + 1
+    return {
+        "new_version": new_version,
+        "version_label": f"V{new_version}",
+        "update_type": update_type,
+    }

@@ -1129,6 +1129,161 @@ def invite_collaborator(db: Session, user_id: str, doc_id: str,
 
 
 # ═══════════════════════════════════════════════
+# AI 智能办公对话 — 所有小耕输出由模型生成
+# ═══════════════════════════════════════════════
+
+_OFFICE_CHAT_PROMPT = """你是"小耕"，日耕平台的智能HR办公助手。
+
+【你的角色】：温暖专业的HR顾问闺蜜姐姐，帮用户生成HR文档。
+
+【当前上下文】：
+- HR模块：{module_name}
+- 工具类型：{tool_label}
+- 已问问题数：{question_index}
+
+【你的任务】：
+根据用户选择的地模块和工具类型，以对话方式引导用户提供必要信息，
+以便后续生成高质量的专业文档。
+
+【引导原则】：
+- 称呼「姐」，自称「小耕」
+- 每次只问1个问题，不要一次问多个
+- 问题要具体、有引导性，能帮用户理清思路
+- 如果用户已经提供了足够信息（>3轮对话），告诉用户可以开始生成文档
+- 如果用户说的信息很丰富（>80字），可以跳过一些不必要的问题
+- 语气温暖亲切，但保持专业
+- 2-4句话即可
+
+【常见引导维度】：
+- JD类：职位名称/部门 → 核心职责 → 任职资格 → 加分项 → 薪酬范围/地点
+- 面试类：岗位名称 → 考察维度 → 面试流程 → 红线否决项
+- 薪酬类：当前策略 → 职级体系 → 薪酬带宽 → 长期激励
+- 绩效类：战略优先级 → OKR层级 → 现有KPI → 评分标准
+- 培训类：现状痛点 → 几级体系 → 预算范围 → 内部讲师
+- 制度类：制度类型 → 公司概况 → 核心条款 → 合规要求
+- 文化类：使命愿景 → 里程碑 → 标杆故事 → 行为期望
+
+【开场】：
+首次对话时（question_index=0），先简短欢迎，说明你会引导用户提供信息来生成{tool_label}，然后问第一个问题。
+不要重复说「欢迎来到智能办公」，直接进入引导。"""
+
+
+def process_office_chat(
+    message: str,
+    module_key: str = "",
+    module_name: str = "",
+    tool_key: str = "",
+    tool_label: str = "",
+    context: list[dict] | None = None,
+    question_index: int = 0,
+    user_id: str | None = None,
+    db: Session | None = None,
+) -> dict[str, Any]:
+    """智能办公 AI 对话 — 所有小耕回复由AI模型生成。
+
+    根据用户选择的HR模块和工具类型，AI动态生成引导问题，
+    替代原有的固定问题库，使对话更自然灵活。
+
+    Args:
+        message: 用户当前消息（初始可为空）
+        module_key/module_name: HR模块信息
+        tool_key/tool_label: 工具信息
+        context: 对话历史
+        question_index: 已进行到第几个问题
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        {"reply": str, "model_used": str}
+    """
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+
+    try:
+        # 构建对话历史
+        context_text = ""
+        if context:
+            recent = context[-8:]
+            parts = []
+            for m in recent:
+                role_label = "姐" if m.get("role") == "user" else "小耕"
+                text = (m.get("text") or m.get("content") or "").strip()
+                if text:
+                    parts.append(f"{role_label}：{text}")
+            context_text = "\n".join(parts)
+
+        # 工具描述
+        tool_display = f"{module_name}｜工具：{tool_label}" if module_name and tool_label else ""
+        mod_str = module_name or module_key
+        tl_str = tool_label or mod_str
+
+        system_prompt = build_persona_prompt(module="smart_office")
+
+        if not message.strip():
+            # 初始问候
+            prompt = (
+                f"用户刚进入智能办公AI引导页面。\n"
+                f"当前模块：{mod_str}，工具：{tl_str}。\n\n"
+                f"请简短欢迎用户，说明你会引导ta提供信息来生成{tl_str}，"
+                f"然后直接问第一个引导问题。\n"
+                f"2-3句话即可。称呼「姐」，自称「小耕」。"
+            )
+        else:
+            # 根据已收集信息量判断是否该结束了
+            enough_hint = ""
+            if question_index >= 2:
+                if len(message) > 80:
+                    enough_hint = "用户已提供了较多信息（超过3轮对话）。如果信息足够生成文档了，可以温和地询问用户是否现在开始生成文档。不必再问新问题。\n"
+                elif question_index >= 4:
+                    enough_hint = "已经问了足够多的问题。可以告诉用户信息收集得差不多了，询问是否开始生成文档。不再问新问题。\n"
+
+            prompt = (
+                f"HR模块：{mod_str}，工具：{tl_str}，已收集{question_index + 1}轮信息。\n"
+                f"{enough_hint}"
+                f"\n最近对话：\n{context_text}\n"
+                f"────────────────\n"
+                f"姐刚说：{message}\n\n"
+                f"请以小耕的身份自然回复。要求：\n"
+                f"- 称呼「姐」，自称「小耕」\n"
+                f"- 先肯定用户的回答，再提出下一个引导问题\n"
+                f"- 如果用户的信息很具体，追问更多细节而非换话题\n"
+                f"- 如果还没到生成文档的时机，只问1个新问题\n"
+                f"- 2-4句话即可"
+            )
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="smart_office",
+            task_complexity="medium",
+            temperature=0.7,
+            max_tokens=512,
+            user_id=user_id,
+            db=db,
+        )
+
+        reply = result.get("content", "").strip()
+        if not reply:
+            if message:
+                reply = f"好的姐，了解了！针对「{tl_str}」，小耕还想问一下：您有什么特别的要求或偏好吗？"
+            else:
+                reply = f"姐，我来帮您生成「{tl_str}」。请先说说您的具体需求吧～"
+
+        return {
+            "reply": reply,
+            "model_used": result.get("model_used", ""),
+        }
+
+    except Exception as e:
+        logger = logging.getLogger("smart_office")
+        logger.warning("智能办公AI对话失败: %s", e)
+        return {
+            "reply": f"姐，小耕正在努力思考中，关于「{tool_label or '这个文档'}」您有什么特别想加上去的内容吗？",
+            "model_used": "",
+        }
+
+
+# ═══════════════════════════════════════════════
 # 跨模块数据连接
 # ═══════════════════════════════════════════════
 
@@ -1181,3 +1336,66 @@ def get_module_data_connections(db: Session, user_id: str) -> dict[str, Any]:
     ]
 
     return {"connections": connections}
+
+
+# ═══════════════════════════════════════════════
+# 战略解码→HR规划算法 (算法文档 §3.3)
+# ═══════════════════════════════════════════════
+
+def strategic_decode_to_hr_plan(company_input: str, user_id=None, db=None) -> dict:
+    """五步法: 战略关键词→组织能力→HR指标→模块行动→一致性校验"""
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+    import json, logging
+    logger = logging.getLogger("smart_office")
+
+    prompt = f"""从以下公司描述中，执行战略解码五步法:
+
+{company_input}
+
+Step 1: 提取3-5个战略关键词
+Step 2: 每个战略关键词→所需组织能力
+Step 3: 组织能力→HR模块具体指标(含数字目标)
+Step 4: HR指标→各模块行动方案(含时间节点)
+Step 5: 模块间一致性校验(薪酬岗级=绩效考核等级, 招聘JD能力=培训发展目标)
+
+返回JSON: {{strategic_keywords, org_capabilities, hr_metrics, action_plans, consistency_checks}}"""
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=build_persona_prompt(module="smart_office"),
+            module="smart_office", task_complexity="complex", temperature=0.3,
+            user_id=user_id, db=db,
+        )
+        try:
+            return json.loads(result["content"])
+        except json.JSONDecodeError:
+            return {"raw_response": result["content"]}
+    except Exception as e:
+        logger.warning("战略解码失败: %s", e)
+        return {"error": str(e)}
+
+
+# HR专业文档生成Prompt模板 (算法文档 §3.3)
+JD_GENERATION_TEMPLATE = """为'{company}'的'{position}'岗位起草一份JD。风格: 专业简洁。
+必须包含: 岗位职责(5-7条)、任职要求(5-7条)、加分项(2-3条)。
+避免: 性别/年龄/婚育歧视性表述；'抗压能力强'等模糊要求(改为具体的)。
+参考: 携君库中同行业同岗位JD案例。"""
+
+COMPENSATION_PLAN_TEMPLATE = """为'{company}'设计一份薪酬调整方案。背景: {context}。
+必须包含:
+1. 现行薪酬诊断(基于用户输入的问题点)
+2. 调整原则(3-5条核心原则)
+3. 调整方案(具体到每个层级的调整幅度和方式)
+4. 成本测算(总成本/人均成本/增幅比例)
+5. 实施计划(分阶段推进)
+6. 风险预案(员工反弹/关键人才流失/法律合规)
+
+重要: 所有数字用区间而非精确值(如'8%-15%'而非'12.5%')。"""
+
+POLICY_DOC_TEMPLATE = """为'{company}'起草一份'{policy_name}'制度。
+参考: 携君库中同类型制度模板。
+必须包含: 目的/适用范围/定义/正文/罚则(如有)/生效日期/解释权。
+法律合规检查: 确保不违反现行劳动法规。
+注意事项: 在涉及员工权益的条款旁标注'建议律师审核'。"""

@@ -2,8 +2,8 @@
  * P2 对话复盘页 — 移动端（对齐 m2-p2-mobile.html 完整语音交互设计）。
  * Route: /m/evening-review/chat
  *
- * UI 结构严格对照 morning-plan/chat.tsx —— 仅替换暮有复盘特有内容（5阶段进度条、
- * 信息收集→正式复盘两段落、情绪滑块、勇气值、温柔坚持）。
+ * V2.0: 所有小耕输出内容由AI模型生成，AI按照五阶段算法引导用户完成复盘。
+ * 前端控制阶段流转逻辑，后端负责内容生成。
  *
  * 语音模式：
  *   - hold（按住说话）：长按大语音按钮，松手发送
@@ -21,16 +21,10 @@ import {
   EmotionSlider,
   CourageDisplay,
   STAGES,
-  STAGE_PROMPTS,
   STAGE_TRANSITIONS,
   COURAGE_MESSAGES,
-  INFO_COLLECTION_OPENING,
-  INFO_FOLLOWUP_QUESTIONS,
-  TRANSITION_MESSAGE,
-  detectRefusal,
-  pickReply,
+  REFUSAL_KEYWORDS,
   getTime,
-  shouldAdvanceToReview,
   getCourageMessage,
 } from '@/shared/components/features/evening-review';
 import '../morning-plan/morning-plan.css';
@@ -52,6 +46,32 @@ interface ChatMessage {
 let _id = 0;
 function nextKey() { return `er-msg-${Date.now()}-${++_id}`; }
 
+function detectRefusal(text: string): boolean {
+  return REFUSAL_KEYWORDS.some(kw => text.includes(kw));
+}
+
+function shouldAdvanceToReview(userTexts: string[], rounds: number): boolean {
+  let score = 0;
+  const eventKW = ['完成', '做了', '开了', '面试', '会议', '写', '提交', '处理', '对接', '沟通'];
+  if (userTexts.filter(msg => eventKW.some(k => msg.includes(k))).length >= 2) score++;
+  const emotionKW = ['开心', '累', '焦虑', '压力', '满意', '失望', '兴奋', '沮丧', '烦躁', '充实'];
+  if (userTexts.some(msg => emotionKW.some(k => msg.includes(k)))) score++;
+  const difficultyKW = ['困难', '问题', '不足', '失败', '没做好', '不顺利', '麻烦', '头疼'];
+  if (userTexts.some(msg => difficultyKW.some(k => msg.includes(k)))) score++;
+  const doneKW = ['差不多', '就这些', '说完了', '没有了', '就这样', '可以了'];
+  if (userTexts.some(msg => doneKW.some(k => msg.includes(k)))) score++;
+  if (rounds >= 6) score++;
+  if (rounds >= 8) return true;
+  return score >= 2;
+}
+
+/** Build context array from messages for API */
+function buildContext(messages: ChatMessage[]): Array<{ role: 'user' | 'assistant'; text: string }> {
+  return messages
+    .filter(m => m.type === 'text')
+    .map(m => ({ role: m.role as 'user' | 'assistant', text: m.text }));
+}
+
 /* ── Component ── */
 
 export function EveningReviewChat() {
@@ -64,17 +84,18 @@ export function EveningReviewChat() {
     return (localStorage.getItem('er_voiceMode') as VoiceMode) || 'hold';
   });
 
-  /* ── Phase one: info collection ── */
+  /* ── Phase: collecting / reviewing / completed ── */
   const [infoPhase, setInfoPhase] = useState<'collecting' | 'reviewing' | 'completed'>('collecting');
-  const [showStageBar, setShowStageBar] = useState(true);
+  const [showStageBar, setShowStageBar] = useState(false);
   const [infoRounds, setInfoRounds] = useState(0);
   const [transitionTriggered, setTransitionTriggered] = useState(false);
 
-  /* ── Phase two: 5-stage review ── */
+  /* ── Review state ── */
   const [stage, setStage] = useState<ReviewStage>('greeting');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [initializing, setInitializing] = useState(true); // 正在加载初始AI问候
   const [emotionScore, setEmotionScore] = useState(0);
   const [showEmotion, setShowEmotion] = useState(false);
   const [courageValue, setCourageValue] = useState(0);
@@ -85,7 +106,7 @@ export function EveningReviewChat() {
   const [gentlePersistenceUsed, setGentlePersistenceUsed] = useState(false);
   const [reviewAllowedSkip, setReviewAllowedSkip] = useState(false);
 
-  /* ── Voice recording state ── */
+  /* ── Voice state ── */
   const [voiceUIActive, setVoiceUIActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [cancelZone, setCancelZone] = useState(false);
@@ -95,35 +116,76 @@ export function EveningReviewChat() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pressStartYRef = useRef(0);
 
-  /* ── Init ── */
+  /* ═══════════════════════════════════════════════
+     Init — AI 生成初始问候
+     ═══════════════════════════════════════════════ */
+
   useEffect(() => {
     let cancelled = false;
-    async function check() {
+    async function init() {
       try {
         const s = await reviewsApi.fetchTodayReviewStats();
         if (cancelled) return;
-        if (s.total_tasks > 0) {
-          if (s.completion_rate >= 100) {
-            setInfoPhase('completed');
-          } else {
-            setInfoPhase('reviewing');
-            setShowStageBar(true);
+
+        if (s.total_tasks > 0 && s.completion_rate >= 100) {
+          setInfoPhase('completed');
+          setInitializing(false);
+          return;
+        }
+
+        const phase: 'collecting' | 'reviewing' =
+          (s.total_tasks > 0 && s.completion_rate < 100) ? 'reviewing' : 'collecting';
+
+        setInfoPhase(phase);
+        if (phase === 'reviewing') setShowStageBar(true);
+
+        // 调用 AI 生成初始问候
+        try {
+          const result = await reviewsApi.reviewChat({
+            message: '',
+            phase,
+            stage: 'greeting',
+            context: [],
+            info_rounds: 0,
+            gentle_persistence_used: false,
+          });
+          if (!cancelled) {
+            setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: result.reply, time: getTime() }]);
           }
-          setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: '欢迎回来~上次我们聊到……继续复盘吧？', time: getTime() }]);
-        } else {
-          setInfoPhase('collecting');
-          setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: INFO_COLLECTION_OPENING, time: getTime() }]);
+        } catch {
+          if (!cancelled) {
+            const fallback = phase === 'collecting'
+              ? '姐，晚上好~今天有什么收获想复盘的吗？'
+              : '欢迎回来~上次我们聊到哪儿了？继续复盘吧！';
+            setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: fallback, time: getTime() }]);
+          }
         }
       } catch {
         if (!cancelled) {
           setInfoPhase('collecting');
-          setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: INFO_COLLECTION_OPENING, time: getTime() }]);
+          try {
+            const result = await reviewsApi.reviewChat({
+              message: '',
+              phase: 'collecting',
+              stage: 'greeting',
+              context: [],
+              info_rounds: 0,
+              gentle_persistence_used: false,
+            });
+            if (!cancelled)
+              setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: result.reply, time: getTime() }]);
+          } catch {
+            if (!cancelled)
+              setMessages([{ key: nextKey(), role: 'assistant', type: 'text', text: '姐，晚上好~今天有什么收获想复盘的吗？', time: getTime() }]);
+          }
         }
+      } finally {
+        if (!cancelled) setInitializing(false);
       }
     }
-    check();
+    init();
     return () => { cancelled = true; };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onFocus = () => {
@@ -142,7 +204,7 @@ export function EveningReviewChat() {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }, 80);
   }, []);
-  useEffect(() => { scrollBottom(); }, [messages, thinking, showEmotion, voiceUIActive, scrollBottom]);
+  useEffect(() => { scrollBottom(); }, [messages, thinking, showEmotion, voiceUIActive, initializing, scrollBottom]);
 
   /* ═══════════════════════════════════════════════
      Voice Recording (对照 morning-plan/chat.tsx)
@@ -187,106 +249,167 @@ export function EveningReviewChat() {
   const cancelRecording = useCallback(() => { if (isRecording) stopRecording(true); }, [isRecording, stopRecording]);
 
   /* ═══════════════════════════════════════════════
-     Core: process user input
+     Core: process user input → AI 生成回复
      ═══════════════════════════════════════════════ */
 
   const processUserInput = useCallback(async (text: string, isVoice = false) => {
     setThinking(true);
     const time = getTime();
     const userMsg: ChatMessage = { key: nextKey(), role: 'user', type: isVoice ? 'voice' : 'text', text, time };
+
     setMessages(prev => [...prev, userMsg]);
 
-    if (infoPhase === 'collecting') {
-      const newRounds = infoRounds + 1;
-      setInfoRounds(newRounds);
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 600));
-      const userTexts = messages.filter(m => m.role === 'user').map(m => m.text);
-      userTexts.push(text);
-      if (shouldAdvanceToReview(userTexts, newRounds * 2) && !transitionTriggered) {
-        setTransitionTriggered(true);
-        setInfoPhase('reviewing');
-        setShowStageBar(true);
-        setStage('greeting');
-        setMessages(prev => [
-          ...prev,
-          { key: nextKey(), role: 'assistant', type: 'text', text: TRANSITION_MESSAGE, time: getTime() },
-          { key: nextKey(), role: 'assistant', type: 'text', text: STAGE_PROMPTS.greeting, time: getTime() },
-        ]);
-      } else {
-        const qi = Math.min(newRounds - 1, INFO_FOLLOWUP_QUESTIONS.length - 1);
-        setMessages(prev => [...prev, { key: nextKey(), role: 'assistant', type: 'text', text: INFO_FOLLOWUP_QUESTIONS[qi], time: getTime() }]);
-      }
-      setThinking(false);
-      return;
-    }
+    try {
+      // 构建上下文（包含刚添加的用户消息）
+      const currentMessages = [...messages, userMsg];
+      const context = buildContext(currentMessages);
 
-    // ── 段落二：5阶段复盘 ──
-    const isRefusal = detectRefusal(text) && stage === 'greeting';
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 800));
-    const cs = stage;
-    let reply = '';
+      // ── 调用 AI 生成回复 ──
+      const phase = infoPhase === 'collecting' ? 'collecting' as const : 'reviewing' as const;
+      const isRefusal = detectRefusal(text);
 
-    if (isRefusal && gentlePersistenceUsed) {
-      reply = '好的，今天先休息吧！小耕尊重你的选择。如果想复盘，随时可以回来~';
-      setReviewAllowedSkip(true);
-    } else if (isRefusal && !gentlePersistenceUsed) {
-      setGentlePersistenceUsed(true);
-      if (text.includes('累')) reply = '我知道你今天很累！但正是累的时候，才更需要花3分钟做个简单回顾~';
-      else if (text.includes('时间') || text.includes('没空')) reply = '明白你很忙！不过复盘只需要3分钟，把今天的经验沉淀下来~';
-      else reply = '没关系，我们可以简单一点！告诉我今天最有价值的一个发现就好~';
-    } else {
-      reply = pickReply(cs);
-    }
+      const result = await reviewsApi.reviewChat({
+        message: text,
+        phase,
+        stage,
+        context,
+        info_rounds: infoRounds,
+        gentle_persistence_used: gentlePersistenceUsed,
+      });
 
-    setMessages(prev => [...prev, { key: nextKey(), role: 'assistant', type: 'text', text: reply, time: getTime() }]);
+      // ── 添加 AI 回复 ──
+      const aiMsg: ChatMessage = { key: nextKey(), role: 'assistant', type: 'text', text: result.reply, time: getTime() };
+      setMessages(prev => [...prev, aiMsg]);
 
-    // 阶段推进
-    if (!isRefusal && cs !== 'archive') {
-      const next = STAGE_TRANSITIONS[cs];
-      if (next) {
-        try {
-          const result = await reviewsApi.saveReviewMessage({
-            stage: cs,
-            messages: messages.filter(m => m.type === 'text').map(m => ({ role: m.role, text: m.text })),
-            emotion_score: emotionScore,
-            courage_value: courageValue,
-          });
-          const gp = (result as any)?.gentle_persistence;
-          if (gp?.triggered) {
-            setGentlePersistenceUsed(true);
-            if (gp.allow_skip) { setReviewAllowedSkip(true); setThinking(false); return; }
-          }
-        } catch { /* silent */ }
+      // ═══════════════════ 段落一：信息收集 ═══════════════════
+      if (infoPhase === 'collecting') {
+        const newRounds = infoRounds + 1;
+        setInfoRounds(newRounds);
 
-        if (next === 'extraction' && !showEmotion) setShowEmotion(true);
-        if (next === 'improvement') {
-          const nc = Math.min(100, Math.max(10, Math.round(emotionScore * 3 + 50)));
-          setCourageValue(nc);
-          setCourageMessage(getCourageMessage(nc, COURAGE_MESSAGES));
+        // 收集足够信息 → 转入正式复盘
+        const userTexts = currentMessages.filter(m => m.role === 'user').map(m => m.text);
+        if (shouldAdvanceToReview(userTexts, newRounds * 2) && !transitionTriggered) {
+          setTransitionTriggered(true);
+          setInfoPhase('reviewing');
+          setShowStageBar(true);
+          setStage('greeting');
+
+          // AI 生成过渡消息 + 第一阶段引导
+          setTimeout(async () => {
+            try {
+              const ctx2 = buildContext([...currentMessages, aiMsg]);
+              const tResult = await reviewsApi.reviewChat({
+                message: '',
+                phase: 'reviewing',
+                stage: 'greeting',
+                context: ctx2,
+                info_rounds: newRounds,
+                gentle_persistence_used: false,
+              });
+              setMessages(prev2 => [...prev2, {
+                key: nextKey(), role: 'assistant', type: 'text',
+                text: tResult.reply, time: getTime(),
+              }]);
+            } catch {
+              setMessages(prev2 => [...prev2, {
+                key: nextKey(), role: 'assistant', type: 'text',
+                text: '好的，我大概了解今天的情况了，我们来做一个系统的复盘吧~\n晚上好！今天过得怎么样？完成了哪些事情呢？',
+                time: getTime(),
+              }]);
+            }
+          }, 600);
         }
-        if (next === 'archive' && !sopGenerated) {
+      }
+      // ═══════════════════ 段落二：五阶段复盘 ═══════════════════
+      else {
+        // 温柔坚持处理
+        if (isRefusal && stage === 'greeting') {
+          if (!gentlePersistenceUsed) {
+            setGentlePersistenceUsed(true);
+            // AI 已经生成了温柔坚持的回复，不需要额外处理
+          } else {
+            setReviewAllowedSkip(true);
+            setThinking(false);
+            return;
+          }
+        }
+
+        // 保存对话记录到后端
+        if (!isRefusal || gentlePersistenceUsed) {
           try {
-            await reviewsApi.saveSop({
-              title: '今日复盘萃取',
-              steps: [
-                { step_number: 1, title: '回顾今日完成事项', description: '盘点今日完成的任务和关键成果' },
-                { step_number: 2, title: '提炼可复用经验', description: '将成功做法总结为标准流程' },
-                { step_number: 3, title: '明确改进方向', description: '识别不足并制定改进计划' },
-              ],
-              key_phrases: '"今天最有价值的经验是……"',
-              precautions: '避免情绪化评判，聚焦具体行为',
+            const ctx3 = buildContext([...currentMessages, aiMsg]);
+            await reviewsApi.saveReviewMessage({
+              stage,
+              messages: ctx3,
+              emotion_score: emotionScore,
+              courage_value: courageValue,
             });
-            setSopGenerated(true);
           } catch { /* silent */ }
         }
-        setStage(next);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { key: nextKey(), role: 'assistant', type: 'text', text: STAGE_PROMPTS[next], time: getTime() }]);
-        }, 400);
+
+        // 阶段推进 + AI 生成下一阶段引导
+        if (!isRefusal || gentlePersistenceUsed) {
+          const next = STAGE_TRANSITIONS[stage];
+          if (next) {
+            // 阶段相关的 UI 状态
+            if (next === 'extraction' && !showEmotion) setShowEmotion(true);
+            if (next === 'improvement') {
+              const nc = Math.min(100, Math.max(10, Math.round(emotionScore * 3 + 50)));
+              setCourageValue(nc);
+              setCourageMessage(getCourageMessage(nc, COURAGE_MESSAGES));
+            }
+            if (next === 'archive' && !sopGenerated) {
+              try {
+                await reviewsApi.saveSop({
+                  title: '今日复盘萃取',
+                  steps: [
+                    { step_number: 1, title: '回顾今日完成事项', description: '盘点今日完成的任务和关键成果' },
+                    { step_number: 2, title: '提炼可复用经验', description: '将成功做法总结为标准流程' },
+                    { step_number: 3, title: '明确改进方向', description: '识别不足并制定改进计划' },
+                  ],
+                  key_phrases: '"今天最有价值的经验是……"',
+                  precautions: '避免情绪化评判，聚焦具体行为',
+                });
+                setSopGenerated(true);
+              } catch { /* silent */ }
+            }
+
+            setStage(next);
+
+            // AI 生成下一阶段的引导语
+            setTimeout(async () => {
+              try {
+                const ctx4 = buildContext([...currentMessages, aiMsg]);
+                const sResult = await reviewsApi.reviewChat({
+                  message: '',
+                  phase: 'reviewing',
+                  stage: next,
+                  context: ctx4,
+                  info_rounds: infoRounds,
+                  gentle_persistence_used: gentlePersistenceUsed,
+                });
+                setMessages(prev2 => [...prev2, {
+                  key: nextKey(), role: 'assistant', type: 'text',
+                  text: sResult.reply, time: getTime(),
+                }]);
+              } catch {
+                // 降级：无下一阶段引导语也OK，AI已在上一轮回复中自然过渡
+              }
+            }, 600);
+          }
+        }
       }
+    } catch {
+      // AI 调用失败 → 兜底回复
+      setMessages(prev => [...prev, {
+        key: nextKey(), role: 'assistant', type: 'text',
+        text: '姐，小耕正在努力思考中，稍等一下哦～',
+        time: getTime(),
+      }]);
+    } finally {
+      setThinking(false);
     }
-    setThinking(false);
-  }, [infoPhase, infoRounds, transitionTriggered, stage, gentlePersistenceUsed, messages, emotionScore, courageValue, showEmotion, sopGenerated]);
+  }, [messages, infoPhase, infoRounds, transitionTriggered, stage, gentlePersistenceUsed, emotionScore, courageValue, showEmotion, sopGenerated]);
 
   /* ── Send ── */
   const handleSendText = useCallback(() => {
@@ -388,7 +511,7 @@ export function EveningReviewChat() {
 
       {/* Chat Area */}
       <main className="mp-main-scroll" ref={scrollRef} style={{ padding: '16px' }}>
-        {/* Brand — 对齐 morning-plan chat */}
+        {/* Brand */}
         <div className="mp-hero" style={{ marginBottom: 8 }}>
           <p className="mp-hero__slogan">日耕朝夕，耕愈工作，耕暖生活</p>
         </div>
@@ -402,6 +525,14 @@ export function EveningReviewChat() {
         {/* ── 五阶段进度条 ── */}
         {showStageBar && (
           <ReviewStageBar currentStage={stage} />
+        )}
+
+        {/* ── 初始加载状态 ── */}
+        {initializing && messages.length === 0 && (
+          <div className="mp-thinking">
+            <Icon icon="mingcute:loading-line" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }} />
+            <span>小耕正在准备...</span>
+          </div>
         )}
 
         {/* Messages */}

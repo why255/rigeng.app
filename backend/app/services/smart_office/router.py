@@ -48,6 +48,7 @@ from .schemas import (
     ComparePolicyRequest,
     DocumentGenerateRequest,
     DraftSaveRequest,
+    OfficeChatIn,
     StepAnswerRequest,
     SystemBuildStartRequest,
     CollaborationInviteRequest,
@@ -139,6 +140,35 @@ def generate(
         body.tool_key, body.build_id, body.custom_prompt,
         body.brand_logo_visible,
     ))
+
+
+# ═══════════════════════════════════════════════
+# AI 智能办公对话 — 所有小耕输出由AI模型生成
+# ═══════════════════════════════════════════════
+
+@router.post("/chat")
+def office_chat(
+    body: OfficeChatIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """智能办公 AI 对话 — 所有小耕回复由AI模型生成。
+
+    AI根据用户选择的HR模块和工具类型，动态生成引导问题，
+    替代固定问题库，使对话更自然灵活。
+    """
+    data = service.process_office_chat(
+        message=body.message,
+        module_key=body.module_key,
+        module_name=body.module_name,
+        tool_key=body.tool_key,
+        tool_label=body.tool_label,
+        context=body.context,
+        question_index=body.question_index,
+        user_id=user.user_id,
+        db=db,
+    )
+    return ok(data)
 
 
 # ═══════════════════════════════════════════════

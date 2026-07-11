@@ -15,7 +15,7 @@ from .plan import Plan, PlanTask  # noqa: F401
 from .review import ReviewRecord  # noqa: F401
 from .vector_index import VectorIndex  # noqa: F401
 from .security import CourageValue, CrisisLog, LocalEncryptedStorage  # noqa: F401
-from .analytics import EventLog, MetricDaily, CarePushLog, SmsSendLog, PushRuleTemplate  # noqa: F401
+from .analytics import EventLog, MetricDaily, CarePushLog, SmsSendLog, PushRuleTemplate, AuditLog  # noqa: F401
 from .emotion_score import EmotionScore  # noqa: F401
 from .emotion import GrowthRecord  # noqa: F401
 from .qa import QaConversation, QaAnswer, QaFeedback  # noqa: F401

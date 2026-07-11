@@ -18,6 +18,8 @@ class LoginIn(BaseModel):
 
 
 class ProfileIn(BaseModel):
+    nickname: str | None = None
+    gender: str | None = None  # male/female
     voice_type: str | None = None
     addressing: str | None = None
     care_mode: str | None = None
@@ -40,3 +42,12 @@ class GrantIn(BaseModel):
 class TeacherAssignIn(BaseModel):
     teacher_id: str
     student_id: str
+
+
+class ModelPreferenceIn(BaseModel):
+    model: str = Field(min_length=1, max_length=64)
+
+
+class PasswordChangeIn(BaseModel):
+    old_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=6, max_length=64)

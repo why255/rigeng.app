@@ -4,7 +4,9 @@ API 端点（匹配前端 recordings.ts API封装）：
   GET    /recordings/today              — 今日录音统计
   GET    /recordings/recent             — 最近录音列表
   POST   /recordings/start              — 开始录音
+  POST   /recordings/chunk              — 上传音频流分片（实时ASR转写）
   POST   /recordings/stop               — 停止录音（触发处理流水线）
+  POST   /recordings/{id}/asr-auth      — 获取实时ASR WebSocket授权
   GET    /recordings/{id}/transcript    — 获取转写文本
   GET    /recordings/{id}/extraction    — 获取萃取结果
   POST   /recordings/{id}/archive       — 归档到知识库
@@ -15,7 +17,9 @@ API 端点（匹配前端 recordings.ts API封装）：
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+import logging
+
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, WebSocket
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -30,6 +34,7 @@ from .schemas import (
 )
 
 router = APIRouter(tags=["智能记录"], prefix="/recordings")
+logger = logging.getLogger("smart_record.router")
 
 
 # ═══════════════════════════════════════════════
@@ -57,6 +62,56 @@ def stop(
     # 自动触发处理流水线
     service.auto_process_recording(db, body.recording_id, user.user_id)
     return ok(result)
+
+
+# ═══════════════════════════════════════════════
+# 实时 ASR：音频流上传 + 实时转写
+# ═══════════════════════════════════════════════
+
+@router.post("/chunk")
+def upload_chunk(
+    chunk: UploadFile = File(...),
+    recording_id: str = Form(...),
+    chunk_index: int = Form(default=0),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """上传音频流分片，实时调用腾讯云ASR转写。
+
+    前端使用 MediaRecorder 每5秒产出一个chunk，
+    后端收到后调用腾讯云 SentenceRecognition 实时转写，
+    转写结果实时存入 TranscriptSegment 表。
+    """
+    audio_data = chunk.file.read()
+    result = service.process_audio_chunk(
+        db, user.user_id, recording_id, audio_data, chunk_index,
+    )
+    return ok(result)
+
+
+@router.post("/{recording_id}/asr-auth")
+def asr_auth(
+    recording_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取腾讯云实时语音识别 WebSocket 授权参数。
+
+    前端可使用返回的 ws_url 直接连接腾讯云 ASR WebSocket，
+    进行真正的流式实时转写（延迟<500ms）。
+    """
+    # 验证录音存在
+    recording = db.query(service.Recording).filter(
+        service.Recording.id == recording_id,
+        service.Recording.user_id == user.user_id,
+        service.Recording.deleted_at.is_(None),
+    ).first()
+    if not recording:
+        from ...shared.errors import APIError
+        raise APIError(60002, "录音不存在", 404)
+
+    from ..voice_engine.service import get_realtime_asr_auth
+    return ok(get_realtime_asr_auth())
 
 
 # ═══════════════════════════════════════════════

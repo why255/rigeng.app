@@ -2086,3 +2086,243 @@ def voice_broadcast_core_metrics(db: Session, user_id: str,
         "duration_estimate": duration,
         "sections_included": sections,
     }
+
+
+# ═══════════════════════════════════════════════
+# 情绪健康指数计算算法 (算法文档 §4.2)
+# ═══════════════════════════════════════════════
+
+def calculate_emotion_health_index(user_id: str, daily_scores: list[float], has_crisis: bool = False) -> dict:
+    """情绪健康指数 = 综合评分(0-100)
+
+    四因子:
+    1. 平均情绪分(权重40%)
+    2. 情绪趋势分(权重30%)
+    3. 情绪稳定性分(权重20%)
+    4. 危机事件惩罚(权重10%)
+    """
+    if not daily_scores:
+        return {"index": 50, "level": "🟡 数据不足", "breakdown": {}}
+
+    n = len(daily_scores)
+    avg_score = sum(daily_scores) / n
+
+    # 1. 平均情绪分 (映射 -10~+10 → 0~40)
+    norm_avg = (avg_score + 10) / 20 * 40
+
+    # 2. 情绪趋势分 (线性回归斜率, 映射到0~30)
+    if n >= 2:
+        x_mean = (n - 1) / 2
+        y_mean = avg_score
+        numerator = sum((i - x_mean) * (daily_scores[i] - y_mean) for i in range(n))
+        denominator = sum((i - x_mean) ** 2 for i in range(n))
+        slope = numerator / denominator if denominator != 0 else 0
+        # 映射 -2~+2 → 0~30
+        trend_score = 15 + (slope / 2) * 15
+        trend_score = max(0, min(30, trend_score))
+    else:
+        slope = 0
+        trend_score = 15
+
+    # 3. 情绪稳定性分 (标准差越小越高)
+    if n >= 2:
+        variance = sum((s - avg_score) ** 2 for s in daily_scores) / n
+        std_dev = variance ** 0.5
+        # std_dev ∈ [0, 5] → [0, 20]
+        stability = 20 - (std_dev / 5) * 20
+        stability = max(0, min(20, stability))
+    else:
+        std_dev = 0
+        stability = 20
+
+    # 4. 危机事件惩罚
+    crisis_penalty = -10 if has_crisis else 10
+
+    total_index = norm_avg + trend_score + stability + crisis_penalty
+    total_index = max(0, min(100, total_index))
+
+    # 健康等级
+    if total_index >= 80:
+        level = "🟢 情绪状态很好"
+    elif total_index >= 60:
+        level = "🟡 情绪状态一般，要注意调节"
+    elif total_index >= 40:
+        level = "🟠 情绪状态偏低，建议多关注自己"
+    else:
+        level = "🔴 需要关注，小耕建议聊聊"
+
+    return {
+        "index": round(total_index, 1),
+        "level": level,
+        "trend": "改善中" if slope > 0.1 else ("下降中" if slope < -0.1 else "稳定"),
+        "breakdown": {
+            "avg_score": round(norm_avg, 1),
+            "trend_score": round(trend_score, 1),
+            "stability_score": round(stability, 1),
+            "crisis_score": crisis_penalty,
+        }
+    }
+
+
+# ═══════════════════════════════════════════════
+# 能力分布雷达图计算 (算法文档 §4.2)
+# ═══════════════════════════════════════════════
+
+def calculate_capability_radar(metrics: dict) -> dict:
+    """6维能力评估(0-100): 规划力/执行力/专业力/学习力/情绪力/求职力
+
+    metrics应包含:
+    - plan_completion_rate, plan_continuity_days, total_days
+    - sop_quality_avg, qa_resolved_rate
+    - kb_growth_rate, kb_query_frequency, cross_module_applications
+    - emotion_health_index, emotion_recovery_speed, growth_manual_count
+    - resume_match_score, interview_invite_rate, offer_rate
+    """
+    total_days = max(metrics.get("total_days", 1), 1)
+
+    # 1. 规划力
+    plan_completion = metrics.get("plan_completion_rate", 0) * 0.5
+    plan_reasonability = 50 * 0.3  # 默认中等合理
+    plan_continuity = min(1.0, metrics.get("plan_continuity_days", 0) / total_days) * 100 * 0.2
+    planning = min(100, plan_completion + plan_reasonability + plan_continuity)
+
+    # 2. 执行力
+    completion = metrics.get("plan_completion_rate", 0) * 0.6
+    improvement = metrics.get("improvement_rate", 0) * 0.4
+    execution = min(100, completion + improvement)
+
+    # 3. 专业力
+    sop_quality = min(100, (metrics.get("sop_quality_avg", 3) / 5) * 100 * 0.4)
+    sop_count_score = min(100, metrics.get("sop_count", 0) * 5) * 0.3
+    qa_rate = metrics.get("qa_resolved_rate", 0) * 0.3
+    professional = min(100, sop_quality + sop_count_score + qa_rate)
+
+    # 4. 学习力
+    kb_growth = min(100, metrics.get("kb_growth_rate", 0) * 100) * 0.3
+    kb_freq = min(100, metrics.get("kb_query_frequency", 0) * 10) * 0.3
+    cross_app = min(100, metrics.get("cross_module_applications", 0) * 5) * 0.4
+    learning = min(100, kb_growth + kb_freq + cross_app)
+
+    # 5. 情绪力
+    emo_health = metrics.get("emotion_health_index", 50) * 0.5
+    emo_recovery = min(100, metrics.get("emotion_recovery_speed", 3) * 20) * 0.3
+    emo_manuals = min(100, metrics.get("growth_manual_count", 0) * 10) * 0.2
+    emotion = min(100, emo_health + emo_recovery + emo_manuals)
+
+    # 6. 求职力
+    resume_match = metrics.get("resume_match_score", 0) * 0.3
+    interview_rate = metrics.get("interview_invite_rate", 0) * 0.3
+    offer_rate = metrics.get("offer_rate", 0) * 0.4
+    career = min(100, resume_match + interview_rate + offer_rate)
+
+    return {
+        "dimensions": {
+            "planning": round(planning, 1),
+            "execution": round(execution, 1),
+            "professional": round(professional, 1),
+            "learning": round(learning, 1),
+            "emotion": round(emotion, 1),
+            "career": round(career, 1),
+        },
+        "avg_score": round((planning + execution + professional + learning + emotion + career) / 6, 1),
+    }
+
+
+# ═══════════════════════════════════════════════
+# 正反向关怀决策树 (算法文档 §4.2)
+# ═══════════════════════════════════════════════
+
+class CareDecisionTree:
+    """决策树: 指标评估 → 关怀策略 → 频率控制 → 内容生成"""
+
+    POSITIVE_TRIGGERS = [
+        {"condition": "plan_completion_rate > 0.90", "level": "light",
+         "message_template": "姐，这周计划完成率{rate}%，执行得真漂亮！"},
+        {"condition": "weekly_sop_count >= 3", "level": "medium",
+         "message_template": "姐，这周沉淀了{count}个SOP，您的专业资产越来越厚了！"},
+        {"condition": "consecutive_review_days >= 7", "level": "medium",
+         "message_template": "姐，您已经连续一周坚持复盘了！这份毅力就是最好的专业素养~"},
+        {"condition": "emotion_health_trend > 0.3", "level": "light",
+         "message_template": "姐，最近状态越来越好，小耕也替您开心~"},
+    ]
+
+    NEGATIVE_TRIGGERS = [
+        {"condition": "plan_completion_rate < 0.30", "level": "medium",
+         "message_template": "姐，这周完成率不太理想。是最近太忙了，还是计划定得多？小耕帮您分析一下~",
+         "action": "suggest_plan_adjustment"},
+        {"condition": "emotion_health_continuous_decline >= 7", "level": "medium",
+         "message_template": "姐，最近是不是有什么心事？随时可以来树洞跟小耕聊聊~",
+         "action": "suggest_emotion_treehole"},
+        {"condition": "consecutive_skip_review >= 5", "level": "medium",
+         "message_template": "姐，最近是不是特别忙？每天抽5分钟回顾一下，会有意想不到的收获~"},
+        {"condition": "emotion_health_index < 40", "level": "high",
+         "message_template": "姐，小耕注意到您最近状态不太好。如果不介意的话，要不要跟安老师聊聊？",
+         "action": "offer_teacher_bridge"},
+        {"condition": "consecutive_inactive_days >= 14", "level": "high",
+         "action": "teacher_bridge", "reason": "用户连续14天未使用日耕"},
+    ]
+
+    @staticmethod
+    def evaluate(condition_str: str, metrics: dict) -> bool:
+        """简易条件评估器。"""
+        try:
+            # 解析 condition_str 如 "plan_completion_rate > 0.90"
+            parts = condition_str.split()
+            if len(parts) < 3:
+                return False
+            key = parts[0]
+            op = parts[1]
+            threshold = float(parts[2])
+            value = metrics.get(key, 0)
+
+            if op == ">":
+                return value > threshold
+            elif op == ">=":
+                return value >= threshold
+            elif op == "<":
+                return value < threshold
+            elif op == "<=":
+                return value <= threshold
+            return False
+        except Exception:
+            return False
+
+    @staticmethod
+    def evaluate_and_get_cares(metrics: dict, current_hour: int = 12,
+                                weekly_push_count: int = 0) -> list[dict]:
+        """评估指标并返回应触发的关怀列表。"""
+        MAX_PER_WEEK = 5
+        MIN_INTERVAL_HOURS = 3
+
+        if weekly_push_count >= MAX_PER_WEEK:
+            return []
+
+        # 夜间免打扰 (22:00-08:00)
+        if current_hour >= 22 or current_hour < 8:
+            return []
+
+        cares = []
+
+        # 正向激励（优先检查）
+        for trigger in CareDecisionTree.POSITIVE_TRIGGERS:
+            if CareDecisionTree.evaluate(trigger["condition"], metrics):
+                msg = trigger["message_template"]
+                for key, val in metrics.items():
+                    if isinstance(val, (int, float)):
+                        msg = msg.replace(f"{{{key}}}", str(round(val, 1)))
+                        msg = msg.replace(f"{{{key}%}}", f"{round(val)}%")
+                cares.append({"type": "positive", "level": trigger["level"], "message": msg})
+
+        # 反向关怀
+        for trigger in CareDecisionTree.NEGATIVE_TRIGGERS:
+            if CareDecisionTree.evaluate(trigger["condition"], metrics):
+                msg = trigger["message_template"]
+                for key, val in metrics.items():
+                    if isinstance(val, (int, float)):
+                        msg = msg.replace(f"{{{key}}}", str(round(val, 1)))
+                care = {"type": "negative", "level": trigger["level"], "message": msg}
+                if "action" in trigger:
+                    care["action"] = trigger["action"]
+                cares.append(care)
+
+        return cares

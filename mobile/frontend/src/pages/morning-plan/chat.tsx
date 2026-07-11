@@ -1,21 +1,17 @@
 /**
- * P2 计划输入与提炼 — 语音/文字对话（对齐 m1p2.html 设计）。
+ * 朝有规划 — AI聊天（纯模型回复）。
  * Route: /m/morning-plan/chat
  *
- * 提炼流程：
- * 1. 用户输入 → conversePlan API（morning_plan 模块）
- * 2. LLM 回复尾部包含 ```tasks 块，前端解析出结构化任务+象限
- * 3. 仅展示人性化文案部分（任务块不显示），确认区展示已提炼任务
- * 4. 确认后 → 每个任务连同象限写入 context → 跳转 P3
+ * 用户说任何话都直接走小耕AI模型回复。
+ * 输入框右上角「提炼计划」按钮：AI根据上下文提取计划，确认后跳转列表页。
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import { morningChat, extractPlan } from '@/shared/api/plans';
+import type { PlanItemOut } from '@/shared/api/plans';
 import { useMorningPlan } from '@/shared/context/MorningPlanContext';
-import { useOnlineStatus } from '@/shared/hooks/useOnlineStatus';
-import { conversePlan } from '@/shared/api/plans';
 import type { Quadrant } from '@/shared/api/plans';
-import { QUADRANT_SHORT_LABELS } from '@/shared/utils/quadrantMapping';
 import './morning-plan.css';
 
 /* ── Types ── */
@@ -26,101 +22,34 @@ interface Message {
   key: string;
   role: 'assistant' | 'user';
   type: 'text' | 'voice';
-  text: string;       // display text
-  time: string;
-}
-
-/** 提炼后的结构化任务 */
-interface ParsedTask {
   text: string;
-  quadrant: Quadrant;
+  time: string;
 }
 
 /* ── Helpers ── */
 
 let _msgId = 0;
 function nextId() { return `msg_${Date.now()}_${++_msgId}`; }
-function genPlanId() { return `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
 function now() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/**
- * 解析 LLM 回复中的 ```tasks 块，提取任务标题 + 象限。
- * @param raw LLM 原始回复
- * @param fallbackText 提取失败时回退到用户原始输入（而非 LLM 全文）
- */
-function parseTasksReply(raw: string, fallbackText: string): { displayText: string; tasks: ParsedTask[] } {
-  const tasks: ParsedTask[] = [];
-
-  // 匹配 ```tasks ... ``` 区块
-  const blockRe = /```tasks\s*\n([\s\S]*?)```/i;
-  const match = raw.match(blockRe);
-
-  // 去掉 tasks 块后的纯文本用于气泡展示
-  const displayText = match ? raw.replace(blockRe, '').trim().replace(/\n{3,}/g, '\n\n') : raw;
-
-  if (match) {
-    const lines = match[1].split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      const parts = line.split(/[|｜]/).map(s => s.trim());
-      if (parts.length < 2) continue;
-
-      const title = parts.slice(0, -1).join(' | ');
-      const label = parts[parts.length - 1];
-
-      // 过滤占位行：...、___、quadrant 等 LLM 生成的填充内容
-      if (/^[.…_—\-]+$/.test(title) || title === '...' || title === '……' || title.length < 2) continue;
-      if (/^[.…_—\-]+$/.test(label) || label === '...' || label === '……' || label === 'quadrant' || label === '___') continue;
-
-      // 象限映射（中英文均可）
-      const quadrantMap: Record<string, Quadrant> = {
-        '重要紧急': 'urgent_important', '重要且紧急': 'urgent_important',
-        'urgent_important': 'urgent_important',
-        '重要不紧急': 'not_urgent_important',
-        'not_urgent_important': 'not_urgent_important',
-        '紧急不重要': 'urgent_not_important',
-        'urgent_not_important': 'urgent_not_important',
-        '不重要不紧急': 'not_urgent_not_important',
-        'not_urgent_not_important': 'not_urgent_not_important',
-      };
-      const q = quadrantMap[label] || 'urgent_important';
-      tasks.push({ text: title, quadrant: q });
-    }
-  }
-
-  // 兜底：无 tasks 块时用用户原始输入，不把 AI 回复当计划
-  if (tasks.length === 0) {
-    // 尝试按换行/逗号/分号拆成多条
-    const rawPlans = fallbackText
-      .split(/[,，;；\n。\.]+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 1);
-    if (rawPlans.length > 0) {
-      for (const t of rawPlans) tasks.push({ text: t.slice(0, 80), quadrant: 'urgent_important' });
-    } else {
-      tasks.push({ text: fallbackText.slice(0, 80), quadrant: 'urgent_important' });
-    }
-  }
-
-  return { displayText: displayText || raw, tasks };
 }
 
 /* ── Component ── */
 
 export function MorningPlanChat() {
   const navigate = useNavigate();
-  const { isOnline } = useOnlineStatus();
   const { addPlan } = useMorningPlan();
 
   /* ── Core state ── */
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [recordedTasks, setRecordedTasks] = useState<ParsedTask[]>([]);
-  const [showConfirm, setShowConfirm] = useState(false);
+
+  /* ── Extract state ── */
+  const [extractedItems, setExtractedItems] = useState<PlanItemOut[]>([]);
+  const [showExtractConfirm, setShowExtractConfirm] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   /* ── Voice state ── */
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('hold');
@@ -143,7 +72,6 @@ export function MorningPlanChat() {
     const saved = localStorage.getItem('rg_voice_mode') as VoiceMode | null;
     if (saved === 'hold' || saved === 'click') setVoiceMode(saved);
   }, []);
-  useEffect(() => { if (!isOnline) navigate('/m/morning-plan/offline', { replace: true }); }, [isOnline, navigate]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   const scrollBottom = useCallback(() => {
@@ -151,7 +79,7 @@ export function MorningPlanChat() {
       chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
     }, 80);
   }, []);
-  useEffect(() => { scrollBottom(); }, [messages, isLoading, showConfirm, voiceUIActive, scrollBottom]);
+  useEffect(() => { scrollBottom(); }, [messages, isLoading, voiceUIActive, scrollBottom]);
 
   /* ═══════════════════════════════════════════════
      Voice Recording
@@ -196,50 +124,27 @@ export function MorningPlanChat() {
   const cancelRecording = () => { if (isRecording) stopRecording(true); };
 
   /* ═══════════════════════════════════════════════
-     Core: process user input through LLM + parse reply
+     Core: send user input → AI reply
      ═══════════════════════════════════════════════ */
 
   const processUserInput = async (text: string, isVoice = false) => {
     setIsLoading(true);
     const time = now();
-    const userMsg: Message = {
+    setMessages(prev => [...prev, {
       key: nextId(), role: 'user', type: isVoice ? 'voice' : 'text', text, time,
-    };
-    setMessages(prev => [...prev, userMsg]);
+    }]);
 
     try {
-      const result = await conversePlan(text, conversationId);
-      if (result.conversation_id) setConversationId(result.conversation_id);
-
-      const fullReply = result.assistant_reply || `已记录：${text}`;
-
-      // ── 解析 tasks 块 ──
-      const { displayText, tasks } = parseTasksReply(fullReply, text);
-
-      // 助理气泡只展示人性化文本
-      const replyMsg: Message = {
-        key: nextId(), role: 'assistant', type: 'text', text: displayText, time: now(),
-      };
-      setMessages(prev => [...prev, replyMsg]);
-
-      // 追加提炼后的任务
-      setRecordedTasks(prev => {
-        const next = [...prev];
-        for (const t of tasks) {
-          if (!next.some(p => p.text === t.text)) next.push(t);
-        }
-        return next;
-      });
-      setShowConfirm(true);
+      const result = await morningChat(text);
+      setMessages(prev => [...prev, {
+        key: nextId(), role: 'assistant', type: 'text', text: result.reply, time: now(),
+      }]);
     } catch {
-      // LLM 不可用：回退 — 把原始输入当一条计划
-      const fallbackReply = `已记录：${text}`;
-      setMessages(prev => [...prev, { key: nextId(), role: 'assistant', type: 'text', text: fallbackReply, time: now() }]);
-      setRecordedTasks(prev => {
-        if (prev.some(p => p.text === text)) return prev;
-        return [...prev, { text, quadrant: 'urgent_important' }];
-      });
-      setShowConfirm(true);
+      setMessages(prev => [...prev, {
+        key: nextId(), role: 'assistant', type: 'text',
+        text: '姐，小耕正在努力思考中，稍等一下哦～',
+        time: now(),
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -252,9 +157,52 @@ export function MorningPlanChat() {
     processUserInput(text);
   };
 
-  const handleConfirm = () => {
-    for (const t of recordedTasks) addPlan(t.text, t.quadrant);
+  /* ── 提炼计划 ── */
+
+  const handleExtractPlan = async () => {
+    if (messages.length === 0) return;
+    setIsExtracting(true);
+
+    try {
+      const chatMessages = messages
+        .filter(m => m.type === 'text')
+        .map(m => ({ role: m.role, text: m.text }));
+
+      const result = await extractPlan(chatMessages);
+
+      // 添加小耕的提炼回复气泡
+      setMessages(prev => [...prev, {
+        key: nextId(), role: 'assistant', type: 'text', text: result.reply, time: now(),
+      }]);
+
+      if (result.plan_items.length > 0) {
+        setExtractedItems(result.plan_items);
+        setShowExtractConfirm(true);
+      }
+    } catch {
+      setMessages(prev => [...prev, {
+        key: nextId(), role: 'assistant', type: 'text',
+        text: '姐，提炼计划时出了点小问题，稍后再试哦～',
+        time: now(),
+      }]);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleConfirmExtract = () => {
+    // 将提炼的计划写入 context → 跳转列表页
+    for (const item of extractedItems) {
+      addPlan(item.title, (item.quadrant as Quadrant) || 'urgent_important');
+    }
+    setShowExtractConfirm(false);
+    setExtractedItems([]);
     navigate('/m/morning-plan/list');
+  };
+
+  const handleCancelExtract = () => {
+    setShowExtractConfirm(false);
+    setExtractedItems([]);
   };
 
   /* ═══════════════════════════════════════════════
@@ -262,9 +210,7 @@ export function MorningPlanChat() {
      ═══════════════════════════════════════════════ */
 
   const showVoiceUI = () => { setVoiceUIActive(true); inputRef.current?.blur(); };
-
   const hasText = inputText.trim().length > 0;
-
   const handleMicSendClick = () => {
     if (hasText) { handleSendText(); }
     else if (!isRecording) { showVoiceUI(); }
@@ -338,14 +284,14 @@ export function MorningPlanChat() {
         </div>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <p className="mp-hero__title" style={{ fontSize: 17 }}>晨起做规划，整日不慌忙</p>
-          <p className="mp-welcome-hint">告诉我你今天想完成什么</p>
+          <p className="mp-welcome-hint">告诉我你今天想完成什么，或者随便聊聊~</p>
         </div>
 
         <div className="mp-bubble-row message-enter" style={{ marginBottom: 16 }}>
           <div className="mp-avatar mp-avatar--geng">耕</div>
           <div className="mp-bubble-wrapper">
             <div className="mp-bubble mp-bubble--assistant">
-              早安！新的一天开始了！<br />告诉我你今天的计划，语音或文字都可以。
+              早安！新的一天开始了！<br />告诉我你今天想做什么，或者有什么想问的~
             </div>
             <span className="mp-bubble-time">刚刚</span>
           </div>
@@ -405,32 +351,47 @@ export function MorningPlanChat() {
           </div>
         )}
 
-        {/* Confirm bubble — 展示提炼后的任务 + 象限 */}
-        {showConfirm && recordedTasks.length > 0 && !isLoading && (
+        {isExtracting && (
+          <div className="mp-thinking">
+            <Icon icon="mingcute:loading-line" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }} />
+            <span>小耕正在提炼计划...</span>
+          </div>
+        )}
+
+        {/* 提炼计划确认区 */}
+        {showExtractConfirm && extractedItems.length > 0 && (
           <div className="mp-confirm-bubble message-enter">
             <div className="mp-confirm-bubble__title">
               <Icon icon="mingcute:check-fill" style={{ fontSize: '16px', color: '#4CAF50', marginRight: 4, verticalAlign: 'middle' }} />
-              已提炼 {recordedTasks.length} 项计划：
+              已提炼 {extractedItems.length} 项计划，是否确认？
             </div>
-            {recordedTasks.slice(-5).map((t, i) => (
+            {extractedItems.slice(0, 8).map((item, i) => (
               <div key={i} className="mp-confirm-task">
-                <span className="mp-confirm-task__text">{t.text}</span>
-                <span className="mp-confirm-task__badge">
-                  {QUADRANT_SHORT_LABELS[t.quadrant] || '重要紧急'}
-                </span>
+                <span className="mp-confirm-task__text">{item.title}</span>
+                <span className="mp-confirm-task__badge">{item.time_hint}</span>
               </div>
             ))}
-            {recordedTasks.length > 5 && (
+            {extractedItems.length > 8 && (
               <p style={{ fontSize: 12, color: '#999', textAlign: 'center', margin: '4px 0' }}>
-                还有 {recordedTasks.length - 5} 项...
+                还有 {extractedItems.length - 8} 项...
               </p>
             )}
-            <p style={{ fontSize: 13, color: '#666', marginTop: 8, marginBottom: 4 }}>
-              继续添加，或点击「确认计划」进入下一步
-            </p>
-            <button className="mp-confirm-btn" onClick={handleConfirm}>
-              确认计划
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button
+                onClick={handleCancelExtract}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+                  background: '#F5F3EF', color: '#666', fontSize: 14, fontWeight: 500,
+                }}
+              >取消</button>
+              <button
+                onClick={handleConfirmExtract}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+                  background: '#C03A39', color: '#fff', fontSize: 14, fontWeight: 600,
+                }}
+              >确认计划</button>
+            </div>
           </div>
         )}
 
@@ -439,13 +400,32 @@ export function MorningPlanChat() {
 
       {/* Input Area */}
       <div className="mp-chat-input-area">
+        {/* 提炼计划按钮 */}
+        {messages.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+            <button
+              onClick={handleExtractPlan}
+              disabled={isExtracting || isLoading}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '6px 14px', borderRadius: 16, border: '1px solid #C03A39',
+                background: isExtracting ? '#f5f5f5' : '#fff',
+                color: '#C03A39', fontSize: 13, fontWeight: 500,
+                opacity: isExtracting || isLoading ? 0.5 : 1,
+              }}
+            >
+              <Icon icon="mingcute:magic-2-line" style={{ fontSize: '16px' }} />
+              提炼计划
+            </button>
+          </div>
+        )}
         <div className="mp-chat-input-pill">
           <input
             ref={inputRef} type="text" value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onFocus={() => setVoiceUIActive(false)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
-            placeholder="输入今天的计划..." autoComplete="off"
+            placeholder="说点什么..." autoComplete="off"
           />
           <button className="mp-chat-mic-btn" onClick={handleMicSendClick}>
             {hasText ? (

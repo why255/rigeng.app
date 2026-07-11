@@ -23,10 +23,12 @@ class User(TimestampMixin, Base):
     nickname: Mapped[str | None] = mapped_column(String(64))
     gender: Mapped[str | None] = mapped_column(String(16))  # male/female
     addressing: Mapped[str | None] = mapped_column(String(32))  # 姐/亲爱的…
+    avatar: Mapped[str | None] = mapped_column(String(255))  # 头像文件路径/URL
     role: Mapped[str] = mapped_column(String(16), default="student")
     voice_type: Mapped[str | None] = mapped_column(String(16))
     care_mode: Mapped[str] = mapped_column(String(16), default="active")
     trial_start_at: Mapped[datetime | None] = mapped_column(DateTime)
+    preferred_model: Mapped[str | None] = mapped_column(String(64))
     push_timezone: Mapped[str] = mapped_column(String(32), default="Asia/Shanghai")
     status: Mapped[str] = mapped_column(String(16), default="active")
 

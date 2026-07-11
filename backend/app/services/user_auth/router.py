@@ -1,7 +1,7 @@
 """①用户/权限服务 路由层（步骤3 §3：U1-U9）。"""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -9,7 +9,8 @@ from ...shared.response import ok
 from ...shared.security import CurrentUser, get_current_user, require_role
 from . import service
 from .schemas import (
-    CareModeIn, DisclaimerIn, GrantIn, LoginIn, ProfileIn, RegisterIn, TeacherAssignIn,
+    CareModeIn, DisclaimerIn, GrantIn, LoginIn, PasswordChangeIn, ProfileIn,
+    RegisterIn, TeacherAssignIn, ModelPreferenceIn,
 )
 
 router = APIRouter(tags=["①用户/权限"])
@@ -59,7 +60,8 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
 
 @router.patch("/users/me/profile")  # U3
 def profile(body: ProfileIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    return ok(service.update_profile(db, user.user_id, voice_type=body.voice_type,
+    return ok(service.update_profile(db, user.user_id, nickname=body.nickname,
+                                    gender=body.gender, voice_type=body.voice_type,
                                     addressing=body.addressing, care_mode=body.care_mode))
 
 
@@ -95,3 +97,28 @@ def trial(user: CurrentUser = Depends(get_current_user), db: Session = Depends(g
 @router.patch("/users/me/care-mode")  # U9（主动/被动关怀模式）
 def care_mode(body: CareModeIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     return ok(service.set_care_mode(db, user.user_id, body.care_mode))
+
+
+@router.get("/users/me/model")  # 获取模型偏好
+def get_model(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ok(service.get_preferred_model(db, user.user_id))
+
+
+@router.patch("/users/me/model")  # 设置模型偏好
+def set_model(body: ModelPreferenceIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ok(service.set_preferred_model(db, user.user_id, body.model))
+
+
+@router.patch("/users/me/password")  # 修改密码
+def change_pwd(body: PasswordChangeIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ok(service.change_password(db, user.user_id, body.old_password, body.new_password))
+
+
+@router.post("/users/me/avatar")  # 上传头像
+def upload_avatar(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    content = file.file.read()
+    return ok(service.upload_avatar(db, user.user_id, content, file.filename or "avatar"))

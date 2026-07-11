@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from ...shared.config import settings
 from ...shared.database import new_uuid, utcnow
 from ...shared.errors import APIError, E_DOC_NOT_FOUND, E_PARAM_FORMAT
+from ...shared.llm_utils import safe_extract_json, LLMParsingError
 from ...shared.models.qa import (
     QA_SOURCE_TYPES,
     QaAnswer,
@@ -31,6 +32,9 @@ from ...shared.models.qa import (
     QaFeedback,
 )
 from ...shared.models.knowledge import Document, AuditQueue
+from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS
+from ...engines.persona import build_persona_prompt
+from ...engines.llm_orchestrator import llm_generate_with_orchestration
 
 logger = logging.getLogger("smart_qa")
 
@@ -41,6 +45,12 @@ ELEMENT_META = {
     "script": {"title": "沟通话术", "icon": "💬", "color": "#6B8FBF"},
     "standard": {"title": "达成标准", "icon": "🎯", "color": "#27AE60"},
 }
+
+# ── 高风险问题免责声明（防幻觉L2增强）──
+DISCLAIMER_HIGH_RISK = (
+    "⚠️ 以下内容为智能生成，涉及重大决策请咨询专业律师。"
+    "小耕可以帮您联系安老师进行专业审核，需要吗？"
+)
 
 # ── HR八大模块分类 ──
 HR_CATEGORIES = [
@@ -115,6 +125,21 @@ def ask_question(
     # ── 1. 三源检索 ──
     search_results = _search_three_sources(db, user_id, question, enabled_sources)
 
+    # ── 1.5 三源权重动态调整（weighted_fusion）──
+    user_doc_count = (
+        db.query(Document)
+        .filter(
+            Document.owner_user_id == user_id,
+            Document.library_type == "private",
+            Document.status == "published",
+            Document.deleted_at.is_(None),
+        )
+        .count()
+    )
+    search_results = weighted_fusion(
+        search_results, user_doc_count=user_doc_count, question=question,
+    )
+
     # ── 2. 判断是否需要追问澄清 ──
     if not is_clarification and conv.rounds < 4:
         needs_clarify, clarifications = _check_needs_clarification(question, conv.rounds)
@@ -129,7 +154,9 @@ def ask_question(
             }
 
     # ── 3. AI生成四要素答案 ──
-    answer_data = _generate_four_element_answer(question, search_results, conv.rounds)
+    answer_data = _generate_four_element_answer(
+        question, search_results, conv.rounds, user_id=user_id, db=db,
+    )
 
     # ── 4. 存储答案 ──
     answer = QaAnswer(
@@ -142,8 +169,8 @@ def ask_question(
         has_source_label=True,
         has_timeliness_label=True,
         audit_status="pending",
-        model_used="mock_mvp",
-        generation_cost_tokens=0,
+        model_used=answer_data.get("_model_used", "mock_mvp"),
+        generation_cost_tokens=answer_data.get("_tokens", 0),
     )
     db.add(answer)
     db.flush()
@@ -275,15 +302,47 @@ def _extract_snippet(content: dict | None, question: str) -> str:
 def _check_needs_clarification(question: str, current_rounds: int) -> tuple[bool, list[str]]:
     """判断是否需要追问澄清。
 
-    MVP逻辑：第0轮（首问）时，若问题较短（<15字）或过于宽泛，追问澄清。
+    优先使用LLM复杂度评估（assess_question_complexity），失败时降级到启发式逻辑。
     最多追问4轮。
     """
     if current_rounds >= 4:
         return False, []
 
-    # 需要澄清的情况：
-    # 1. 问题太短（<10字），可能信息不足
-    # 2. 问题没有具体场景
+    # ── 优先尝试LLM复杂度评估 ──
+    try:
+        assessment = assess_question_complexity(question)
+        recommended_rounds = assessment.get("recommended_clarification_rounds", 0)
+        completeness = assessment.get("completeness_score", 50)
+        q_type = assessment.get("question_type", "how_to")
+
+        logger.info(
+            "问题复杂度评估: type=%s completeness=%d recommended_rounds=%d current=%d",
+            q_type, completeness, recommended_rounds, current_rounds,
+        )
+
+        if recommended_rounds > current_rounds:
+            remaining = recommended_rounds - current_rounds
+            if q_type == "scenario_design" and remaining >= 3:
+                return True, [
+                    "能先说说贵公司的基本情况吗？比如行业、规模、发展阶段？",
+                    "目前这方面的现状是怎样的？有哪些具体痛点？",
+                    "你希望达到什么样的目标或效果？",
+                    "有哪些约束条件需要考虑（预算、时间、人员、合规要求等）？",
+                ]
+            elif remaining >= 2:
+                return True, [
+                    "能再具体说说业务场景和现状吗？比如涉及的人员范围、当前遇到的问题？",
+                    "有哪些约束条件需要考虑（预算、时间、合规要求等）？",
+                ]
+            else:
+                return True, [
+                    "能再补充一些具体信息吗？这样小耕可以给出更精准的建议~",
+                ]
+        return False, []
+    except Exception as e:
+        logger.warning("LLM复杂度评估失败，降级到启发式逻辑: %s", e)
+
+    # ── 启发式逻辑（fallback）──
     short_q = len(question.strip()) < 10
 
     if short_q and current_rounds == 0:
@@ -307,28 +366,129 @@ def _check_needs_clarification(question: str, current_rounds: int) -> tuple[bool
 
 def _generate_four_element_answer(
     question: str, sources: list[dict], rounds: int,
+    user_id: str | None = None, db: Session | None = None,
 ) -> dict[str, Any]:
     """生成四要素结构化答案。
 
-    生产环境：调用③AI引擎（voice_engine.llm_generate），传入 system_prompt 指定四要素格式。
-    MVP阶段：基于模板生成模拟答案。
+    优先调用AI引擎（voice_engine.llm_generate），失败时降级到模板生成。
     """
     # 确定最佳来源
     best_source = _pick_best_source(sources)
 
-    # 生成四要素
+    # 尝试AI生成
+    ai_elements, ai_model_used, ai_tokens = _generate_ai_four_element_answer(
+        question, sources, user_id=user_id, db=db,
+    )
+    if ai_elements is not None:
+        # 来源引用（传入question以启用L2时效性检查+高风险免责声明）
+        source_out = _build_source_out(best_source, question=question)
+        intro = f'针对"{question[:40]}{"..." if len(question) > 40 else ""}"，以下是基于四要素的结构化建议：'
+        return {
+            "intro": intro,
+            "elements": ai_elements,
+            "source": source_out,
+            "_model_used": ai_model_used,
+            "_tokens": ai_tokens,
+        }
+
+    # 降级到模板生成
     elements = _generate_mock_elements(question, best_source)
-
-    # 来源引用
-    source_out = _build_source_out(best_source)
-
+    source_out = _build_source_out(best_source, question=question)
     intro = f'针对"{question[:40]}{"..." if len(question) > 40 else ""}"，建议按以下四要素结构化方案执行：'
-
     return {
         "intro": intro,
         "elements": elements,
         "source": source_out,
+        "_model_used": "mock_mvp_fallback",
+        "_tokens": 0,
     }
+
+
+def _generate_ai_four_element_answer(
+    question: str, sources: list[dict],
+    user_id: str | None = None, db: Session | None = None,
+) -> tuple[list[dict] | None, str, int]:
+    """调用AI引擎生成四要素结构化答案。
+
+    Returns:
+        (elements, model_used, tokens) — 成功时返回，失败时返回 (None, "", 0)
+    """
+    # 构建来源文本
+    sources_text = _build_sources_text_for_prompt(sources)
+
+    # 构建四要素输出schema描述
+    output_schema = (
+        '{\n'
+        '  "elements": [\n'
+        '    {"key": "key-points", "summary": "操作要点概要(20字以内)", "detail": ["具体操作步骤1", "具体操作步骤2", ...]},\n'
+        '    {"key": "cautions", "summary": "注意事项概要(20字以内)", "detail": ["风险点1", "风险点2", ...]},\n'
+        '    {"key": "script", "summary": "沟通话术概要(20字以内)", "detail": ["可直接使用的沟通话术1", "话术2", ...]},\n'
+        '    {"key": "standard", "summary": "达成标准概要(20字以内)", "detail": ["可衡量的完成标准1", "标准2", ...]}\n'
+        '  ]\n'
+        '}'
+    )
+
+    prompt = (
+        f'用户问题：{question}\n\n'
+        f'以下是从三源知识库检索到的参考资料：\n{sources_text}\n\n'
+        f'请基于以上参考资料回答用户问题。如果参考资料不足或无法确认，请如实说明"参考资料不足，以下为通用建议"。\n\n'
+        f'请以JSON格式输出四要素结构化答案，格式如下：\n'
+        f'{output_schema}\n\n'
+        f'要求：\n'
+        f'1. 每个要素的detail数组包含2-3条具体内容\n'
+        f'2. summary控制在20字以内\n'
+        f'3. 严格按上述JSON格式输出，不要添加额外文字说明'
+    )
+
+    try:
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_qa", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.7,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict) and "elements" in parsed:
+            elements = _enrich_elements_with_meta(parsed["elements"])
+            return elements, result["model_used"], result["usage"]["total_tokens"]
+        logger.warning("AI四要素答案解析失败: 无效的JSON结构")
+    except Exception as e:
+        logger.warning("AI四要素答案生成失败: %s", e)
+
+    return None, "", 0
+
+
+def _build_sources_text_for_prompt(sources: list[dict]) -> str:
+    """将检索到的来源构建为prompt可用的文本。"""
+    if not sources:
+        return "（无参考资料，请基于通用HR知识回答）"
+
+    texts = []
+    for i, src in enumerate(sources[:5], 1):  # 最多5条来源
+        title = src.get("title", "未知文档")
+        library = src.get("library", "内部知识库")
+        snippet = src.get("snippet", "") or src.get("content", "") or ""
+        verified = "已验证" if src.get("verified") else "未验证"
+        texts.append(f"[来源{i}] {title}（{library}，{verified}）\n{snippet[:800]}")
+    return "\n\n".join(texts)
+
+
+def _enrich_elements_with_meta(raw_elements: list[dict]) -> list[dict]:
+    """为AI生成的元素补充icon/color等展示元信息。"""
+    enriched = []
+    for elem in raw_elements:
+        key = elem.get("key", "")
+        meta = ELEMENT_META.get(key, {})
+        enriched.append({
+            "key": key,
+            "title": meta.get("title", key),
+            "icon": meta.get("icon", "📋"),
+            "color": meta.get("color", "#333"),
+            "summary": elem.get("summary", ""),
+            "detail": elem.get("detail", []),
+        })
+    return enriched
 
 
 def _pick_best_source(sources: list[dict]) -> dict | None:
@@ -346,34 +506,80 @@ def _pick_best_source(sources: list[dict]) -> dict | None:
     return sources[0]
 
 
-def _build_source_out(source: dict | None) -> dict | None:
-    """构建来源引用输出。"""
+def _build_source_out(source: dict | None, question: str = "") -> dict | None:
+    """构建来源引用输出（防幻觉四级防线 L1+L2 增强版）。
+
+    L1 来源标注：每条关键信息标注来源类型和日期。
+    L2 时效性检查：
+      - 通用内容 > 365天 → "内容较旧"
+      - 劳动法内容 > 180天 → 强制标注 + "劳动法规更新频繁，请以最新规定为准"
+      - 薪酬数据 > 90天 → 时效性警告
+    """
     if not source:
         return None
 
     is_internet = source.get("is_internet", False) or source.get("library") == "互联网"
     updated_at = source.get("updated_at", "")
+    days_old = None
     is_stale = False
+    timeliness_warning = ""
+    timeliness_level = "fresh"
 
-    # 时效性检查：超过12个月标注"内容较旧"
+    # 时效性检查
     if updated_at and not is_internet:
         try:
             dt = datetime.strptime(updated_at, "%Y-%m-%d")
-            if (datetime.now() - dt).days > 365:
-                is_stale = True
+            days_old = (datetime.now() - dt).days
         except ValueError:
-            pass
+            days_old = None
 
-    # 标签
+    # ── L2 时效性检查（按内容类型分阈值）──
+    if days_old is not None:
+        # 检测内容类型
+        q_lower = question.lower() if question else ""
+        source_title = (source.get("title", "") or "").lower()
+
+        is_labor_law = any(kw in q_lower or kw in source_title for kw in [
+            "劳动法", "劳动合同", "劳动仲裁", "工伤", "社保", "公积金",
+            "年假", "产假", "病假", "加班", "辞退", "解雇", "裁员", "竞业",
+            "补偿金", "赔偿",
+        ])
+        is_salary = any(kw in q_lower or kw in source_title for kw in [
+            "薪酬", "工资", "奖金", "薪资", "涨薪", "调薪", "股权激励",
+        ])
+
+        if is_labor_law and days_old > 180:
+            is_stale = True
+            timeliness_level = "outdated_law"
+            timeliness_warning = "劳动法规更新频繁，请以最新规定为准"
+        elif is_salary and days_old > 90:
+            is_stale = True
+            timeliness_level = "outdated_salary"
+            timeliness_warning = "薪酬数据具有时效性，建议核实最新市场行情"
+        elif days_old > 365:
+            is_stale = True
+            timeliness_level = "outdated_general"
+
+    # ── L1 来源标签 ──
     if is_internet:
         label = "请核实"
         verified = False
     elif is_stale:
-        label = "内容较旧"
+        if timeliness_level == "outdated_law":
+            label = "内容较旧 ⚠️法规"
+        elif timeliness_level == "outdated_salary":
+            label = "内容较旧 ⚠️时效"
+        else:
+            label = "内容较旧"
         verified = source.get("verified", False)
     else:
         label = "文档较新"
         verified = source.get("verified", False)
+
+    # ── 高风险问题免责声明 ──
+    disclaimer = ""
+    if _is_high_risk_question(question):
+        disclaimer = DISCLAIMER_HIGH_RISK
 
     return {
         "title": source.get("title", ""),
@@ -384,6 +590,10 @@ def _build_source_out(source: dict | None) -> dict | None:
         "is_internet": is_internet,
         "is_stale": is_stale,
         "doc_id": source.get("doc_id"),
+        "timeliness_warning": timeliness_warning,
+        "timeliness_level": timeliness_level,
+        "days_old": days_old,
+        "disclaimer": disclaimer,
     }
 
 
@@ -611,6 +821,10 @@ def _build_answer_out(answer: QaAnswer) -> dict[str, Any]:
             "is_internet": src.get("is_internet", False),
             "is_stale": src.get("is_stale", False),
             "doc_id": src.get("doc_id"),
+            "timeliness_warning": src.get("timeliness_warning", ""),
+            "timeliness_level": src.get("timeliness_level", "fresh"),
+            "days_old": src.get("days_old"),
+            "disclaimer": src.get("disclaimer", ""),
         }
 
     return {
@@ -945,3 +1159,179 @@ def search_qa_history(
         })
 
     return result
+
+
+# ═══════════════════════════════════════════════
+# 防幻觉L2辅助：高风险问题检测
+# ═══════════════════════════════════════════════
+
+def _is_high_risk_question(question: str) -> bool:
+    """检测高风险HR问题：裁员/劳动仲裁/赔偿计算/工伤认定/解雇等。
+
+    用于触发免责声明和加强时效性检查。
+    """
+    if not question:
+        return False
+
+    high_risk_keywords = [
+        "裁员", "劳动仲裁", "赔偿计算", "工伤认定", "解雇",
+        "辞退", "开除", "经济补偿", "违法解除", "劳动争议",
+        "工伤", "职业病", "竞业限制纠纷", "劳动合同解除赔偿",
+        "违法解除劳动合同", "被迫离职", "降薪", "调岗",
+    ]
+    q_lower = question.lower()
+    return any(kw in q_lower for kw in high_risk_keywords)
+
+
+# ═══════════════════════════════════════════════
+# 问题复杂度评估算法（调用LLM）
+# ═══════════════════════════════════════════════
+
+def assess_question_complexity(question: str, user_id=None, db=None) -> dict:
+    """调用LLM评估HR问题的复杂度。
+
+    返回:
+        {
+            question_type: 'fact_lookup' | 'how_to' | 'scenario_design',
+            completeness_score: 0-100,
+            recommended_clarification_rounds: 0-4,
+            reasoning: str,
+        }
+
+    判定逻辑（由LLM执行）：
+      - fact_lookup（「年假怎么算」）：简单 → 0轮追问
+      - how_to（「怎么做一个薪酬调查」）：中等 → 完整度<50→2轮, 50-75→1轮, >75→0轮
+      - scenario_design（「帮我们公司设计一套绩效方案」）：复杂 → 完整度<50→4轮, 50-75→2-3轮, >75→1-2轮
+
+    失败时返回安全默认值。
+    """
+    prompt = (
+        '分析以下HR问题的复杂度。返回JSON:\n'
+        '{\n'
+        '  "question_type": "fact_lookup"|"how_to"|"scenario_design",\n'
+        '  "completeness_score": 0-100,\n'
+        '  "recommended_clarification_rounds": 0-4,\n'
+        '  "reasoning": "简短说明"\n'
+        '}\n\n'
+        '完整度评分标准（公司背景25分+现状描述25分+目标清晰25分+约束条件25分）：\n'
+        '- question_type判定：\n'
+        '  * fact_lookup（如「年假怎么算」）：简单事实查询 → 0轮追问\n'
+        '  * how_to（如「怎么做一个薪酬调查」）：中等操作指南 → 完整度<50→2轮, 50-75→1轮, >75→0轮\n'
+        '  * scenario_design（如「帮我们公司设计一套绩效方案」）：复杂方案设计 → 完整度<50→4轮, 50-75→2-3轮, >75→1-2轮\n\n'
+        f'用户问题：{question}'
+    )
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            module="smart_qa",
+            task_complexity="simple",
+            temperature=0.2,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict) and "question_type" in parsed:
+            return {
+                "question_type": parsed.get("question_type", "how_to"),
+                "completeness_score": int(parsed.get("completeness_score", 50)),
+                "recommended_clarification_rounds": int(
+                    parsed.get("recommended_clarification_rounds", 1)
+                ),
+                "reasoning": parsed.get("reasoning", ""),
+            }
+    except Exception as e:
+        logger.warning("问题复杂度评估LLM调用失败: %s", e)
+
+    # 安全默认值
+    logger.info("问题复杂度评估降级为默认值: how_to, completeness=50, rounds=1")
+    return {
+        "question_type": "how_to",
+        "completeness_score": 50,
+        "recommended_clarification_rounds": 1,
+        "reasoning": "LLM评估失败，使用默认值",
+    }
+
+
+# ═══════════════════════════════════════════════
+# 三源检索权重动态调整（weighted fusion）
+# ═══════════════════════════════════════════════
+
+def weighted_fusion(
+    results: list[dict],
+    user_doc_count: int = 0,
+    question: str = "",
+) -> list[dict]:
+    """三源检索权重动态调整。
+
+    基础权重: private=1.0, xiejun(public)=1.0, internet=0.5
+
+    动态调整规则：
+      1. 用户熟悉度：user_doc_count > 50 → private ×1.2；< 10 → xiejun ×1.3
+      2. 问题类型：
+         - 法律合规类 → xiejun ×1.5
+         - 公司个性化类 → private ×1.5
+         - 行业趋势类 → internet ×1.5
+      3. 时效性：问题含「最新」「2026」等 → internet ×2.0
+
+    Returns:
+        按调整后权重降序排列的结果列表（每个结果含 _weight 字段）。
+    """
+    # ── 基础权重 ──
+    w_private = 1.0
+    w_xiejun = 1.0
+    w_internet = 0.5
+
+    # ── 规则1: 用户熟悉度调整 ──
+    if user_doc_count > 50:
+        w_private *= 1.2
+    if user_doc_count < 10:
+        w_xiejun *= 1.3
+
+    # ── 规则2: 问题类型调整 ──
+    q_lower = question.lower() if question else ""
+
+    legal_keywords = [
+        "法律", "劳动法", "仲裁", "赔偿", "合规", "合同",
+        "解除", "裁员", "辞退", "工伤", "竞业",
+    ]
+    personal_keywords = [
+        "我们公司", "我们部门", "我们团队", "我们企业",
+        "我们厂", "我公司", "本单位",
+    ]
+    trend_keywords = [
+        "趋势", "最新", "2026", "2025", "行业", "市场",
+        "报告", "动态", "行情", "前沿",
+    ]
+
+    if any(kw in q_lower for kw in legal_keywords):
+        w_xiejun *= 1.5
+    if any(kw in q_lower for kw in personal_keywords):
+        w_private *= 1.5
+    if any(kw in q_lower for kw in trend_keywords):
+        w_internet *= 1.5
+
+    # ── 规则3: 时效性调整 ──
+    time_keywords = ["最新", "2026", "2025", "近期", "最近"]
+    if any(kw in q_lower for kw in time_keywords):
+        w_internet *= 2.0
+
+    # ── 分配权重并排序 ──
+    for r in results:
+        lt = r.get("library_type", "")
+        if lt == "private":
+            r["_weight"] = w_private
+        elif lt == "public":
+            r["_weight"] = w_xiejun
+        elif lt == "internet":
+            r["_weight"] = w_internet
+        else:
+            r["_weight"] = 1.0
+
+    results.sort(key=lambda x: x.get("_weight", 0), reverse=True)
+
+    logger.info(
+        "三源权重调整: private=%.2f xiejun=%.2f internet=%.2f "
+        "user_docs=%d results=%d",
+        w_private, w_xiejun, w_internet, user_doc_count, len(results),
+    )
+
+    return results

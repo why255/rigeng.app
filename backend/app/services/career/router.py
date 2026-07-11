@@ -1,7 +1,7 @@
 """高维求职服务 — 路由层（步骤20 / Wave 4）。
 
 五步法全流程 API端点：
-  一盘: POST /career/resume/upload, POST /career/star/extract
+  一盘: POST /career/resume/file (上传PDF/Word), POST /career/resume/upload, POST /career/star/extract
   二定: POST /career/strategy
   三投: POST /career/applications, GET /career/applications
   四面: POST /career/interview/prepare, POST /career/interview/record,
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -23,6 +23,7 @@ from ...shared.security import CurrentUser, get_current_user
 from . import service
 from .schemas import (
     ApplicationTrackingRequest,
+    CareerChatIn,
     CompanyIntelRequest,
     InterviewPrepRequest,
     InterviewRecordingLinkRequest,
@@ -50,6 +51,30 @@ def upload_resume(
     return ok(service.upload_resume(
         db, user.user_id, body.title, body.content, body.file_object_id,
     ))
+
+
+@router.post("/resume/file")
+async def upload_resume_file(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """上传简历文件（PDF/Word）并AI自动解析。
+
+    支持格式: .pdf, .doc, .docx
+    上传后自动：
+      1. 提取文本内容
+      2. AI解析简历结构（技能/经验/教育等）
+      3. 创建/更新五步法进度
+      4. 返回解析结果供前端展示
+    """
+    file_bytes = await file.read()
+    filename = file.filename or "resume.pdf"
+
+    data = service.process_resume_file(
+        db, user.user_id, file_bytes, filename,
+    )
+    return ok(data)
 
 
 @router.post("/star/extract")
@@ -229,6 +254,33 @@ def get_company_intel(
     return ok(service.get_company_intel(
         db, teacher_id, body.company_name, body.user_id,
     ))
+
+
+# ═══════════════════════════════════════════════
+# AI 高维求职对话 — 所有小耕输出由AI模型生成
+# ═══════════════════════════════════════════════
+
+@router.post("/chat")
+def career_chat(
+    body: CareerChatIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """高维求职 AI 对话 — 所有小耕回复由AI模型生成。
+
+    AI根据当前五步法步骤（yipan/erding/santou/simian/wuxuan）
+    和子进度，按算法引导用户完成求职全流程。
+    """
+    data = service.process_career_chat(
+        message=body.message,
+        step=body.step,
+        context=body.context,
+        sub_index=body.sub_index,
+        has_resume=body.has_resume,
+        user_id=user.user_id,
+        db=db,
+    )
+    return ok(data)
 
 
 # ═══════════════════════════════════════════════

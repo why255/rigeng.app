@@ -9,7 +9,7 @@ from ...shared.errors import APIError
 from ...shared.response import ok
 from ...shared.security import CurrentUser, get_current_user
 from . import service
-from .schemas import ArchiveIn, PlanCreateIn, PlanUpdateIn, PromoteIn, SyncIn, TaskAddIn, TaskMoveIn, TaskUpdateIn
+from .schemas import ArchiveIn, ExtractPlanIn, MorningChatIn, PlanCreateIn, PlanUpdateIn, PromoteIn, SyncIn, TaskAddIn, TaskMoveIn, TaskUpdateIn
 
 router = APIRouter(tags=["朝有规划"])
 
@@ -147,6 +147,43 @@ def promote_tasks(plan_id: str, body: PromoteIn,
     data = service.promote_tasks(
         db, plan_id=plan_id, user_id=user.user_id,
         task_ids=body.task_ids, source=body.source,
+    )
+    return ok(data)
+
+
+# ═══════ 朝有规划对话（AI意图识别+分流） ═══════
+
+@router.post("/plans/chat")
+def morning_chat(body: MorningChatIn,
+                 user: CurrentUser = Depends(get_current_user),
+                 db: Session = Depends(get_db)):
+    """朝有规划对话统一入口。
+
+    自动识别用户输入意图：
+    - plan(计划类) → 提取结构化计划项，回复「已提炼 X 项计划」
+    - chat(对话类) → 调用AI进行一般性对话回答
+    """
+    data = service.process_morning_chat(
+        message=body.message,
+        user_id=user.user_id,
+        db=db,
+    )
+    return ok(data)
+
+
+@router.post("/plans/extract")
+def extract_plan(body: ExtractPlanIn,
+                 user: CurrentUser = Depends(get_current_user),
+                 db: Session = Depends(get_db)):
+    """从对话上下文中提炼计划项。
+
+    将所有用户消息拼接后调用AI提取结构化计划项。
+    返回已提炼的计划列表和小耕确认回复。
+    """
+    data = service.extract_plan_from_context(
+        messages=body.messages,
+        user_id=user.user_id,
+        db=db,
     )
     return ok(data)
 

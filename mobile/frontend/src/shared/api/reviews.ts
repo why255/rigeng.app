@@ -189,3 +189,22 @@ export interface NonReviewRemindersResult {
 export function fetchNonReviewReminders(): Promise<NonReviewRemindersResult> {
   return apiGet<NonReviewRemindersResult>('/reviews/non-review-reminders');
 }
+
+// ── AI 复盘对话 ──
+
+export interface ReviewChatResult {
+  reply: string;
+  model_used: string;
+}
+
+/** 暮有复盘 AI 对话 — 所有小耕回复由AI模型生成 */
+export function reviewChat(data: {
+  message: string;
+  phase: 'collecting' | 'reviewing';
+  stage: ReviewStage;
+  context: Array<{ role: 'user' | 'assistant'; text: string }>;
+  info_rounds: number;
+  gentle_persistence_used: boolean;
+}): Promise<ReviewChatResult> {
+  return apiPost<ReviewChatResult>('/reviews/chat', data);
+}

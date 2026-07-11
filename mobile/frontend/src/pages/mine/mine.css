@@ -1,0 +1,713 @@
+/* ============================================================
+   "我的"板块子页面 (Mine) — 移动端 BEM 样式
+   对齐项目现有设计规范：kb-* / so-* / cm-* 页面模式
+   主色 #C03A39  背景 #F5F3EF  卡片 #FFFFFF  边框 #E8E0D6
+   mm-* BEM 前缀，无 Tailwind，无 emoji
+   ============================================================ */
+
+/* ── 页面布局 ── */
+.mm-page {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: #F5F3EF;
+  display: flex;
+  flex-direction: column;
+}
+
+.mm-page__header {
+  flex: none;
+  height: 48px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+  z-index: 10;
+}
+
+.mm-header-spacer {
+  width: 40px;
+}
+
+.mm-header-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+
+.mm-header-btn:active {
+  background: #f5f3ef;
+}
+
+.mm-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* ── 主滚动区 ── */
+.mm-main-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mm-main-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mm-main-padding {
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── 品牌标语 ── */
+.mm-hero {
+  text-align: center;
+  padding: 4px 0 8px;
+}
+
+.mm-hero__slogan {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.mm-hero__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #333;
+}
+
+/* ── 通用卡片 ── */
+.mm-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #E8E0D6;
+  box-shadow: 0 2px 8px rgba(192,58,57,0.04);
+}
+
+.mm-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mm-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.mm-card__icon--red {
+  background: rgba(192,58,57,0.1);
+  color: #C03A39;
+}
+
+.mm-card__icon--amber {
+  background: rgba(232,169,77,0.1);
+  color: #E8A94D;
+}
+
+.mm-card__icon--green {
+  background: rgba(107,142,35,0.1);
+  color: #6B8E23;
+}
+
+.mm-card__icon--blue {
+  background: rgba(96,125,139,0.1);
+  color: #607D8B;
+}
+
+.mm-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+}
+
+.mm-card__subtitle {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+/* ── 统计数字 ── */
+.mm-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.mm-stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #E8E0D6;
+}
+
+.mm-stat-item__num {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  color: #C03A39;
+}
+
+.mm-stat-item__label {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* ── 设置项列表 ── */
+.mm-settings-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #E8E0D6;
+  overflow: hidden;
+}
+
+.mm-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #F5F3EF;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mm-setting-row:last-child {
+  border-bottom: none;
+}
+
+.mm-setting-row:active {
+  background: #fafaf8;
+}
+
+.mm-setting-row__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mm-setting-row__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-size: 18px;
+}
+
+.mm-setting-row__icon--red {
+  background: rgba(192,58,57,0.1);
+  color: #C03A39;
+}
+
+.mm-setting-row__icon--blue {
+  background: rgba(96,125,139,0.1);
+  color: #607D8B;
+}
+
+.mm-setting-row__icon--green {
+  background: rgba(107,142,35,0.1);
+  color: #6B8E23;
+}
+
+.mm-setting-row__icon--amber {
+  background: rgba(232,169,77,0.1);
+  color: #E8A94D;
+}
+
+.mm-setting-row__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mm-setting-row__title {
+  font-size: 14px;
+  color: #333;
+}
+
+.mm-setting-row__desc {
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.mm-setting-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mm-setting-row__value {
+  font-size: 12px;
+  color: #999;
+}
+
+.mm-setting-row__arrow {
+  color: #BCAAA4;
+  font-size: 18px;
+}
+
+/* ── Toggle 开关 ── */
+.mm-toggle {
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+}
+
+.mm-toggle--on {
+  background: #C03A39;
+}
+
+.mm-toggle--off {
+  background: #D0D0D0;
+}
+
+.mm-toggle__knob {
+  position: absolute;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.mm-toggle--on .mm-toggle__knob {
+  left: 21px;
+}
+
+.mm-toggle--off .mm-toggle__knob {
+  left: 3px;
+}
+
+/* ── 区块标题 ── */
+.mm-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px;
+  margin-bottom: -8px;
+}
+
+/* ── 会员卡 ── */
+.mm-vip-card {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 18px;
+  padding: 24px 20px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.mm-vip-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -20px;
+  width: 140px;
+  height: 140px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 50%;
+}
+
+.mm-vip-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(232,169,77,0.2);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #E8A94D;
+  margin-bottom: 14px;
+}
+
+.mm-vip-card__plan {
+  font-size: 28px;
+  font-weight: 900;
+  margin-bottom: 2px;
+}
+
+.mm-vip-card__price {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 16px;
+}
+
+.mm-vip-card__expire {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.mm-vip-card__benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mm-vip-card__benefit {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.8);
+}
+
+/* ── 升级方案列表 ── */
+.mm-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mm-plan-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px;
+  border: 2px solid #E8E0D6;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.mm-plan-card--active {
+  border-color: #C03A39;
+  background: rgba(192,58,57,0.02);
+}
+
+.mm-plan-card--active::after {
+  content: '当前方案';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #C03A39;
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.mm-plan-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mm-plan-card__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.mm-plan-card__price {
+  font-size: 18px;
+  font-weight: 900;
+  color: #C03A39;
+}
+
+.mm-plan-card__period {
+  font-size: 11px;
+  font-weight: 400;
+  color: #999;
+}
+
+.mm-plan-card__desc {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 10px;
+}
+
+.mm-plan-card__features {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mm-plan-card__feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.mm-plan-card__check {
+  color: #6B8E23;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* ── 时间线 ── */
+.mm-timeline {
+  position: relative;
+  padding-left: 24px;
+}
+
+.mm-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: #E8E0D6;
+}
+
+.mm-timeline-item {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.mm-timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.mm-timeline-item__dot {
+  position: absolute;
+  left: -24px;
+  top: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #C03A39;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.mm-timeline-item__dot::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #C03A39;
+}
+
+.mm-timeline-item__date {
+  font-size: 11px;
+  font-weight: 700;
+  color: #C03A39;
+  margin-bottom: 4px;
+}
+
+.mm-timeline-item__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.mm-timeline-item__desc {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+/* ── 按钮 ── */
+.mm-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.2s;
+}
+
+.mm-btn:active {
+  transform: scale(0.97);
+}
+
+.mm-btn--primary {
+  background: #C03A39;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(192,58,57,0.2);
+}
+
+.mm-btn--secondary {
+  background: #fff;
+  color: #C03A39;
+  border: 1px solid #C03A39;
+}
+
+.mm-btn--danger {
+  background: #fff;
+  color: #C03A39;
+  border: 1px solid rgba(192,58,57,0.3);
+}
+
+/* ── 空状态 ── */
+.mm-empty {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.mm-empty__icon {
+  width: 64px;
+  height: 64px;
+  background: #f5f3ef;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #BCAAA4;
+  font-size: 28px;
+}
+
+.mm-empty__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.mm-empty__desc {
+  font-size: 12px;
+  color: #999;
+}
+
+/* ── 快捷操作按钮 ── */
+.mm-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mm-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 12px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #E8E0D6;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.mm-action-btn:active {
+  transform: scale(0.96);
+}
+
+.mm-action-btn__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.mm-action-btn__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* ── 关于信息行 ── */
+.mm-about-info {
+  padding: 16px;
+  text-align: center;
+}
+
+.mm-about-info__logo {
+  width: 56px;
+  height: 56px;
+  background: #d62828;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.mm-about-info__logo span {
+  color: #fff;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.mm-about-info__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.mm-about-info__version {
+  font-size: 12px;
+  color: #999;
+}
+
+/* ── 退出登录按钮 ── */
+.mm-logout-section {
+  padding-top: 8px;
+}
+
+/* ── 响应式 ── */
+@media (max-width: 420px) {
+  .mm-action-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mm-stat-row {
+    gap: 8px;
+  }
+}

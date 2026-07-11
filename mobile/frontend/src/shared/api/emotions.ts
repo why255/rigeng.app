@@ -110,6 +110,20 @@ export function fetchEmotionSuggest(userMessage: string): Promise<EmotionSuggest
   return apiPost<EmotionSuggest>('/emotion/suggest', { message: userMessage });
 }
 
+/** 情绪树洞 AI 对话 — 所有小耕回复由AI模型生成 */
+export interface EmotionChatResult {
+  reply: string;
+  model_used: string;
+}
+
+export function emotionChat(data: {
+  message: string;
+  context: Array<{ role: string; text: string }>;
+  elapsed_seconds: number;
+}): Promise<EmotionChatResult> {
+  return apiPost<EmotionChatResult>('/emotion/chat', data);
+}
+
 /** 本地生成小耕回复（离线兜底） */
 export function getLocalSuggest(_userMessage: string): EmotionSuggest {
   const idx = Math.floor(Math.random() * XIAOGENG_REPLIES.length);

@@ -83,6 +83,8 @@ export function SmartQaChat() {
   const transcriptRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pressStartYRef = useRef(0);
+  const askedRef = useRef(false);  // 防 StrictMode 双重调用
+  const askingRef = useRef(false); // 防 handleAsk 重入
 
   /* ── Init ── */
   useEffect(() => {
@@ -100,7 +102,8 @@ export function SmartQaChat() {
       },
     ]);
 
-    if (initialQuestion) {
+    if (initialQuestion && !askedRef.current) {
+      askedRef.current = true;
       handleAsk(initialQuestion);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +133,8 @@ export function SmartQaChat() {
      ═══════════════════════════════════════════════ */
 
   const handleAsk = async (q: string) => {
-    if (!q.trim() || isThinking) return;
+    if (!q.trim() || isThinking || askingRef.current) return;
+    askingRef.current = true;
     setIsThinking(true);
     setSuggestions([]);
     setHelpfulClicked(false);
@@ -203,6 +207,7 @@ export function SmartQaChat() {
       ]);
     } finally {
       setIsThinking(false);
+      askingRef.current = false;
     }
   };
 

@@ -105,18 +105,37 @@ export function startRecording(scene: SceneType): Promise<StartRecordingResponse
 }
 
 /** 上传音频流分片（实时） */
-export function uploadAudioChunk(recordingId: string, chunk: Blob): Promise<void> {
+export function uploadAudioChunk(recordingId: string, chunk: Blob, chunkIndex: number = 0): Promise<{ text: string; confidence: number; segment_index: number }> {
   const formData = new FormData()
   formData.append('chunk', chunk)
   formData.append('recordingId', recordingId)
-  // 使用 fetch 直接发送 FormData（不走 JSON 封装）
+  formData.append('chunk_index', String(chunkIndex))
+  const token = localStorage.getItem('rg_token') ?? ''
   return fetch('/api/v1/recordings/chunk', {
     method: 'POST',
     body: formData,
-    headers: { Authorization: `Bearer ${localStorage.getItem('rg_token') ?? ''}` },
-  }).then((res) => {
-    if (!res.ok) throw new Error(`上传失败 (${res.status})`)
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async (res) => {
+    if (!res.ok) {
+      const errBody = await res.text()
+      throw new Error(`上传失败 (${res.status}): ${errBody}`)
+    }
+    const json = await res.json()
+    return json.data as { text: string; confidence: number; segment_index: number }
   })
+}
+
+/** 获取腾讯云实时语音识别 WebSocket 授权 */
+export interface AsrAuthResponse {
+  ws_url: string
+  voice_id: string
+  appid: string
+  engine_model_type: string
+  expired: number
+}
+
+export function fetchAsrAuth(recordingId: string): Promise<AsrAuthResponse> {
+  return apiPost<AsrAuthResponse>(`/recordings/${recordingId}/asr-auth`)
 }
 
 /** 停止录音 */

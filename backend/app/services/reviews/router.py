@@ -8,7 +8,7 @@ from ...shared.database import get_db
 from ...shared.response import ok
 from ...shared.security import CurrentUser, get_current_user
 from . import service
-from .schemas import DiagnoseIn, SaveMessageIn, SopIn
+from .schemas import DiagnoseIn, ReviewChatIn, SaveMessageIn, SopIn
 
 router = APIRouter(tags=["暮有复盘"])
 
@@ -56,6 +56,7 @@ def save_sop(body: SopIn, user: CurrentUser = Depends(get_current_user),
     data = service.save_sop(
         db, user_id=user.user_id, title=body.title, steps=steps_in,
         key_phrases=body.key_phrases, precautions=body.precautions,
+        reflection_text=body.reflection_text,
     )
     return ok(data)
 
@@ -93,6 +94,31 @@ def weekly_progress(user: CurrentUser = Depends(get_current_user), db: Session =
 def history(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """获取历史复盘列表（P4 历史页）。"""
     data = service.get_review_history(db, user_id=user.user_id)
+    return ok(data)
+
+
+# ═══════ 暮有复盘 AI 对话 ═══════
+
+@router.post("/reviews/chat")
+def review_chat(body: ReviewChatIn,
+                user: CurrentUser = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    """暮有复盘 AI 对话 — 所有小耕回复由AI模型生成。
+
+    AI根据当前阶段(collecting/五阶段)和对话上下文，
+    按照复盘的算法引导用户完成复盘。
+    前端负责阶段流转控制，后端负责内容生成。
+    """
+    data = service.process_review_chat(
+        message=body.message,
+        phase=body.phase,
+        stage=body.stage,
+        context=body.context,
+        info_rounds=body.info_rounds,
+        gentle_persistence_used=body.gentle_persistence_used,
+        user_id=user.user_id,
+        db=db,
+    )
     return ok(data)
 
 

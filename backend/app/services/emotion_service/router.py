@@ -20,6 +20,7 @@ from ...shared.security import CurrentUser, get_current_user
 from . import service
 from .schemas import (
     CrisisTriggerRequest,
+    EmotionChatIn,
     EmotionMessageLogRequest,
     EmotionSuggestRequest,
     GrowthRecordCreateRequest,
@@ -67,6 +68,30 @@ def get_emotion_suggest(
 ):
     """获取小耕共情回复。基于用户消息生成温柔的陪伴性回应。"""
     return ok(service.generate_suggest(body.message))
+
+
+# ═══════ 情绪树洞 AI 对话 ═══════
+
+@router.post("/emotion/chat")
+def emotion_chat(
+    body: EmotionChatIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """情绪树洞 AI 对话 — 所有小耕回复由AI模型生成。
+
+    AI根据对话历史和当前消息生成温暖共情的回复，
+    遵循三不原则（不评判/不否定/不急给建议）。
+    支持空消息（初始问候）。
+    """
+    data = service.process_emotion_chat(
+        message=body.message,
+        context=body.context,
+        elapsed_seconds=body.elapsed_seconds,
+        user_id=user.user_id,
+        db=db,
+    )
+    return ok(data)
 
 
 # ═══════════════════════════════════════════════

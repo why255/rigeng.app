@@ -4,14 +4,25 @@
 """
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger("plans")
 
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
+from ...engines.persona import build_persona_prompt
+from ...engines.llm_orchestrator import llm_generate_with_orchestration
+from ...engines.security_compliance import desensitize
+from ...engines.data_foundation import emit_event
 from ...shared import errors
 from ...shared.database import utcnow
+from ...shared.llm_utils import safe_extract_json
 from ...shared.models.plan import Plan, PlanTask, QUADRANTS, TASK_SOURCES, TASK_STATUSES
+
+logger = logging.getLogger("plans_service")
 
 
 def _enum_guard(value, allowed, field_name):
@@ -449,3 +460,516 @@ def get_smart_record_sync(db: Session, *, user_id: str) -> dict:
         )
     )
     return {"tasks": [_task_out(t) for t in tasks]}
+
+
+# ═══════ AI 算法引擎（日耕模块算法设计文档 V2.0） ═══════
+
+_MODULE_KEY = "morning_plan"
+_MODULE_TEMPERATURE = 0.3
+
+
+def get_carryover_context(db: Session, *, user_id: str) -> dict:
+    """收集昨日未完成任务和智能记录行动项，作为 LLM 上下文。
+
+    Returns:
+        {"yesterday_tasks": [...], "smart_record_items": [...], "context_text": str}
+    """
+    # 昨日未完成任务
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    y_start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
+    y_end = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
+
+    y_plan = db.scalar(
+        select(Plan).where(
+            and_(
+                Plan.user_id == user_id,
+                Plan.created_at >= y_start,
+                Plan.created_at <= y_end,
+                Plan.status != "archived",
+            )
+        ).order_by(Plan.created_at.desc())
+    )
+
+    yesterday_tasks: list[dict] = []
+    if y_plan:
+        y_tasks = list(
+            db.scalars(
+                select(PlanTask).where(
+                    and_(
+                        PlanTask.plan_id == y_plan.id,
+                        PlanTask.deleted_at.is_(None),
+                        PlanTask.status == "pending",
+                    )
+                ).order_by(PlanTask.sort_order)
+            )
+        )
+        yesterday_tasks = [_task_out(t) for t in y_tasks]
+
+    # 智能记录同步的待处理行动项
+    sr_tasks = list(
+        db.scalars(
+            select(PlanTask).where(
+                and_(
+                    PlanTask.user_id == user_id,
+                    PlanTask.source == "smart_record_sync",
+                    PlanTask.status == "pending",
+                    PlanTask.deleted_at.is_(None),
+                )
+            ).order_by(PlanTask.created_at.desc()).limit(10)
+        )
+    )
+    smart_record_items = [_task_out(t) for t in sr_tasks]
+
+    # 构建 LLM 可用的上下文文本
+    parts: list[str] = []
+    if yesterday_tasks:
+        parts.append("昨日未完成事项：")
+        for t in yesterday_tasks:
+            parts.append(f"  - {t['title']}")
+    if smart_record_items:
+        parts.append("智能记录待处理行动项：")
+        for t in smart_record_items:
+            parts.append(f"  - {t['title']}")
+
+    context_text = "\n".join(parts) if parts else ""
+
+    return {
+        "yesterday_tasks": yesterday_tasks,
+        "smart_record_items": smart_record_items,
+        "context_text": context_text,
+    }
+
+
+def parse_plan_from_speech(transcript: str, user_id: str | None = None, db=None) -> dict:
+    """口语化描述解析算法。
+
+    从用户自由语音转写文本中提取结构化计划事项。
+
+    Args:
+        transcript: 用户口语化描述的转写文本
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        {"items": [...], "raw_response": str}
+        每个 item: {title, time_hint, type, is_continuation}
+    """
+    try:
+        # 安全脱敏
+        safe_transcript = desensitize(transcript, module=_MODULE_KEY)
+
+        # 获取延续上下文
+        carryover_text = ""
+        if db and user_id:
+            try:
+                ctx = get_carryover_context(db, user_id=user_id)
+                if ctx["context_text"]:
+                    carryover_text = f"\n\n用户昨日/之前的未完成事项参考：\n{ctx['context_text']}"
+            except Exception:
+                pass  # 上下文获取失败不阻塞主流程
+
+        system_prompt = build_persona_prompt(module=_MODULE_KEY)
+
+        prompt = (
+            "从以下口语化描述中提取所有计划事项。每项必须含:\n"
+            " 1. 事项名称(简洁，≤15字)\n"
+            " 2. 时间意图(上午/下午/全天/无明确时间)\n"
+            " 3. 类型标签(会议/方案/面试/汇报/日常/学习/沟通/其他)\n"
+            " 4. 是否为延续事项(提到'上次/之前/继续/还没/昨天/上回'→标记为延续)\n"
+            f" 返回JSON数组 [{{title, time_hint, type, is_continuation}}]\n\n"
+            f"用户描述:\n{safe_transcript}"
+            f"{carryover_text}"
+        )
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module=_MODULE_KEY,
+            task_complexity="medium",
+            temperature=_MODULE_TEMPERATURE,
+            user_id=user_id,
+            db=db,
+        )
+
+        parsed = safe_extract_json(result.get("content", ""), default=[])
+        if not isinstance(parsed, list):
+            parsed = []
+
+        items = []
+        for item in parsed:
+            if isinstance(item, dict):
+                items.append({
+                    "title": str(item.get("title", "")).strip()[:15],
+                    "time_hint": item.get("time_hint", "无明确时间"),
+                    "type": item.get("type", "日常"),
+                    "is_continuation": bool(item.get("is_continuation", False)),
+                })
+
+        # 事件发射
+        if user_id:
+            emit_event(user_id, "plans", "plan.created",
+                       {"task_count": len(items), "source": "speech_parsing"})
+
+        return {"items": items, "raw_response": result.get("content", "")}
+
+    except Exception as e:
+        logger.warning("口语化描述解析失败: %s", e)
+        return {"items": [], "raw_response": ""}
+
+
+def classify_quadrant(items: list[dict], user_id: str | None = None, db=None) -> list[dict]:
+    """四象限自动分类算法。
+
+    为每件事项标注艾森豪威尔四象限并给出分类理由。
+
+    Args:
+        items: 待分类事项列表，每项至少含 {title}
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        增强后的事项列表，每项新增 quadrant 和 reason 字段
+    """
+    if not items:
+        return items
+
+    try:
+        # 格式化待分类事项
+        items_text = "\n".join(
+            f"{i + 1}. {item.get('title', '')}"
+            f"{' (延续事项)' if item.get('is_continuation') else ''}"
+            for i, item in enumerate(items)
+        )
+
+        system_prompt = build_persona_prompt(module=_MODULE_KEY)
+
+        prompt = (
+            "为以下每件事标注艾森豪威尔四象限，并给出分类理由:\n"
+            " 重要紧急(urgent_important): 影响核心目标+Ddl在24h内\n"
+            " 重要不紧急(not_urgent_important): 影响核心目标+可规划\n"
+            " 紧急不重要(urgent_not_important): 不直接影响核心目标+必须今天处理\n"
+            " 不重要不紧急(not_urgent_not_important): 既不重要也不紧急"
+            "(标注后温和建议是否可以不做/委派)\n\n"
+            "已知用户身份为HR经理，她的核心目标通常包括:\n"
+            " - 完成招聘KPI / 薪酬体系优化 / 绩效体系落地 / 员工关系维护 / 向上汇报\n\n"
+            f"待分类事项:\n{items_text}\n\n"
+            "返回JSON数组 [{index: 序号, quadrant: 象限key, reason: 分类理由(≤30字)}]"
+        )
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module=_MODULE_KEY,
+            task_complexity="medium",
+            temperature=_MODULE_TEMPERATURE,
+            user_id=user_id,
+            db=db,
+        )
+
+        parsed = safe_extract_json(result.get("content", ""), default=[])
+        if not isinstance(parsed, list):
+            parsed = []
+
+        # 将分类结果回填到原 items
+        quadrant_map: dict[int, dict] = {}
+        for entry in parsed:
+            if isinstance(entry, dict):
+                idx = entry.get("index", -1)
+                if isinstance(idx, int) and 1 <= idx <= len(items):
+                    quadrant_map[idx - 1] = {
+                        "quadrant": entry.get("quadrant", "not_urgent_important"),
+                        "reason": str(entry.get("reason", ""))[:30],
+                    }
+
+        enriched = []
+        for i, item in enumerate(items):
+            enriched_item = dict(item)
+            if i in quadrant_map:
+                enriched_item["quadrant"] = quadrant_map[i]["quadrant"]
+                enriched_item["reason"] = quadrant_map[i]["reason"]
+            else:
+                enriched_item["quadrant"] = "not_urgent_important"
+                enriched_item["reason"] = "自动默认分类"
+            enriched.append(enriched_item)
+
+        return enriched
+
+    except Exception as e:
+        logger.warning("四象限分类失败，使用默认分类: %s", e)
+        # 安全降级：全部归入"重要不紧急"
+        return [
+            {**item, "quadrant": "not_urgent_important", "reason": "分类服务暂不可用"}
+            for item in items
+        ]
+
+
+# ═══════ 朝有规划对话 — 意图识别与分流 ═══════
+
+_INTENT_PROMPT = """判断用户输入属于哪种类型，返回JSON: {"intent": "plan"|"chat", "confidence": 0.0-1.0}
+
+【plan 计划类】用户在描述今天要做的事、待办事项、任务安排、工作计划。包括:
+- 明确列出要做的事情（「今天要面试三个人」「下午开会」「把方案写完」）
+- 延续之前的事项（「上次那个绩效的事还没弄完」）
+- 包含时间安排的事项（「上午...下午...」）
+- 日常工作任务描述
+
+【chat 对话类】用户在提问、闲聊、咨询，不是在做计划。包括:
+- 提问（「绩效面谈怎么做」「面试要注意什么」）
+- 咨询建议（「帮我分析一下...」「这个方案怎么样」）
+- 情绪表达（「今天好累」「不想上班」）
+- 闲聊（「你好」「谢谢」）
+- 任何没有明确描述待办事项的消息
+
+只返回JSON，不要添加其他文字。"""
+
+
+def classify_message_intent(message: str, user_id: str | None = None, db=None) -> dict:
+    """识别用户输入意图：plan(计划类) 或 chat(对话类)。
+
+    使用轻量级LLM快速分类，失败时用规则兜底。
+
+    Returns:
+        {"intent": "plan"|"chat", "confidence": float}
+    """
+    # 规则快速预判（减少LLM调用成本）
+    quick_plan_keywords = ["今天", "上午", "下午", "要", "需要", "得", "打算", "准备",
+                          "先", "然后", "再", "还有", "另外", "对了"]
+    quick_chat_keywords = ["怎么", "如何", "什么", "为什么", "帮我", "分析", "建议",
+                          "推荐", "介绍", "解释", "你好", "谢谢", "累", "烦"]
+
+    plan_hints = sum(1 for kw in quick_plan_keywords if kw in message)
+    chat_hints = sum(1 for kw in quick_chat_keywords if kw in message)
+
+    # 规则强信号 → 直接判定，不走LLM
+    if plan_hints >= 3 and chat_hints == 0:
+        return {"intent": "plan", "confidence": 0.85, "method": "rule"}
+    if chat_hints >= 3 and plan_hints == 0:
+        return {"intent": "chat", "confidence": 0.85, "method": "rule"}
+
+    # 调用LLM精细分类
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=f"用户消息：{message}\n\n{_INTENT_PROMPT}",
+            system_prompt=build_persona_prompt(module="morning_plan"),
+            module="morning_plan",
+            task_complexity="simple",
+            temperature=0.1,  # 分类任务需要确定性
+            user_id=user_id,
+            db=db,
+        )
+        parsed = safe_extract_json(result.get("content", ""), default={})
+        if isinstance(parsed, dict) and "intent" in parsed:
+            return {
+                "intent": parsed.get("intent", "chat"),
+                "confidence": float(parsed.get("confidence", 0.7)),
+                "method": "llm",
+            }
+    except Exception as e:
+        logger.warning("意图分类LLM调用失败: %s", e)
+
+    # 兜底：按规则判定
+    if plan_hints > chat_hints:
+        return {"intent": "plan", "confidence": 0.6, "method": "rule_fallback"}
+    return {"intent": "chat", "confidence": 0.6, "method": "rule_fallback"}
+
+
+def process_morning_chat(message: str, user_id: str, db) -> dict:
+    """朝有规划对话 — 纯AI聊天模式。
+
+    用户说任何话都直接走模型回复，小耕以温暖专业的HR闺蜜姐姐身份回应。
+    不做意图分流、不提取计划项。
+
+    Returns:
+        {"reply": str, "model_used": str}
+    """
+    try:
+        safe_message = desensitize(message, module="morning_plan")
+        system_prompt = build_persona_prompt(module="morning_plan")
+
+        prompt = (
+            f"用户说：{safe_message}\n\n"
+            f"请用小耕的身份（温暖专业的HR闺蜜姐姐）自然回复。\n"
+            f"要求：\n"
+            f"- 称呼用户「姐」，自称「小耕」\n"
+            f"- 语气温暖亲切，自然随和\n"
+            f"- 如果用户说的是今天的待办事项/计划类内容，帮ta梳理提炼\n"
+            f"- 如果用户问的是HR专业问题，给出专业、实用的建议\n"
+            f"- 如果用户表达情绪，先共情再回应\n"
+            f"- 回复2-4句话为宜，不要太长"
+        )
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="morning_plan",
+            task_complexity="medium",
+            temperature=0.7,
+            user_id=user_id,
+            db=db,
+        )
+
+        reply = result.get("content", "").strip()
+        if not reply:
+            reply = "姐，您说的小耕都听到了～有什么我可以帮您的吗？"
+
+        return {
+            "reply": reply,
+            "model_used": result.get("model_used", ""),
+        }
+
+    except Exception as e:
+        logger.warning("朝有规划对话LLM失败: %s", e)
+        return {
+            "reply": "姐，小耕正在努力思考中，稍等一下哦～",
+            "model_used": "",
+        }
+
+
+def extract_plan_from_context(messages: list[dict], user_id: str, db) -> dict:
+    """从对话上下文中提炼计划项。
+
+    将所有用户消息拼接后调用 parse_plan_from_speech 提取计划。
+    也会带上小耕的回复作为上下文，帮助AI更准确理解。
+
+    Returns:
+        {"reply": str, "plan_items": [...], "item_count": int}
+    """
+    if not messages:
+        return {"reply": "姐，还没有聊天内容呢，先说点什么吧~", "plan_items": [], "item_count": 0}
+
+    # 拼接所有用户消息为一段文本
+    user_texts = []
+    for m in messages:
+        role = m.get("role", "")
+        text = (m.get("text") or m.get("content") or "").strip()
+        if text:
+            if role == "user":
+                user_texts.append(text)
+            elif role == "assistant":
+                # 小耕的回复作为轻量上下文参考
+                user_texts.append(f"(小耕之前回复: {text[:80]})")
+
+    combined = "。".join(user_texts)
+
+    # 调用已有的口语化解析
+    parsed = parse_plan_from_speech(combined, user_id=user_id, db=db)
+    items = parsed.get("items", [])
+
+    if items:
+        count = len(items)
+        items_preview = "、".join(item["title"] for item in items[:8])
+        if count > 8:
+            items_preview += f"等{count}项"
+        reply = f"姐，小耕根据咱们刚才聊的内容，梳理出了 {count} 项计划：{items_preview}。要确认这些计划吗？"
+    else:
+        reply = "姐，小耕仔细看了一遍咱们的聊天，好像还没有明确要做的事呢。再跟我说说今天打算做什么？"
+
+    emit_event(user_id, "plans", "plan.created",
+               {"task_count": len(items), "source": "extract_from_context"})
+
+    return {
+        "reply": reply,
+        "plan_items": items,
+        "item_count": len(items),
+    }
+
+
+class GentleFollowUp:
+    """三层温柔追问引擎。
+
+    在计划创建/确认流程中，根据上下文温和引导用户补充和优化计划。
+
+    Usage:
+        gf = GentleFollowUp()
+        if gf.should_ask("完整性确认", context):
+            prompt = gf.get_prompt("完整性确认", context)
+    """
+
+    def __init__(self):
+        self.layers = [
+            {
+                "name": "完整性确认",
+                "trigger": "always",
+                "prompt": "姐，还有别的吗？比如昨天没弄完的事、今天临时加的任务？",
+            },
+            {
+                "name": "优先级澄清",
+                "trigger": "items_count >= 4",
+                "prompt": "姐，这里面哪个最急？小耕帮您排个序~",
+            },
+            {
+                "name": "工作量校验",
+                "trigger": "items_count >= 6 or total_hours > 8",
+                "prompt": "姐，今天安排了{count}件事，估计要{hours}个小时。会不会太满？要不要把不急的先往后挪？",
+            },
+        ]
+
+    def should_ask(self, layer_name: str, context: dict | None = None) -> bool:
+        """判断当前上下文是否应该触发该层追问。
+
+        Args:
+            layer_name: 追问层名称
+            context: {items_count, total_hours, user_preference, skip_follow_up}
+
+        Returns:
+            是否应该追问
+        """
+        context = context or {}
+
+        if context.get("skip_follow_up"):
+            return False
+
+        layer = next((l for l in self.layers if l["name"] == layer_name), None)
+        if not layer:
+            return False
+
+        trigger = layer["trigger"]
+        if trigger == "always":
+            return True
+
+        # 简易 trigger 评估
+        items_count = context.get("items_count", 0)
+        total_hours = context.get("total_hours", 0)
+
+        try:
+            # 替换变量后评估布尔表达式
+            expr = trigger.replace("items_count", str(items_count)).replace("total_hours", str(total_hours))
+            # 安全评估：仅限比较运算符
+            return bool(eval(expr, {"__builtins__": {}}, {}))
+        except Exception:
+            return True  # 解析失败时默认追问
+
+    def get_prompt(self, layer_name: str, context: dict | None = None) -> str:
+        """获取追问提示文案。
+
+        Args:
+            layer_name: 追问层名称
+            context: {items_count, total_hours}
+
+        Returns:
+            追问提示字符串
+        """
+        context = context or {}
+        layer = next((l for l in self.layers if l["name"] == layer_name), None)
+        if not layer:
+            return ""
+
+        prompt = layer["prompt"]
+        prompt = prompt.replace("{count}", str(context.get("items_count", 0)))
+        prompt = prompt.replace("{hours}", str(context.get("total_hours", 0)))
+        return prompt
+
+    def get_all_prompts(self, context: dict | None = None) -> list[dict]:
+        """获取当前上下文下所有应触发的追问提示。
+
+        Returns:
+            [{name, prompt}] 列表
+        """
+        results = []
+        for layer in self.layers:
+            if self.should_ask(layer["name"], context):
+                results.append({
+                    "name": layer["name"],
+                    "prompt": self.get_prompt(layer["name"], context),
+                })
+        return results

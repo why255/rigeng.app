@@ -94,6 +94,10 @@ class SkillCrystal(TimestampMixin, Base):
     source_step: Mapped[int | None] = mapped_column(Integer)  # 来源五步法步骤 (1-5)
     tags_json: Mapped[list | None] = mapped_column(PortableJSON())
 
+    # AI 生成元信息
+    model_used: Mapped[str | None] = mapped_column(String(64))
+    generation_cost_tokens: Mapped[int | None] = mapped_column(Integer, default=0)
+
     # 归档状态
     archived_to_kb: Mapped[bool] = mapped_column(Boolean, default=False)
     kb_doc_id: Mapped[str | None] = mapped_column(GUID, ForeignKey("document.id"), nullable=True)
@@ -147,6 +151,10 @@ class InterviewPrep(TimestampMixin, Base):
 
     company: Mapped[str | None] = mapped_column(String(255))
     position: Mapped[str | None] = mapped_column(String(255))
+
+    # AI 生成元信息
+    model_used: Mapped[str | None] = mapped_column(String(64))
+    generation_cost_tokens: Mapped[int | None] = mapped_column(Integer, default=0)
 
 
 class InterviewReview(TimestampMixin, Base):
@@ -211,6 +219,10 @@ class ProbationPlan(TimestampMixin, Base):
 
     company: Mapped[str | None] = mapped_column(String(255))
     position: Mapped[str | None] = mapped_column(String(255))
+
+    # AI 生成元信息
+    model_used: Mapped[str | None] = mapped_column(String(64))
+    generation_cost_tokens: Mapped[int | None] = mapped_column(Integer, default=0)
 
 
 class CompanyIntel(TimestampMixin, Base):

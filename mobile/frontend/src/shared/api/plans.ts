@@ -213,3 +213,37 @@ export function conversePlan(
     context_meta: contextMeta,
   });
 }
+
+// ── 朝有规划对话（纯AI聊天）──
+
+export interface MorningChatResult {
+  reply: string;
+  model_used: string;
+}
+
+/** 朝有规划对话 — 所有消息直接走模型回复 */
+export function morningChat(message: string): Promise<MorningChatResult> {
+  return apiPost<MorningChatResult>('/plans/chat', { message });
+}
+
+// ── 提炼计划 ──
+
+export interface PlanItemOut {
+  title: string;
+  time_hint: string;
+  type: string;
+  is_continuation: boolean;
+  quadrant?: string | null;
+  reason?: string | null;
+}
+
+export interface ExtractPlanResult {
+  reply: string;
+  plan_items: PlanItemOut[];
+  item_count: number;
+}
+
+/** 从对话上下文中提炼计划项 */
+export function extractPlan(messages: { role: string; text: string }[]): Promise<ExtractPlanResult> {
+  return apiPost<ExtractPlanResult>('/plans/extract', { messages });
+}

@@ -4,6 +4,9 @@
  * 对齐 m3p2-mobile.html 设计，布局模仿 MorningPlan chat.tsx 模式。
  * 暗色模式默认开启；关闭后各颜色与朝有规划 chat 页一致。
  *
+ * V2.0: 所有小耕输出内容由AI模型生成，AI按情绪树洞算法进行共情回复，
+ * 遵循三不原则（不评判/不否定/不急给建议）。
+ *
  * 使用 mh-* BEM 类名（来自 mood-haven.css）+ 内联 style。无 Tailwind CSS。
  * 图标使用 @iconify/react <Icon> 组件。返回按钮使用 navigate(-1)。
  * 语音模式存储于 localStorage.mh_voiceMode，暗色模式存储于 localStorage.mh_darkMode。
@@ -15,20 +18,9 @@ import * as emotionsApi from '@/shared/api/emotions';
 import type { ChatMessage } from '@/shared/api/emotions';
 import './mood-haven.css';
 
-const SAFETY_PROMISE = '姐，您来了。这里只有您和我，您说的每一句话小耕都会保守秘密。想说什么就说吧，小耕在听。';
-
 const CRISIS_KEYWORDS = ['想死', '不想活', '自杀', '结束生命', '活不下去', '没有意义', '消失', '绝望'];
 
-const FALLBACK_REPLIES = [
-  '嗯，小耕在听。这确实不容易，姐，您辛苦了。',
-  '还有呢？这件事让您最难过的点是什么？',
-  '小耕感受到您的心情了，想哭就哭出来吧，没关系的。',
-  '谢谢您愿意跟我说这些，小耕会一直陪着您。',
-  '嗯，小耕在听。这件事确实让人难受。',
-  '还有更多想说的吗？小耕在听。',
-  '收到，小耕会一直陪着您。',
-  '说出来会好一些，小耕在这里。',
-];
+const AI_FALLBACK = '姐，小耕正在努力思考中，稍等一下哦～';
 
 function getTime() {
   const now = new Date();
@@ -56,14 +48,12 @@ export function MoodHavenChat() {
   // ── 暗色模式 ──
   const [isDark, setIsDark] = useState(readDarkMode);
 
-  // 监听 storage 变化（设置页可能修改）
   useEffect(() => {
     const onStorage = () => setIsDark(readDarkMode());
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // 应用 data-theme
   useEffect(() => {
     if (isDark) {
       document.documentElement.setAttribute('data-theme', 'dark');
@@ -71,7 +61,6 @@ export function MoodHavenChat() {
       document.documentElement.removeAttribute('data-theme');
     }
     return () => {
-      // 离开时恢复默认暗色
       if (readDarkMode()) {
         document.documentElement.setAttribute('data-theme', 'dark');
       } else {
@@ -83,8 +72,6 @@ export function MoodHavenChat() {
   // ── 色板 ──
   const P = isDark ? {
     pageBg: '#1a1a1a',
-    headerBg: '#1a1a1a',
-    headerBorder: 'rgba(255,255,255,0.05)',
     headerBtn: '#B0B0B0',
     title: '#E0E0E0',
     timer: '#FFCC80',
@@ -97,16 +84,11 @@ export function MoodHavenChat() {
     thinkingColor: '#B0B0B0',
     thinkingSpinnerBorder: '#3a3a5c',
     thinkingSpinnerTop: '#FFCC80',
-    inputAreaBg: '#1a1a1a',
-    inputAreaBorder: 'rgba(255,255,255,0.05)',
     endSessionBg: '#FFCC80',
     endSessionColor: '#2C1810',
     endSessionShadow: '0 2px 8px rgba(255,204,128,0.25)',
-    endSessionActiveBg: '#e8b85a',
     micBg: '#FFCC80',
     micColor: '#2C1810',
-    micActiveBg: '#e8b85a',
-    voiceBg: '#1a1a1a',
     voiceBtnGradient: 'linear-gradient(135deg, #FFCC80 0%, #E8A94D 100%)',
     voiceBtnShadow: '0 10px 25px rgba(255,204,128,0.3)',
     voicePulseBg: 'rgba(255,204,128,0.2)',
@@ -114,15 +96,10 @@ export function MoodHavenChat() {
     cancelBg: '#333',
     cancelColor: '#FFCC80',
     cancelBorder: '#555',
-    cancelActiveBg: '#FFCC80',
-    cancelActiveColor: '#2C1810',
     voiceHintColor: '#888',
     micIconColor: '#2C1810',
-    micSendIcon: '#2C1810',
   } : {
     pageBg: '#F5F3EF',
-    headerBg: '#fff',
-    headerBorder: '#f0f0f0',
     headerBtn: '#666',
     title: '#333',
     timer: '#C03A39',
@@ -135,16 +112,11 @@ export function MoodHavenChat() {
     thinkingColor: '#999',
     thinkingSpinnerBorder: '#E8E0D6',
     thinkingSpinnerTop: '#C03A39',
-    inputAreaBg: '#F5F3EF',
-    inputAreaBorder: 'rgba(0,0,0,0.04)',
     endSessionBg: '#C03A39',
     endSessionColor: '#fff',
     endSessionShadow: '0 2px 8px rgba(192,58,57,0.25)',
-    endSessionActiveBg: '#A0302E',
     micBg: '#C03A39',
     micColor: '#fff',
-    micActiveBg: '#A0302E',
-    voiceBg: '#F5F3EF',
     voiceBtnGradient: '#C03A39',
     voiceBtnShadow: '0 10px 25px rgba(192,58,57,0.4)',
     voicePulseBg: 'rgba(192,58,57,0.2)',
@@ -152,17 +124,13 @@ export function MoodHavenChat() {
     cancelBg: '#fff',
     cancelColor: '#C03A39',
     cancelBorder: '#F1D5C7',
-    cancelActiveBg: '#C03A39',
-    cancelActiveColor: '#fff',
     voiceHintColor: '#999',
     micIconColor: '#fff',
-    micSendIcon: '#fff',
   };
 
   // ── 聊天状态 ──
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', text: SAFETY_PROMISE, time: getTime() },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => []);
+  const [initializing, setInitializing] = useState(true);
   const [draft, setDraft] = useState('');
   const [thinking, setThinking] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -185,6 +153,36 @@ export function MoodHavenChat() {
   const [showCrisis, setShowCrisis] = useState(false);
   const [showTimeAlert, setShowTimeAlert] = useState(false);
 
+  /* ═══════════════════════════════════════════════
+     Init — AI 生成初始问候
+     ═══════════════════════════════════════════════ */
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      try {
+        const result = await emotionsApi.emotionChat({
+          message: '',
+          context: [],
+          elapsed_seconds: 0,
+        });
+        if (!cancelled) {
+          setMessages([{ role: 'assistant', text: result.reply, time: getTime() }]);
+        }
+      } catch {
+        if (!cancelled) {
+          setMessages([{
+            role: 'assistant', text: '姐，您来了。这里只有您和我，您说的每一句话小耕都会保守秘密。想说什么就说吧，小耕在听。', time: getTime(),
+          }]);
+        }
+      } finally {
+        if (!cancelled) setInitializing(false);
+      }
+    }
+    init();
+    return () => { cancelled = true; };
+  }, []);
+
   // ── 计时器 ──
   useEffect(() => {
     if (!timerRunning) return;
@@ -201,7 +199,7 @@ export function MoodHavenChat() {
     return () => clearInterval(interval);
   }, [timerRunning]);
 
-  // ── 滚动到底部 ──
+  // ── 滚动 ──
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -217,40 +215,67 @@ export function MoodHavenChat() {
     }
   }, []);
 
-  // ── 发送消息 ──
+  /* ═══════════════════════════════════════════════
+     Core: send message → AI 生成回复
+     ═══════════════════════════════════════════════ */
+
   const addUserMessage = useCallback(async (text: string) => {
     const time = getTime();
     const userMsg: ChatMessage = { role: 'user', text, time };
-    setMessages(prev => [...prev, userMsg]);
+
+    // 构建对话上下文（包含新用户消息）
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
     setThinking(true);
 
+    // 后台记录消息
     try {
       await emotionsApi.logEmotionMessage({ role: 'user', text, duration_seconds: elapsedSeconds });
-    } catch { /* 静默失败 */ }
+    } catch { /* 静默 */ }
 
+    // 危机检测
     checkCrisis(text);
 
-    let replyText: string;
+    // ── 调用 AI 生成回复 ──
     try {
-      const suggest = await emotionsApi.fetchEmotionSuggest(text);
-      replyText = suggest.text;
+      const context = currentMessages
+        .filter(m => m.text)
+        .map(m => ({ role: m.role, text: m.text }));
+
+      const result = await emotionsApi.emotionChat({
+        message: text,
+        context,
+        elapsed_seconds: elapsedSeconds,
+      });
+
+      const assistantMsg: ChatMessage = { role: 'assistant', text: result.reply, time: getTime() };
+      setMessages(prev => [...prev, assistantMsg]);
+
+      // 后台记录 AI 回复
+      try {
+        await emotionsApi.logEmotionMessage({ role: 'assistant', text: result.reply, duration_seconds: elapsedSeconds });
+      } catch { /* 静默 */ }
     } catch {
-      const local = emotionsApi.getLocalSuggest(text);
-      replyText = local.text || FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
+      // AI 失败 → 回退到 suggest API
+      let replyText: string;
+      try {
+        const suggest = await emotionsApi.fetchEmotionSuggest(text);
+        replyText = suggest.text;
+      } catch {
+        replyText = '嗯，小耕在听。姐，说出来会好受一些。';
+      }
+
+      const fallbackMsg: ChatMessage = { role: 'assistant', text: replyText, time: getTime() };
+      setMessages(prev => [...prev, fallbackMsg]);
+
+      try {
+        await emotionsApi.logEmotionMessage({ role: 'assistant', text: replyText, duration_seconds: elapsedSeconds });
+      } catch { /* 静默 */ }
     }
-
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
-
-    const assistantMsg: ChatMessage = { role: 'assistant', text: replyText, time: getTime() };
-    setMessages(prev => [...prev, assistantMsg]);
-
-    try {
-      await emotionsApi.logEmotionMessage({ role: 'assistant', text: replyText, duration_seconds: elapsedSeconds });
-    } catch { /* 静默失败 */ }
 
     setThinking(false);
     scrollToBottom();
-  }, [elapsedSeconds, checkCrisis, scrollToBottom]);
+  }, [messages, elapsedSeconds, checkCrisis, scrollToBottom]);
 
   // ── 键盘发送 ──
   const handleSend = useCallback(async () => {
@@ -260,9 +285,9 @@ export function MoodHavenChat() {
     await addUserMessage(text);
   }, [draft, thinking, addUserMessage]);
 
-  // ═══════════════════════════════════════════════
-  //  语音识别
-  // ═══════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════
+     Voice Recording
+     ═══════════════════════════════════════════════ */
 
   const startTimer = () => { setRecordingTime(0); timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000); };
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
@@ -276,7 +301,6 @@ export function MoodHavenChat() {
     rec.lang = 'zh-CN';
     rec.continuous = true;
     rec.interimResults = true;
-
     rec.onresult = (event: any) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
@@ -284,20 +308,15 @@ export function MoodHavenChat() {
         }
       }
     };
-
     rec.onerror = (e: any) => {
       console.warn('语音错误', e.error);
       if (e.error === 'not-allowed') alert('请允许麦克风权限');
       setIsRecording(false);
       setVoiceUIActive(false);
     };
-
     rec.onend = () => {
-      if (isRecording) {
-        try { rec.start(); } catch (_) { /* ignore */ }
-      }
+      if (isRecording) { try { rec.start(); } catch (_) { /* ignore */ } }
     };
-
     recognitionRef.current = rec;
     return rec;
   }, [isRecording]);
@@ -307,11 +326,7 @@ export function MoodHavenChat() {
     if (!rec) return;
     transcriptRef.current = '';
     setCancelZone(false);
-    try {
-      rec.start();
-      setIsRecording(true);
-      startTimer();
-    } catch (_) { /* ignore */ }
+    try { rec.start(); setIsRecording(true); startTimer(); } catch (_) { /* ignore */ }
   }, [initRecognition]);
 
   const stopRecording = useCallback((cancelled: boolean = false) => {
@@ -319,24 +334,18 @@ export function MoodHavenChat() {
     setIsRecording(false);
     stopTimer();
     try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
-
     setVoiceUIActive(false);
-
     if (cancelled || cancelZone || transcriptRef.current.trim() === '') {
       transcriptRef.current = '';
       return;
     }
-
     const userMsg = transcriptRef.current.trim();
     transcriptRef.current = '';
     addUserMessage(userMsg);
   }, [isRecording, cancelZone, addUserMessage]);
 
-  const cancelRecording = useCallback(() => {
-    stopRecording(true);
-  }, [stopRecording]);
+  const cancelRecording = useCallback(() => { stopRecording(true); }, [stopRecording]);
 
-  // ── 大语音按钮事件 ──
   const handleLargeVoiceStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     if (isRecording) return;
@@ -361,22 +370,16 @@ export function MoodHavenChat() {
     }
   }, [voiceMode, isRecording, startRecording, stopRecording]);
 
-  // ── 话筒/发送合并按钮 ──
   const hasText = draft.trim().length > 0;
 
   const handleMicSendClick = useCallback(() => {
-    if (hasText) {
-      handleSend();
-    } else if (!isRecording) {
-      setVoiceUIActive(true);
-    }
+    if (hasText) { handleSend(); }
+    else if (!isRecording) { setVoiceUIActive(true); }
   }, [hasText, isRecording, handleSend]);
 
-  // ── 设置按钮：跳转设置页 ──
   const handleSettingsClick = useCallback(() => {
     if (isRecording) {
-      setIsRecording(false);
-      stopTimer();
+      setIsRecording(false); stopTimer();
       try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
       setVoiceUIActive(false);
       transcriptRef.current = '';
@@ -387,8 +390,7 @@ export function MoodHavenChat() {
   // ── 结束倾诉 ──
   const handleEndChat = useCallback(async () => {
     if (isRecording) {
-      setIsRecording(false);
-      stopTimer();
+      setIsRecording(false); stopTimer();
       try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
       setVoiceUIActive(false);
     }
@@ -396,17 +398,16 @@ export function MoodHavenChat() {
 
     try {
       await emotionsApi.createGrowthRecord({
-        chat_messages: messages.map(m => ({ role: m.role, text: m.text })),
+        chat_messages: messages.filter(m => m.text).map(m => ({ role: m.role, text: m.text })),
         emotion_score: 0,
         courage_value: Math.min(100, Math.round(Math.min(elapsedSeconds / 60, 60) * 1.2 + 30)),
         duration_minutes: Math.round(elapsedSeconds / 60),
       });
-    } catch { /* 静默失败 */ }
+    } catch { /* 静默 */ }
 
     navigate('/m/mood-haven/growth');
   }, [isRecording, messages, elapsedSeconds, navigate]);
 
-  // ── 页面卸载清理 ──
   useEffect(() => {
     return () => {
       if (recognitionRef.current && isRecording) {
@@ -416,13 +417,13 @@ export function MoodHavenChat() {
     };
   }, [isRecording]);
 
-  // ═══════════════════════════════════════════════
-  //  JSX — 模仿 MorningPlan chat.tsx 布局
-  // ═══════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════
+     Render
+     ═══════════════════════════════════════════════ */
 
   return (
     <div className="mh-mobile-page">
-      {/* ═══ Header（48px 固定顶栏） ═══ */}
+      {/* Header */}
       <header className="mh-mobile-page__header">
         <button className="mh-header-btn" onClick={() => navigate(-1)}>
           <Icon icon="mingcute:arrow-left-fill" style={{ fontSize: '24px', color: P.headerBtn }} />
@@ -438,9 +439,8 @@ export function MoodHavenChat() {
         </button>
       </header>
 
-      {/* ═══ Chat Scroll Area ═══ */}
+      {/* Chat Area */}
       <main className="mh-main-scroll" ref={scrollRef}>
-        {/* 品牌标语 */}
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <div style={{ color: P.brand, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
             日耕朝夕，耕愈工作，耕暖生活
@@ -448,32 +448,34 @@ export function MoodHavenChat() {
           <span style={{
             fontSize: 10, color: P.brand, background: P.brandTagBg,
             padding: '2px 8px', borderRadius: 10,
-          }}>
-            心事有处说，烦恼变智慧
-          </span>
+          }}>心事有处说，烦恼变智慧</span>
         </div>
+
+        {/* 初始加载 */}
+        {initializing && messages.length === 0 && (
+          <div className="mh-thinking" style={{ color: P.thinkingColor }}>
+            <div className="mh-thinking__spinner" style={{
+              borderColor: P.thinkingSpinnerBorder, borderTopColor: P.thinkingSpinnerTop,
+            }} />
+            <span>小耕正在准备...</span>
+          </div>
+        )}
 
         {/* Messages */}
         {messages.map((m, i) => (
           <div key={i} className={`mh-bubble-row ${m.role === 'user' ? 'mh-bubble-row--user' : ''}`} style={{ marginBottom: 12 }}>
             <div
               className={`mh-bubble mh-bubble--${m.role} mh-message-enter`}
-              style={{
-                background: m.role === 'assistant' ? P.bubbleAssistant : P.bubbleUser,
-                color: P.bubbleText,
-              }}
-            >
-              {m.text}
-            </div>
+              style={{ background: m.role === 'assistant' ? P.bubbleAssistant : P.bubbleUser, color: P.bubbleText }}
+            >{m.text}</div>
           </div>
         ))}
 
-        {/* 思考动画 */}
+        {/* Thinking */}
         {thinking && (
           <div className="mh-thinking" style={{ color: P.thinkingColor }}>
             <div className="mh-thinking__spinner" style={{
-              borderColor: P.thinkingSpinnerBorder,
-              borderTopColor: P.thinkingSpinnerTop,
+              borderColor: P.thinkingSpinnerBorder, borderTopColor: P.thinkingSpinnerTop,
             }} />
             <span>小耕在聆听…</span>
           </div>
@@ -482,9 +484,8 @@ export function MoodHavenChat() {
         <div style={{ height: 12 }} />
       </main>
 
-      {/* ═══ Input Area ═══ */}
+      {/* Input Area */}
       <div className="mh-chat-input-area">
-        {/* 大语音覆盖层 */}
         {voiceUIActive && (
           <div className="mh-voice-zone">
             <div className="mh-voice-hint" style={{ color: P.voiceHintColor }}>
@@ -494,9 +495,7 @@ export function MoodHavenChat() {
               {isRecording && (
                 <button
                   className={`mh-voice-cancel-pill ${cancelZone ? 'mh-voice-cancel-pill--active' : ''}`}
-                  style={cancelZone ? {} : {
-                    background: P.cancelBg, color: P.cancelColor, borderColor: P.cancelBorder,
-                  }}
+                  style={cancelZone ? {} : { background: P.cancelBg, color: P.cancelColor, borderColor: P.cancelBorder }}
                   onClick={(e) => { e.stopPropagation(); cancelRecording(); }}
                 >取消</button>
               )}
@@ -517,7 +516,6 @@ export function MoodHavenChat() {
           </div>
         )}
 
-        {/* 输入行 + 结束倾诉按钮 */}
         {!voiceUIActive && (
           <>
             <button
@@ -551,7 +549,7 @@ export function MoodHavenChat() {
         )}
       </div>
 
-      {/* ═══ 危机干预弹窗 ═══ */}
+      {/* 危机干预弹窗 */}
       {showCrisis && (
         <div className="mh-modal-mask" onClick={() => setShowCrisis(false)}>
           <div className="mh-modal" onClick={(e) => e.stopPropagation()}>
@@ -559,21 +557,15 @@ export function MoodHavenChat() {
               <Icon icon="mingcute:phone-line" width={32} color="#C03A39" />
             </div>
             <h3 className="mh-modal__title">姐，小耕注意到您可能不太好</h3>
-            <p className="mh-modal__desc">
-              如果需要，可以拨打这个号码，有人帮您：
-            </p>
+            <p className="mh-modal__desc">如果需要，可以拨打这个号码，有人帮您：</p>
             <div className="mh-modal__hotline">400-161-9995</div>
-            <p style={{ fontSize: 12, color: '#888', marginBottom: 20 }}>
-              全国 24 小时心理危机干预热线
-            </p>
-            <button className="mh-modal__close" onClick={() => setShowCrisis(false)}>
-              我知道了
-            </button>
+            <p style={{ fontSize: 12, color: '#888', marginBottom: 20 }}>全国 24 小时心理危机干预热线</p>
+            <button className="mh-modal__close" onClick={() => setShowCrisis(false)}>我知道了</button>
           </div>
         </div>
       )}
 
-      {/* ═══ 30分钟温柔提醒 ═══ */}
+      {/* 30分钟温柔提醒 */}
       {showTimeAlert && (
         <div className="mh-time-alert" onClick={() => setShowTimeAlert(false)}>
           <span className="mh-time-alert__icon">

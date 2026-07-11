@@ -52,13 +52,22 @@ import { CareerMentorErding } from '@/pages/career-mentor/CareerMentorErding'
 import { CareerMentorSantou } from '@/pages/career-mentor/CareerMentorSantou'
 import { CareerMentorSimian } from '@/pages/career-mentor/CareerMentorSimian'
 
-// Board 4 - 我的智库
-import { KnowledgeHub } from '@/pages/board4/KnowledgeHub'
-import { KnowledgeList } from '@/pages/board4/KnowledgeList'
-import { KnowledgeExport } from '@/pages/board4/KnowledgeExport'
-import { KnowledgeAudit } from '@/pages/board4/KnowledgeAudit'
-import { AnalyticsHome } from '@/pages/board4/AnalyticsHome'
-import { DataAnalytics } from '@/pages/board4/DataAnalytics'
+// Board 3 - 我的智库 (知识库)
+import { KnowledgeBaseLayout } from '@/pages/knowledge-base/KnowledgeBaseLayout'
+import { KnowledgeBaseHome } from '@/pages/knowledge-base/home'
+import { KnowledgeBaseList } from '@/pages/knowledge-base/list'
+import { KnowledgeBaseExport } from '@/pages/knowledge-base/export'
+import { KnowledgeBaseAudit } from '@/pages/knowledge-base/audit'
+import { KnowledgeBasePublic } from '@/pages/knowledge-base/public'
+
+// Board 3 - 我的智库 (数据分析)
+import { AnalyticsHome } from '@/pages/data-analytics/home'
+
+// Mine section pages
+import { MembershipPage } from '@/pages/mine/MembershipPage'
+import { JourneyPage } from '@/pages/mine/JourneyPage'
+import { ModelSelectPage } from '@/pages/mine/ModelSelectPage'
+import { SettingsPage } from '@/pages/mine/SettingsPage'
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
@@ -149,15 +158,23 @@ export function MobileApp() {
                     <Route path="/m/career-mentor/santou" element={<CareerMentorSantou />} />
                     <Route path="/m/career-mentor/simian" element={<CareerMentorSimian />} />
 
-                    {/* 知识库 */}
-                    <Route path="/m/knowledge-base" element={<KnowledgeHub />} />
-                    <Route path="/m/knowledge-base/list" element={<KnowledgeList />} />
-                    <Route path="/m/knowledge-base/export/:id" element={<KnowledgeExport />} />
-                    <Route path="/m/knowledge-base/audit" element={<KnowledgeAudit />} />
+                    {/* 公私智库 — Layout + 嵌套路由 */}
+                    <Route path="/m/knowledge-base" element={<KnowledgeBaseLayout />}>
+                      <Route index element={<KnowledgeBaseHome />} />
+                      <Route path="list" element={<KnowledgeBaseList />} />
+                      <Route path="export/:id" element={<KnowledgeBaseExport />} />
+                      <Route path="audit" element={<KnowledgeBaseAudit />} />
+                      <Route path="public" element={<KnowledgeBasePublic />} />
+                    </Route>
 
-                    {/* 数据分析 */}
+                    {/* 数据分析 — 占位页面，待原型就绪后完整实现 */}
                     <Route path="/m/data-analytics" element={<AnalyticsHome />} />
-                    <Route path="/m/data-analytics/insight" element={<DataAnalytics />} />
+
+                    {/* "我的"板块子页面 */}
+                    <Route path="/m/membership" element={<MembershipPage />} />
+                    <Route path="/m/journey" element={<JourneyPage />} />
+                    <Route path="/m/model-select" element={<ModelSelectPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
 
                     {/* 管理后台 */}
                     <Route path="/admin" element={<AdminDashboard />} />

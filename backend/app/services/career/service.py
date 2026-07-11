@@ -30,12 +30,14 @@ from sqlalchemy.orm import Session
 from ...shared.config import settings
 from ...shared.database import new_uuid, utcnow
 from ...shared.errors import APIError, E_FILE_NOT_FOUND, E_PARAM_FORMAT
+from ...shared.llm_utils import safe_extract_json, LLMParsingError
 from ...shared.models.career import (
     CareerProgress, STARExtraction, SkillCrystal, JobApplication,
     InterviewPrep, InterviewReview, OfferComparison, ProbationPlan,
     CompanyIntel,
 )
 from ...shared.models.user import TeacherProfile
+from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS
 
 logger = logging.getLogger("career")
 
@@ -98,6 +100,229 @@ def _check_completeness(situation: str, task: str, action: str, result: str) -> 
 # ═══════════════════════════════════════════════
 # 一盘：简历盘点与重构
 # ═══════════════════════════════════════════════
+
+def _extract_text_from_file(file_bytes: bytes, filename: str) -> tuple[str, str]:
+    """从 PDF / Word 文件中提取文本。
+
+    Returns:
+        (text, error_message) — 成功时 error_message 为空字符串
+    """
+    ext = (filename or "").lower().split(".")[-1] if "." in (filename or "") else "pdf"
+
+    if ext in ("docx", "doc"):
+        try:
+            # python-docx: 读取 .docx
+            import io
+            from docx import Document as DocxDocument
+            doc = DocxDocument(io.BytesIO(file_bytes))
+            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            if text:
+                return text, ""
+        except ImportError:
+            return "", "服务器未安装python-docx库，无法解析Word文件，请上传PDF格式"
+        except Exception as e:
+            logger.warning("Word解析失败: %s", e)
+            # 降级：尝试当纯文本读
+            try:
+                return file_bytes.decode("utf-8", errors="replace"), ""
+            except Exception:
+                return "", f"无法解析Word文件: {e}"
+
+    if ext == "pdf":
+        try:
+            # PyPDF2: 读取 PDF
+            import io
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(file_bytes))
+            parts = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    parts.append(t)
+            text = "\n".join(parts)
+            if text.strip():
+                return text, ""
+            # PyPDF2 提取为空，尝试 pdfplumber
+        except ImportError:
+            logger.warning("PyPDF2未安装，尝试pdfplumber")
+        except Exception as e:
+            logger.warning("PyPDF2解析失败: %s，尝试pdfplumber", e)
+
+        # pdfplumber 作为备选
+        try:
+            import io
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                parts = [p.extract_text() or "" for p in pdf.pages]
+            text = "\n".join(p for p in parts if p.strip())
+            if text.strip():
+                return text, ""
+        except ImportError:
+            return "", "服务器未安装PDF解析库(PyPDF2/pdfplumber)，请联系管理员"
+        except Exception as e:
+            logger.exception("PDF解析失败")
+
+        return "", "无法从PDF中提取文本，请确保PDF包含可选中的文字（非扫描件）"
+
+    return "", f"不支持的文件格式: .{ext}，请上传PDF或Word文件"
+
+
+def _ai_parse_resume(resume_text: str, user_id: str | None = None,
+                     db: Session | None = None) -> dict:
+    """调用AI引擎解析简历，提取结构化信息。
+
+    Returns:
+        {"summary": str, "key_skills": [...], "key_experiences": [...],
+         "education": str, "years_of_experience": str, "industries": [...],
+         "strengths": [...], "suggested_positions": [...]}
+    """
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+
+    # 截断过长的简历（前4000字足够AI分析）
+    text = resume_text[:4000]
+
+    prompt = (
+        f"请分析以下简历，提取结构化信息。返回JSON（只返回JSON，不要markdown标记）：\n\n"
+        f"{{\n"
+        f'  "summary": "100字以内的候选人综合概述",\n'
+        f'  "key_skills": ["技能1", "技能2", ...],  // 最多8个\n'
+        f'  "key_experiences": ["公司/职位/时间段 - 一句话概述", ...],  // 最多5条\n'
+        f'  "education": "最高学历+学校+专业",\n'
+        f'  "years_of_experience": "X年",\n'
+        f'  "industries": ["行业1", "行业2"],\n'
+        f'  "strengths": ["亮点1", "亮点2"],  // 候选人最突出的3个优势\n'
+        f'  "suggested_positions": ["建议岗位1", "建议岗位2"],  // 基于简历推断的适合岗位\n'
+        f"}}\n\n"
+        f"简历内容：\n{text}"
+    )
+
+    system_prompt = build_persona_prompt(module="career")
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="career",
+            task_complexity="medium",
+            temperature=0.3,
+            max_tokens=1024,
+            user_id=user_id,
+            db=db,
+        )
+        parsed = safe_extract_json(result.get("content", ""))
+        if isinstance(parsed, dict) and parsed:
+            return parsed
+    except Exception as e:
+        logger.warning("AI简历解析失败: %s", e)
+
+    # 降级：基于关键词的简单提取
+    skills = []
+    skill_keywords = [
+        "Python", "Java", "JavaScript", "React", "Vue", "SQL", "Docker",
+        "项目管理", "团队管理", "数据分析", "人力资源", "财务",
+        "市场营销", "产品设计", "运营", "招聘", "培训",
+        "C++", "Go", "Rust", "Kubernetes", "AWS", "Azure",
+        "沟通", "领导力", "战略规划", "Python", "Excel",
+    ]
+    for kw in skill_keywords:
+        if kw.lower() in resume_text.lower():
+            skills.append(kw)
+
+    return {
+        "summary": f"简历包含{len(resume_text)}字，涵盖{len(skills)}项可识别技能",
+        "key_skills": skills[:8],
+        "key_experiences": ["（请查看原文）"],
+        "education": "（请查看原文）",
+        "years_of_experience": "（请查看原文）",
+        "industries": [],
+        "strengths": [],
+        "suggested_positions": [],
+    }
+
+
+def process_resume_file(db: Session, user_id: str, file_bytes: bytes,
+                        filename: str) -> dict[str, Any]:
+    """处理上传的简历文件：提取文本 → AI解析 → 保存进度。
+
+    Returns:
+        {"career_progress_id": str, "filename": str, "text_preview": str,
+         "text_length": int, "parsed_summary": str, "key_skills": [...],
+         "key_experiences": [...], "suggested_next": str}
+    """
+    # 1. 提取文本
+    resume_text, error = _extract_text_from_file(file_bytes, filename)
+    if error:
+        raise APIError(20001, f"简历文件解析失败: {error}", 400)
+
+    if not resume_text or len(resume_text.strip()) < 20:
+        raise APIError(20001, "简历文件内容过短或无法识别文字。请确保上传的是文字版PDF而非扫描件图片", 400)
+
+    # 2. AI解析
+    ai_result = _ai_parse_resume(resume_text, user_id=user_id, db=db)
+
+    # 3. 保存到五步法进度
+    summary = ai_result.get("summary", "")
+    skills = ai_result.get("key_skills", [])
+    experiences = ai_result.get("key_experiences", [])
+
+    # 创建/更新进度
+    existing = db.query(CareerProgress).filter(
+        CareerProgress.user_id == user_id,
+        CareerProgress.deleted_at.is_(None),
+    ).first()
+
+    if existing:
+        existing.current_step = 1
+        existing.status = "active"
+        existing.step_data_json = existing.step_data_json or {}
+        step_data = dict(existing.step_data_json)
+        step_data["resume_title"] = filename
+        step_data["resume_content"] = resume_text[:3000]
+        step_data["resume_parsed"] = ai_result
+        step_data["file_object_id"] = None
+        existing.step_data_json = step_data
+        db.commit()
+        db.refresh(existing)
+        progress = existing
+        logger.info("简历文件已更新: user_id=%s filename=%s", user_id, filename)
+    else:
+        progress = CareerProgress(
+            user_id=user_id,
+            current_step=1,
+            status="active",
+            step_data_json={
+                "resume_title": filename,
+                "resume_content": resume_text[:3000],
+                "resume_parsed": ai_result,
+            },
+        )
+        db.add(progress)
+        db.commit()
+        db.refresh(progress)
+        logger.info("简历文件已上传: user_id=%s progress_id=%s", user_id, progress.id)
+
+    # 发射事件
+    from ...engines.data_foundation import emit_event
+    try:
+        emit_event(user_id, "career", "resume.uploaded", {
+            "filename": filename,
+            "text_length": len(resume_text),
+            "skills_count": len(skills),
+        }, db=db)
+    except Exception:
+        pass
+
+    return {
+        "career_progress_id": progress.id,
+        "filename": filename,
+        "text_preview": resume_text[:500],
+        "text_length": len(resume_text),
+        "parsed_summary": summary,
+        "key_skills": skills,
+        "key_experiences": experiences,
+        "suggested_next": "erding",  # 下一步：二定·求职策略
+    }
 
 def upload_resume(db: Session, user_id: str, title: str, content: str,
                   file_object_id: str | None = None) -> dict[str, Any]:
@@ -241,30 +466,44 @@ def generate_skill_crystal(db: Session, user_id: str,
     if existing_crystal:
         return _crystal_to_dict(existing_crystal)
 
-    # MVP: 基于模板生成（生产环境调用LLM）
+    # 提取STAR四要素
     situation = extraction.situation or ""
     task = extraction.task or ""
     action_text = extraction.action or ""
     result_text = extraction.result or ""
+    quantified_value = extraction.quantified_value or ""
 
-    # 从action中提取核心技能关键词
-    action_keywords = _extract_skill_keywords(action_text)
-
-    what = f"核心能力：{', '.join(action_keywords) if action_keywords else '综合执行能力'}"
-    how = f"基于情境「{situation[:80]}...」完成的任务「{task[:80]}...」\n执行步骤：\n{action_text[:500]}"
-    notes = (f"关键注意事项：\n"
-             f"1. 充分了解情境背景，明确任务边界\n"
-             f"2. 拆解复杂任务为可执行步骤\n"
-             f"3. 在执行过程中持续收集反馈并调整\n"
-             f"4. 量化成果，用数据说话")
-
-    outcome = f"成果：{result_text[:300] if result_text else '待补充'}"
-    reusable_sop = (f"可复用SOP——{task[:60]}：\n"
-                    f"S1 情境分析：理解背景、识别关键干系人\n"
-                    f"S2 目标拆解：将大目标分解为可量化的小任务\n"
-                    f"S3 行动执行：{action_text[:200]}\n"
-                    f"S4 结果验证：对标目标，收集量化数据\n"
-                    f"S5 复盘归档：总结关键学习点，更新知识库")
+    # 尝试AI生成技能晶体
+    try:
+        ai_result = _generate_ai_skill_crystal(
+            situation, task, action_text, result_text, quantified_value,
+            user_id=user_id, db=db,
+        )
+        if ai_result:
+            what, how, notes, outcome, reusable_sop, tags, model_used, tokens = ai_result
+        else:
+            raise ValueError("AI生成技能晶体返回空")
+    except Exception as e:
+        logger.warning("AI技能晶体生成失败，降级到模板: %s", e)
+        # 降级：基于模板生成
+        action_keywords = _extract_skill_keywords(action_text)
+        what = f"核心能力：{', '.join(action_keywords) if action_keywords else '综合执行能力'}"
+        how = f"基于情境「{situation[:80]}...」完成的任务「{task[:80]}...」\n执行步骤：\n{action_text[:500]}"
+        notes = (f"关键注意事项：\n"
+                 f"1. 充分了解情境背景，明确任务边界\n"
+                 f"2. 拆解复杂任务为可执行步骤\n"
+                 f"3. 在执行过程中持续收集反馈并调整\n"
+                 f"4. 量化成果，用数据说话")
+        outcome = f"成果：{result_text[:300] if result_text else '待补充'}"
+        reusable_sop = (f"可复用SOP——{task[:60]}：\n"
+                        f"S1 情境分析：理解背景、识别关键干系人\n"
+                        f"S2 目标拆解：将大目标分解为可量化的小任务\n"
+                        f"S3 行动执行：{action_text[:200]}\n"
+                        f"S4 结果验证：对标目标，收集量化数据\n"
+                        f"S5 复盘归档：总结关键学习点，更新知识库")
+        tags = action_keywords
+        model_used = "mock_mvp_fallback"
+        tokens = 0
 
     crystal = SkillCrystal(
         user_id=user_id,
@@ -275,14 +514,16 @@ def generate_skill_crystal(db: Session, user_id: str,
         outcome=outcome,
         reusable_sop=reusable_sop,
         source_step=1,
-        tags_json=action_keywords,
+        tags_json=tags,
+        model_used=model_used,
+        generation_cost_tokens=tokens,
     )
     db.add(crystal)
     db.commit()
     db.refresh(crystal)
 
-    logger.info("技能晶体已生成: crystal_id=%s star_extraction=%s tags=%s",
-                crystal.id, star_extraction_id, action_keywords)
+    logger.info("技能晶体已生成: crystal_id=%s star_extraction=%s tags=%s model=%s",
+                crystal.id, star_extraction_id, tags, model_used)
 
     return _crystal_to_dict(crystal)
 
@@ -310,6 +551,65 @@ def _extract_skill_keywords(text: str) -> list[str]:
             else:
                 keywords.append(category)
     return keywords[:5] if keywords else ["综合执行能力"]
+
+
+def _generate_ai_skill_crystal(
+    situation: str, task: str, action_text: str, result_text: str,
+    quantified_value: str = "", user_id: str | None = None, db: Session | None = None,
+) -> tuple | None:
+    """调用AI引擎将STAR四要素升级为技能晶体五要素。
+
+    Returns:
+        (what, how, notes, outcome, reusable_sop, tags, model_used, tokens) or None
+    """
+    output_schema = (
+        '{\n'
+        '  "what": "做什么——一句话概括核心能力(30字以内)",\n'
+        '  "how": "怎么做——具体执行步骤和方法(150-300字)",\n'
+        '  "notes": ["注意事项1", "注意事项2", "注意事项3", "注意事项4"],\n'
+        '  "outcome": "成果——量化成果描述(100字以内)",\n'
+        '  "reusable_sop": "可复用SOP——5步标准化流程(S1-S5)",\n'
+        '  "tags": ["技能标签1", "技能标签2"]\n'
+        '}'
+    )
+    prompt = (
+        f'请将以下STAR四要素升级为结构化的"技能晶体"：\n\n'
+        f'S-情境：{situation[:500]}\n'
+        f'T-任务：{task[:500]}\n'
+        f'A-行动：{action_text[:800]}\n'
+        f'R-结果：{result_text[:500]}\n'
+        f'量化成果：{quantified_value or "无"}\n'
+    )
+
+    result = llm_generate(
+        prompt=prompt,
+        system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+        user_id=user_id,
+        db=db,
+        temperature=0.6,
+    )
+    parsed = safe_extract_json(result["content"])
+    if not parsed or not isinstance(parsed, dict):
+        return None
+
+    notes_list = parsed.get("notes", [])
+    if isinstance(notes_list, list):
+        notes_text = "关键注意事项：\n" + "\n".join(
+            f"{i+1}. {n}" for i, n in enumerate(notes_list[:5])
+        )
+    else:
+        notes_text = str(notes_list)
+
+    return (
+        parsed.get("what", ""),
+        parsed.get("how", ""),
+        notes_text,
+        parsed.get("outcome", ""),
+        parsed.get("reusable_sop", ""),
+        parsed.get("tags", []),
+        result["model_used"],
+        result["usage"]["total_tokens"],
+    )
 
 
 def _crystal_to_dict(c: SkillCrystal) -> dict[str, Any]:
@@ -446,36 +746,48 @@ def create_job_strategy(db: Session, user_id: str, career_progress_id: str,
     if not progress:
         raise APIError(20001, "五步法进度不存在", 404)
 
-    # MVP: 基于模板生成策略（生产环境调用LLM）
-    resource_inventory = {
-        "core_skills": _deduce_skills_from_resume(progress.step_data_json or {}),
-        "experiences": "从简历STAR萃取中提取的关键项目经验",
-        "network": "LinkedIn联系人 / 前同事内推 / 行业社群",
-        "certifications": "行业认证、培训证书等",
-        "portfolio": "GitHub / 作品集 / 技术博客",
-        "references": "至少2-3位可提供推荐的前领导/同事",
-    }
-
-    plan = {
-        "weekly_goals": [
-            {"week": 1, "goal": "完成简历定版+STAR萃取+技能晶体",
-             "tasks": ["定版简历", "完成至少3个STAR萃取", "生成技能晶体"]},
-            {"week": 2, "goal": "明确目标行业和岗位·开始投递",
-             "tasks": ["研究目标公司", "完成5-10次投递", "维护投递追踪表"]},
-            {"week": 3, "goal": "持续投递·准备面试",
-             "tasks": ["每日投递3-5家", "整理面试常见问题", "模拟面试练习"]},
-            {"week": 4, "goal": "面试执行与复盘",
-             "tasks": ["参加面试并录音", "面试后24h内完成复盘", "根据反馈调整策略"]},
-        ],
-        "channel_strategy": {
-            "Boss直聘": "适合互联网/技术岗位，活跃度高",
-            "猎聘": "适合中高端岗位，猎头资源丰富",
-            "内推": "成功率最高的渠道，优先利用",
-            "官网投递": "适合大厂，流程规范但周期长",
-            "脉脉/LinkedIn": "适合建立行业人脉，获取隐藏机会",
-        },
-        "timeline": f"建议周期：4-8周密集求职期 → 2-4周面试期 → 1-2周Offer决策期",
-    }
+    # 尝试AI生成策略
+    try:
+        ai_strategy = _generate_ai_job_strategy(
+            progress.step_data_json or {},
+            target_industry, target_position, salary_range, location, preferences,
+            user_id=user_id, db=db,
+        )
+        if ai_strategy:
+            resource_inventory, plan = ai_strategy
+        else:
+            raise ValueError("AI策略生成返回空")
+    except Exception as e:
+        logger.warning("AI求职策略生成失败，降级到模板: %s", e)
+        # 降级模板
+        resource_inventory = {
+            "core_skills": _deduce_skills_from_resume(progress.step_data_json or {}),
+            "experiences": "从简历STAR萃取中提取的关键项目经验",
+            "network": "LinkedIn联系人 / 前同事内推 / 行业社群",
+            "certifications": "行业认证、培训证书等",
+            "portfolio": "GitHub / 作品集 / 技术博客",
+            "references": "至少2-3位可提供推荐的前领导/同事",
+        }
+        plan = {
+            "weekly_goals": [
+                {"week": 1, "goal": "完成简历定版+STAR萃取+技能晶体",
+                 "tasks": ["定版简历", "完成至少3个STAR萃取", "生成技能晶体"]},
+                {"week": 2, "goal": "明确目标行业和岗位·开始投递",
+                 "tasks": ["研究目标公司", "完成5-10次投递", "维护投递追踪表"]},
+                {"week": 3, "goal": "持续投递·准备面试",
+                 "tasks": ["每日投递3-5家", "整理面试常见问题", "模拟面试练习"]},
+                {"week": 4, "goal": "面试执行与复盘",
+                 "tasks": ["参加面试并录音", "面试后24h内完成复盘", "根据反馈调整策略"]},
+            ],
+            "channel_strategy": {
+                "Boss直聘": "适合互联网/技术岗位，活跃度高",
+                "猎聘": "适合中高端岗位，猎头资源丰富",
+                "内推": "成功率最高的渠道，优先利用",
+                "官网投递": "适合大厂，流程规范但周期长",
+                "脉脉/LinkedIn": "适合建立行业人脉，获取隐藏机会",
+            },
+            "timeline": "建议周期：4-8周密集求职期 → 2-4周面试期 → 1-2周Offer决策期",
+        }
 
     # 更新进度
     if not progress.step_data_json:
@@ -524,6 +836,89 @@ def _deduce_skills_from_resume(step_data: dict) -> list[str]:
         if kw.lower() in str(content).lower():
             skills.append(kw)
     return skills[:8] if skills else ["通用职业技能"]
+
+
+def _generate_ai_job_strategy(
+    step_data: dict, target_industry: str | None, target_position: str | None,
+    salary_range: str | None, location: str | None, preferences: str | None,
+    user_id: str | None = None, db: Session | None = None,
+) -> tuple | None:
+    """调用AI引擎生成求职资源盘点和计划表。"""
+    resume_content = str(step_data.get("resume_content", ""))[:1500]
+    output_schema = (
+        '{\n'
+        '  "resource_inventory": {\n'
+        '    "core_skills": ["技能1"],\n'
+        '    "experiences": "关键项目经验概述",\n'
+        '    "network": "人脉渠道建议",\n'
+        '    "certifications": "建议补充的证书",\n'
+        '    "portfolio": "建议准备的材料",\n'
+        '    "references": "推荐人策略"\n'
+        '  },\n'
+        '  "plan": {\n'
+        '    "weekly_goals": [\n'
+        '      {"week": 1, "goal": "...", "tasks": ["..."]},\n'
+        '      ...\n'
+        '    ],\n'
+        '    "channel_strategy": {"渠道名": "策略建议"},\n'
+        '    "timeline": "整体时间线建议"\n'
+        '  }\n'
+        '}'
+    )
+    prompt = (
+        f'用户求职目标：\n'
+        f'- 目标行业：{target_industry or "不限"}\n'
+        f'- 目标岗位：{target_position or "不限"}\n'
+        f'- 期望薪资：{salary_range or "面议"}\n'
+        f'- 工作地点：{location or "不限"}\n'
+        f'- 偏好：{preferences or "无"}\n\n'
+        f'用户简历摘要：\n{resume_content}\n\n'
+        f'请生成个性化的求职资源盘点和4周求职计划表。'
+    )
+
+    result = llm_generate(
+        prompt=prompt,
+        system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+        user_id=user_id,
+        db=db,
+        temperature=0.7,
+    )
+    parsed = safe_extract_json(result["content"])
+    if not parsed or not isinstance(parsed, dict):
+        return None
+
+    inv = parsed.get("resource_inventory", {})
+    plan = parsed.get("plan", {})
+
+    if not isinstance(inv, dict):
+        inv = {}
+    if not isinstance(plan, dict):
+        plan = {}
+
+    # 确保 weekly_goals 是有效列表
+    weekly_goals = plan.get("weekly_goals", [])
+    if not isinstance(weekly_goals, list) or len(weekly_goals) < 2:
+        return None
+
+    resource_inventory = {
+        "core_skills": inv.get("core_skills", []) or _deduce_skills_from_resume(step_data),
+        "experiences": inv.get("experiences", "关键项目经验"),
+        "network": inv.get("network", "内推+LinkedIn"),
+        "certifications": inv.get("certifications", "行业认证"),
+        "portfolio": inv.get("portfolio", "GitHub/作品集"),
+        "references": inv.get("references", "2-3位推荐人"),
+    }
+
+    plan_out = {
+        "weekly_goals": weekly_goals[:6],
+        "channel_strategy": plan.get("channel_strategy", {
+            "Boss直聘": "适合互联网岗位",
+            "内推": "成功率最高",
+        }),
+        "timeline": plan.get("timeline", "4-8周求职期"),
+    }
+
+    return resource_inventory, plan_out
 
 
 # ═══════════════════════════════════════════════
@@ -674,19 +1069,21 @@ def prepare_interview(db: Session, user_id: str, career_progress_id: str,
     if not progress:
         raise APIError(20001, "五步法进度不存在", 404)
 
-    # 企业情报（AI初稿，仅公开信息）—— MVP用模板
-    company_intel = _generate_company_intel(company)
+    # 企业情报（AI初稿，仅公开信息）—— AI优先+模板降级
+    company_intel = _generate_company_intel(company, user_id=user_id, db=db)
 
     # 匹配度分析
-    match_analysis = _generate_match_analysis(progress.step_data_json or {}, position, company)
+    match_analysis = _generate_match_analysis(
+        progress.step_data_json or {}, position, company, user_id=user_id, db=db,
+    )
 
     # 面试策略
     stage = interview_stage or "综合面试"
-    strategy_doc = _generate_interview_strategy(company, position, stage)
+    strategy_doc = _generate_interview_strategy(company, position, stage, user_id=user_id, db=db)
 
     # 问题清单
-    question_list = _generate_question_list(company, position, stage)
-    warm_up_questions = _generate_warm_up_questions()
+    question_list = _generate_question_list(company, position, stage, user_id=user_id, db=db)
+    warm_up_questions = _generate_warm_up_questions(company, position, user_id=user_id, db=db)
 
     prep = InterviewPrep(
         user_id=user_id,
@@ -726,11 +1123,59 @@ def prepare_interview(db: Session, user_id: str, career_progress_id: str,
     }
 
 
-def _generate_company_intel(company: str) -> dict:
+def _generate_company_intel(company: str, user_id: str | None = None,
+                             db: Session | None = None) -> dict:
     """生成企业情报初稿（仅公开信息源，≤3分钟AI生成）。"""
     if not company:
         return {"note": "请提供公司名称以获取企业情报"}
 
+    # 尝试AI生成
+    try:
+        output_schema = (
+            '{\n'
+            '  "industry": "行业分类",\n'
+            '  "size": "规模估算",\n'
+            '  "stage": "发展阶段",\n'
+            '  "culture_tags": ["文化标签1", "标签2"],\n'
+            '  "products": "主要产品/服务线概述",\n'
+            '  "competitors": "主要竞争对手",\n'
+            '  "recent_news": ["近期动态1"]\n'
+            '}'
+        )
+        prompt = (
+            f'请为以下公司生成面试准备用的企业情报初稿（仅使用你的训练数据中的公开信息）：\n\n'
+            f'公司名称：{company}\n\n'
+            f'请基于该公司在公开信息中的形象，提供行业分类、规模估算、发展阶段、文化标签、'
+            f'产品概述、竞争对手和近期动态。如果信息不足，请标注"建议核实"而非编造。'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.5,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict):
+            return {
+                "company_name": company,
+                "industry": parsed.get("industry", "建议通过工商信息核实"),
+                "size": parsed.get("size", "建议通过企查查/天眼查核实"),
+                "stage": parsed.get("stage", "建议了解融资阶段"),
+                "culture_tags": parsed.get("culture_tags", ["技术创新"]),
+                "products": parsed.get("products", "建议访问公司官网了解"),
+                "competitors": parsed.get("competitors", "建议通过行业报告分析"),
+                "recent_news": parsed.get("recent_news", ["建议搜索了解最新动态"]),
+                "source_urls": [
+                    "https://www.qcc.com（企查查）",
+                    "https://www.tianyancha.com（天眼查）",
+                ],
+                "disclaimer": "本情报基于AI初稿，仅使用公开信息源，生成时间≤3分钟。请用户自行核实。",
+            }
+    except Exception as e:
+        logger.warning("AI企业情报生成失败: %s", e)
+
+    # 降级模板
     return {
         "company_name": company,
         "industry": "信息技术/互联网（基于公开信息推断）",
@@ -740,14 +1185,43 @@ def _generate_company_intel(company: str) -> dict:
         "products": "建议访问公司官网了解产品矩阵",
         "competitors": "建议通过行业报告分析竞争格局",
         "recent_news": ["建议通过搜索引擎了解最新动态"],
-        "source_urls": [f"https://www.qcc.com（企查查）", f"https://www.tianyancha.com（天眼查）"],
+        "source_urls": ["https://www.qcc.com（企查查）", "https://www.tianyancha.com（天眼查）"],
         "disclaimer": "本情报基于AI初稿，仅使用公开信息源，生成时间≤3分钟。请用户自行核实。",
     }
 
 
-def _generate_match_analysis(step_data: dict, position: str, company: str) -> str:
+def _generate_match_analysis(step_data: dict, position: str, company: str,
+                              user_id: str | None = None,
+                              db: Session | None = None) -> str:
     """生成匹配度分析。"""
-    resume_content = step_data.get("resume_content", "")
+    # 尝试AI生成
+    try:
+        resume_content = str(step_data.get("resume_content", ""))[:2000]
+        prompt = (
+            f'请分析以下候选人与目标岗位的匹配度：\n\n'
+            f'岗位：{position}\n'
+            f'公司：{company}\n\n'
+            f'候选人简历/STAR萃取摘要：\n{resume_content}\n\n'
+            f'请以纯文本Markdown格式输出匹配度分析（不需要JSON），包含：\n'
+            f'1. 岗位核心要求理解\n'
+            f'2. 候选人优势匹配（具体指出哪些经验/技能匹配）\n'
+            f'3. 差距与提升建议\n'
+            f'4. 整体匹配评估'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.6,
+        )
+        content = result.get("content", "").strip()
+        if content and len(content) > 50:
+            return content
+    except Exception as e:
+        logger.warning("AI匹配度分析生成失败: %s", e)
+
+    # 降级模板
     parts = [
         f"## 匹配度分析：{company} - {position}",
         "",
@@ -774,8 +1248,37 @@ def _generate_match_analysis(step_data: dict, position: str, company: str) -> st
     return "\n".join(parts)
 
 
-def _generate_interview_strategy(company: str, position: str, stage: str) -> str:
+def _generate_interview_strategy(company: str, position: str, stage: str,
+                                  user_id: str | None = None,
+                                  db: Session | None = None) -> str:
     """生成面试策略文档。"""
+    # 尝试AI生成
+    try:
+        prompt = (
+            f'请为以下面试生成面试策略文档：\n\n'
+            f'公司：{company}\n'
+            f'岗位：{position}\n'
+            f'面试阶段：{stage}\n\n'
+            f'策略内容应包含（纯文本Markdown格式，不需要JSON）：\n'
+            f'1. 整体策略（3-4条核心原则）\n'
+            f'2. 核心卖点（应重点展示的3个方面）\n'
+            f'3. 阶段策略（针对{stage}的具体建议）\n'
+            f'4. 注意事项（针对该公司/岗位的特别提醒）'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.7,
+        )
+        content = result.get("content", "").strip()
+        if content and len(content) > 50:
+            return content
+    except Exception as e:
+        logger.warning("AI面试策略生成失败: %s", e)
+
+    # 降级模板
     return f"""## 面试策略：{company} - {position} ({stage})
 
 ### 整体策略
@@ -802,8 +1305,41 @@ def _generate_interview_strategy(company: str, position: str, stage: str) -> str
 """
 
 
-def _generate_question_list(company: str, position: str, stage: str) -> list[dict]:
+def _generate_question_list(company: str, position: str, stage: str,
+                             user_id: str | None = None,
+                             db: Session | None = None) -> list[dict]:
     """生成面试问题清单。"""
+    # 尝试AI生成
+    try:
+        output_schema = (
+            '{\n'
+            '  "questions": [\n'
+            '    {"category": "类别", "question": "问题", "purpose": "目的", "answer_hint": "理想回答要点"},\n'
+            '    ...\n'
+            '  ]\n'
+            '}'
+        )
+        prompt = (
+            f'请为以下面试场景生成7-8个面试问题：\n\n'
+            f'公司：{company}\n'
+            f'岗位：{position}\n'
+            f'面试阶段：{stage}\n\n'
+            f'覆盖类别：自我介绍、项目经验、技术/专业能力、职业动机、团队协作、应对挑战、反问环节'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.7,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict) and len(parsed.get("questions", [])) >= 5:
+            return parsed["questions"][:8]
+    except Exception as e:
+        logger.warning("AI问题清单生成失败: %s", e)
+
+    # 降级模板
     return [
         {
             "category": "自我介绍",
@@ -850,8 +1386,31 @@ def _generate_question_list(company: str, position: str, stage: str) -> list[dic
     ]
 
 
-def _generate_warm_up_questions() -> list[dict]:
+def _generate_warm_up_questions(company: str = "", position: str = "",
+                                 user_id: str | None = None,
+                                 db: Session | None = None) -> list[dict]:
     """生成暖场问题。"""
+    # 尝试AI生成
+    try:
+        output_schema = '{"questions": [{"question": "...", "purpose": "..."}, ...]}'
+        prompt = (
+            f'请为{company}的{position}面试开场环节生成3句暖场/破冰提示。'
+            f'需要轻松自然，缓解候选人紧张情绪。'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.8,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict) and len(parsed.get("questions", [])) >= 2:
+            return parsed["questions"][:3]
+    except Exception as e:
+        logger.warning("AI暖场问题生成失败: %s", e)
+
+    # 降级模板
     return [
         {"question": "今天的天气不错/交通还好吗？", "purpose": "缓解紧张气氛"},
         {"question": "感谢你今天抽时间来参加面试。", "purpose": "展示尊重和友善"},
@@ -923,8 +1482,18 @@ def analyze_interview(db: Session, user_id: str, review_id: str) -> dict[str, An
     company = prep.company if prep else "未知公司"
     position = prep.position if prep else "未知岗位"
 
-    # MVP: 模拟分析（生产环境调用AI引擎）
-    highlights = f"""## 面试亮点分析：{company} - {position}
+    # 尝试AI分析
+    ai_rating = 4
+    try:
+        ai_result = _generate_ai_interview_review(company, position, user_id=user_id, db=db)
+        if ai_result:
+            highlights, improvements, review_sop, ai_rating = ai_result
+        else:
+            raise ValueError("AI分析返回空")
+    except Exception as e:
+        logger.warning("AI面试复盘分析失败，降级到模板: %s", e)
+        # 降级模板
+        highlights = f"""## 面试亮点分析：{company} - {position}
 
 ### 表现突出方面
 1. **自我介绍结构清晰**：职业脉络表达流畅，核心能力突出
@@ -937,8 +1506,7 @@ def analyze_interview(db: Session, user_id: str, review_id: str) -> dict[str, An
 - 对公司/行业有一定了解，做了功课
 - 沟通中展现了真诚和自信的平衡
 """
-
-    improvements = f"""## 面试改进方向：{company} - {position}
+        improvements = f"""## 面试改进方向：{company} - {position}
 
 ### 需要提升方面
 1. **专业深度展示**：技术/专业问题上可以更深入，展示专业性
@@ -951,8 +1519,7 @@ def analyze_interview(db: Session, user_id: str, review_id: str) -> dict[str, An
 - 遇到不会的问题诚实表达，但展示学习思路
 - 面试后24小时内发送感谢邮件（简要回顾+表达兴趣）
 """
-
-    review_sop = f"""## 面试复盘SOP
+        review_sop = f"""## 面试复盘SOP
 
 ### 面试后24小时黄金复盘期
 **S1 - 立即记录（面试结束10分钟内）**
@@ -978,7 +1545,7 @@ def analyze_interview(db: Session, user_id: str, review_id: str) -> dict[str, An
     review.highlights = highlights
     review.improvements = improvements
     review.review_sop = review_sop
-    review.overall_rating = 4  # 模拟评分 4/5
+    review.overall_rating = ai_rating
     db.commit()
     db.refresh(review)
 
@@ -996,6 +1563,53 @@ def _review_to_dict(r: InterviewReview) -> dict[str, Any]:
         "review_sop": r.review_sop or "",
         "overall_rating": r.overall_rating or 0,
     }
+
+
+def _generate_ai_interview_review(
+    company: str, position: str,
+    user_id: str | None = None, db: Session | None = None,
+) -> tuple | None:
+    """调用AI引擎生成面试复盘分析。"""
+    output_schema = (
+        '{\n'
+        '  "highlights": "面试亮点分析(Markdown)",\n'
+        '  "improvements": "面试改进方向(Markdown)",\n'
+        '  "review_sop": "面试复盘SOP(Markdown)",\n'
+        '  "overall_rating": 4\n'
+        '}'
+    )
+    prompt = (
+        f'请分析以下面试表现并生成复盘报告：\n\n'
+        f'公司：{company}\n'
+        f'岗位：{position}\n\n'
+        f'请基于通用面试场景，分析候选人的可能表现。'
+        f'亮点分析应包含3-4个方面，改进方向应包含3-4个方面（纯文本Markdown格式），'
+        f'复盘SOP为5步标准化流程。overall_rating为1-5的整数评分。'
+    )
+
+    result = llm_generate(
+        prompt=prompt,
+        system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+        user_id=user_id,
+        db=db,
+        temperature=0.6,
+    )
+    parsed = safe_extract_json(result["content"])
+    if not parsed or not isinstance(parsed, dict):
+        return None
+
+    rating = parsed.get("overall_rating", 4)
+    try:
+        rating = max(1, min(5, int(rating)))
+    except (ValueError, TypeError):
+        rating = 4
+
+    return (
+        parsed.get("highlights", ""),
+        parsed.get("improvements", ""),
+        parsed.get("review_sop", ""),
+        rating,
+    )
 
 
 def list_interview_preps(db: Session, user_id: str) -> list[dict[str, Any]]:
@@ -1122,7 +1736,7 @@ def accept_offer(db: Session, user_id: str, comparison_id: str,
     position = selected_offer.get("position", "新岗位") if selected_offer else "新岗位"
 
     # 生成试用期计划
-    milestones = _generate_probation_milestones(company, position)
+    milestones = _generate_probation_milestones(company, position, user_id=user_id, db=db)
 
     plan = ProbationPlan(
         user_id=user_id,
@@ -1159,8 +1773,40 @@ def accept_offer(db: Session, user_id: str, comparison_id: str,
     }
 
 
-def _generate_probation_milestones(company: str, position: str) -> dict:
+def _generate_probation_milestones(company: str, position: str,
+                                    user_id: str | None = None,
+                                    db: Session | None = None) -> dict:
     """生成试用期30/60/90天里程碑。"""
+    # 尝试AI生成
+    try:
+        output_schema = (
+            '{\n'
+            '  "overall_goal": "试用期总体目标(一句话)",\n'
+            '  "day_30": [{"goal": "阶段目标", "actions": ["行动1"], "checkpoints": ["检查点1"]}],\n'
+            '  "day_60": [{"goal": "...", "actions": [...], "checkpoints": [...]}],\n'
+            '  "day_90": [{"goal": "...", "actions": [...], "checkpoints": [...]}]\n'
+            '}'
+        )
+        prompt = (
+            f'请为以下新入职员工生成试用期30/60/90天里程碑计划：\n\n'
+            f'公司：{company}\n'
+            f'岗位：{position}\n\n'
+            f'每个阶段（30/60/90天）应包含1个目标、3-5个行动项和2-3个检查点。'
+        )
+        result = llm_generate(
+            prompt=prompt,
+            system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_job", ""),
+            user_id=user_id,
+            db=db,
+            temperature=0.6,
+        )
+        parsed = safe_extract_json(result["content"])
+        if parsed and isinstance(parsed, dict) and "day_30" in parsed:
+            return parsed
+    except Exception as e:
+        logger.warning("AI试用期计划生成失败: %s", e)
+
+    # 降级模板
     return {
         "overall_goal": f"顺利通过{company}的试用期考核，在{position}岗位上建立核心贡献",
         "day_30": [
@@ -1234,26 +1880,52 @@ def get_company_intel(db: Session, teacher_id: str | None, company_name: str,
     import time
     start_ms = int(time.time() * 1000)
 
-    # MVP: 模板化初稿（生产环境调用LLM + 网页抓取）
-    intel_report = {
-        "company_name": company_name,
-        "industry": "建议通过工商信息/企业官网核实",
-        "scale": "建议通过企查查/天眼查核实",
-        "founded": "建议通过工商信息核实",
-        "hq": "建议通过企业官网核实",
-        "culture_summary": f"{company_name}的企业文化特点（基于公开信息整理）",
-        "product_summary": "建议访问公司官网了解产品矩阵",
-        "market_position": "建议参考行业报告和竞品分析",
-        "recent_news": ["建议通过搜索引擎了解最新动态"],
-        "risk_flags": ["本部分仅基于公开信息，请老师审核后确认"],
-        "hiring_trend": "建议参考脉脉/看准网等职场社区",
-        "disclaimer": "本情报基于AI初稿，仅使用公开信息源。请老师核实后补充。",
-    }
+    # 尝试AI生成企业情报
+    model_used = "mock_mvp"
+    intel_report = None
+    try:
+        # 复用面试准备的AI企业情报生成逻辑
+        ai_intel = _generate_company_intel(company_name, user_id=user_id, db=db)
+        if ai_intel and "note" not in ai_intel:
+            intel_report = {
+                "company_name": company_name,
+                "industry": ai_intel.get("industry", ""),
+                "scale": ai_intel.get("size", ""),
+                "founded": "建议通过工商信息核实",
+                "hq": "建议通过企业官网核实",
+                "culture_summary": ", ".join(ai_intel.get("culture_tags", [])),
+                "product_summary": ai_intel.get("products", ""),
+                "market_position": ai_intel.get("competitors", ""),
+                "recent_news": ai_intel.get("recent_news", []),
+                "risk_flags": ["本部分仅基于公开信息，请老师审核后确认"],
+                "hiring_trend": "建议参考脉脉/看准网等职场社区",
+                "disclaimer": ai_intel.get("disclaimer", "仅公开信息源"),
+            }
+            model_used = "zhipu_ai"
+    except Exception as e:
+        logger.warning("AI企业情报生成失败，降级到模板: %s", e)
+
+    if not intel_report:
+        # 降级模板
+        intel_report = {
+            "company_name": company_name,
+            "industry": "建议通过工商信息/企业官网核实",
+            "scale": "建议通过企查查/天眼查核实",
+            "founded": "建议通过工商信息核实",
+            "hq": "建议通过企业官网核实",
+            "culture_summary": f"{company_name}的企业文化特点（基于公开信息整理）",
+            "product_summary": "建议访问公司官网了解产品矩阵",
+            "market_position": "建议参考行业报告和竞品分析",
+            "recent_news": ["建议通过搜索引擎了解最新动态"],
+            "risk_flags": ["本部分仅基于公开信息，请老师审核后确认"],
+            "hiring_trend": "建议参考脉脉/看准网等职场社区",
+            "disclaimer": "本情报基于AI初稿，仅使用公开信息源。请老师核实后补充。",
+        }
 
     source_urls = [
-        f"https://www.qcc.com（企查查工商信息）",
-        f"https://www.tianyancha.com（天眼查）",
-        f"https://www.qixin.com（启信宝）",
+        "https://www.qcc.com（企查查工商信息）",
+        "https://www.tianyancha.com（天眼查）",
+        "https://www.qixin.com（启信宝）",
     ]
 
     generation_time_ms = int(time.time() * 1000) - start_ms
@@ -1265,7 +1937,7 @@ def get_company_intel(db: Session, teacher_id: str | None, company_name: str,
         source_urls=source_urls,
         teacher_id=teacher_id,
         teacher_verified=False,
-        model_used="mock_mvp",
+        model_used=model_used,
         generation_time_ms=generation_time_ms,
     )
     db.add(intel_record)
@@ -1283,6 +1955,172 @@ def get_company_intel(db: Session, teacher_id: str | None, company_name: str,
         "teacher_verified": False,
         "generation_time_ms": generation_time_ms,
     }
+
+
+# ═══════════════════════════════════════════════
+# AI 高维求职对话 — 所有小耕输出由模型生成
+# ═══════════════════════════════════════════════
+
+def process_career_chat(
+    message: str,
+    step: str = "yipan",
+    context: list[dict] | None = None,
+    sub_index: int = 0,
+    has_resume: bool = False,
+    user_id: str | None = None,
+    db: Session | None = None,
+) -> dict[str, Any]:
+    """高维求职 AI 对话 — 所有小耕回复由AI模型生成。
+
+    根据五步法步骤和子进度，AI按算法引导用户完成求职全流程。
+
+    一盘(yipan)五大盘点:
+      0-履历梳理 → 1-STAR追问 → 2-技能晶体 → 3-人脉资源 → 4-岗位建议
+
+    Args:
+        message: 用户当前消息（初始可为空）
+        step: yipan|erding|santou|simian|wuxuan
+        context: 对话历史
+        sub_index: 一盘子进度 0-4
+        has_resume: 是否已上传简历
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        {"reply": str, "model_used": str}
+    """
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+
+    # 步骤标签
+    step_labels = {
+        "yipan": "一盘·简历盘点与重构",
+        "erding": "二定·求职策略与资源",
+        "santou": "三投·投递追踪与分析",
+        "simian": "四面·面试准备与复盘",
+        "wuxuan": "五选·Offer评估与入职",
+    }
+
+    # 一盘子阶段
+    yipan_phases = ["履历梳理", "STAR追问", "技能晶体", "人脉资源", "岗位建议"]
+    phase_label = yipan_phases[min(sub_index, 4)]
+
+    try:
+        # 构建对话历史
+        context_text = ""
+        if context:
+            recent = context[-10:]
+            parts = []
+            for m in recent:
+                role_label = "姐" if m.get("role") == "user" else "小耕"
+                text = (m.get("text") or m.get("content") or "").strip()
+                if text:
+                    parts.append(f"{role_label}：{text}")
+            context_text = "\n".join(parts)
+
+        system_prompt = build_persona_prompt(module="career")
+
+        if not message.strip():
+            # 初始问候
+            step_name = step_labels.get(step, "求职")
+            if step == "yipan":
+                if has_resume:
+                    prompt = (
+                        "用户已上传简历，正在进行一盘·简历盘点。"
+                        "小耕需要对简历做初步反馈，然后引导用户进入STAR追问环节。\n\n"
+                        "请简短回应用户已上传简历这件事（2-3句话），"
+                        "然后开始引导STAR追问：请用户选择一个最有成就感的项目/经历，"
+                        "用STAR框架（情境/任务/行动/结果）来描述。\n"
+                        "称呼「姐」，自称「小耕」，语气温暖鼓励。"
+                    )
+                else:
+                    prompt = (
+                        "用户刚进入一盘·简历盘点页面。"
+                        "请以温暖的方式打招呼，邀请用户上传简历或者直接用文字/语音"
+                        "聊聊职业经历。提及五大盘点：履历梳理→STAR追问→技能晶体→人脉资源→岗位建议。\n"
+                        "2-3句话即可。称呼「姐」，自称「小耕」。"
+                    )
+            else:
+                prompt = (
+                    f"用户进入了「{step_name}」步骤。"
+                    f"请以温暖的方式欢迎用户，介绍当前步骤的目标和要点。\n"
+                    f"2-3句话即可。称呼「姐」，自称「小耕」。"
+                )
+        else:
+            # 根据步骤和子进度构建引导
+            if step == "yipan":
+                phase_guides = [
+                    # 0-履历梳理
+                    ("请引导用户系统性地梳理职业经历。追问方向：\n"
+                     "- 最近一段工作的公司、职位、主要职责\n"
+                     "- 之前还有哪些重要的工作经历\n"
+                     "先肯定用户的回答，再温和追问下一段经历。2-3句话。"),
+                    # 1-STAR追问
+                    ("用户正在做STAR萃取。引导用户用STAR框架描述一个具体项目：\n"
+                     "S-当时什么背景？T-你要完成什么任务？A-你具体做了什么？R-结果如何？\n"
+                     "每次只追问一个维度。如果用户已经说了S和T，就追问A。\n"
+                     "先肯定已描述的，再追问缺失的。2-3句话。"),
+                    # 2-技能晶体
+                    ("用户已经完成STAR描述。现在需要从具体经历中提炼可复用的技能晶体。\n"
+                     "帮用户识别：这个经历体现了什么核心能力？这个能力在什么场景下可以复用？\n"
+                     "引导用户用一句话概括这个能力（做什么+怎么做），然后给出等级评估建议。\n"
+                     "2-3句话，专业但不啰嗦。"),
+                    # 3-人脉资源
+                    ("用户在盘点求职资源。引导用户梳理人脉网络：\n"
+                     "- 前领导/同事中谁能帮忙内推？\n"
+                     "- 行业里认识哪些HR/猎头？\n"
+                     "- 同学/校友网络中有没有可用的渠道？\n"
+                     "鼓励用户把所有可能性都列出来。2-3句话。"),
+                    # 4-岗位建议
+                    ("用户已完成盘点，马上要进入下一步。\n"
+                     "根据前面的对话，帮用户识别：\n"
+                     "- 基于经历和技能，最适合的岗位方向是什么？\n"
+                     "- 还有什么需要补充的？\n"
+                     "最后引导用户进入「二定·求职策略」步骤。\n"
+                     "2-3句话。"),
+                ]
+                guide = phase_guides[min(sub_index, 4)]
+            else:
+                guide = (
+                    "根据用户的回答，给出温暖的回应，继续引导用户完成当前步骤。\n"
+                    "2-3句话即可。"
+                )
+
+            prompt = (
+                f"当前步骤：{step_labels.get(step, step)}，子阶段：{phase_label}\n"
+                f"对话历史：\n{context_text}\n"
+                f"────────────────\n"
+                f"姐刚说：{message}\n\n"
+                f"{guide}\n\n"
+                f"称呼「姐」，自称「小耕」，语气温暖鼓励，专业务实。"
+            )
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="career",
+            task_complexity="medium",
+            temperature=0.7,
+            max_tokens=512,
+            user_id=user_id,
+            db=db,
+        )
+
+        reply = result.get("content", "").strip()
+        if not reply:
+            reply = "姐，小耕听到了～咱们继续梳理您的职场经历，让每段经历都变成闪闪发光的资产！"
+
+        return {
+            "reply": reply,
+            "model_used": result.get("model_used", ""),
+        }
+
+    except Exception as e:
+        logger.warning("高维求职AI对话失败: %s", e)
+        return {
+            "reply": "姐，小耕正在努力思考中，请稍等一下哦～",
+            "model_used": "",
+        }
 
 
 # ═══════════════════════════════════════════════
@@ -1482,3 +2320,110 @@ def get_step_data(db: Session, user_id: str, step_id: int) -> dict[str, Any]:
         }
 
     return {"step_id": step_id, "label": STEP_LABELS.get(step_id, ""), "data": {}}
+
+
+# ═══════════════════════════════════════════════
+# 深度STAR萃取算法 (算法文档 §3.4)
+# ═══════════════════════════════════════════════
+
+def deep_star_extraction(resume_text: str, career_history: str = "", user_id=None, db=None) -> dict:
+    """深度STAR成就事件萃取。
+
+    输出: 结构化的STAR成就事件列表 + 技能晶体
+    """
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+    import json, logging
+    logger = logging.getLogger("career")
+
+    prompt = f"""对以下工作经历进行STAR解构:
+
+{resume_text}
+
+{('补充经历: ' + career_history) if career_history else ''}
+
+对每段经历进行四维解构:
+S(Situation/情境): 公司阶段/团队规模/HR挑战
+T(Task/任务): 具体任务/重要性/影响范围
+A(Action/行动): 按时间顺序的行动/主导vs配合/困难克服
+R(Result/结果): 量化成果/可验证的描述
+
+同时提取'技能晶体'——可跨场景迁移的核心能力:
+- 能力名称(如: 薪酬体系设计、高难度沟通)
+- 能力证明(对应STAR事件简述)
+- 能力等级(初级/熟练/精通/专家)
+- 能力维度归类: 专业力/领导力/沟通力/分析力/执行力
+
+返回JSON: {{star_events: [...], skill_crystals: [...]}}
+完整性检查: 信息不足时标注'信息缺失', 不要编造。"""
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=build_persona_prompt(module="career"),
+            module="career", task_complexity="complex", temperature=0.6,
+            user_id=user_id, db=db,
+        )
+        # Try to parse JSON from result
+        content = result["content"]
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            # Try extracting JSON block
+            import re
+            match = re.search(r'\{[^{}]*"star_events"[^{}]*\}', content, re.DOTALL)
+            if match:
+                parsed = json.loads(match.group())
+            else:
+                return {"star_events": [], "skill_crystals": [], "raw": content}
+        return parsed
+    except Exception as e:
+        logger.warning("深度STAR萃取失败: %s", e)
+        return {"star_events": [], "skill_crystals": []}
+
+
+def generate_interview_strategy(job_description: str, star_extractions: list, company_intel: str = "", user_id=None, db=None) -> dict:
+    """三阶段面试策略生成。
+
+    阶段1: 人岗匹配度分析
+    阶段2: 面试问题预测(必考题/专业题/行为题/压力题)
+    阶段3: STAR应答准备
+    """
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_with_orchestration
+    import json, logging
+    logger = logging.getLogger("career")
+
+    stars_text = json.dumps(star_extractions, ensure_ascii=False, indent=2)[:3000]
+
+    prompt = f"""基于以下信息生成面试策略:
+
+【岗位描述】: {job_description[:1000]}
+【我的STAR成就事件】: {stars_text}
+{f'【公司情报】: {company_intel[:500]}' if company_intel else ''}
+
+三阶段分析:
+1. 人岗匹配度: 优势(strengths)/短板(gaps)/差异化亮点(differentiators)
+2. 面试问题预测:
+   - 必考题(100%): 自我介绍/离职原因/期望薪资/职业规划
+   - 专业题(80%): 基于JD的专业问题
+   - 行为题(60%): 简历疑点追问
+   - 压力题(30%): '你最大的失败是什么'
+3. STAR应答准备: 为每个关键问题准备≤3分钟的STAR回答
+
+返回JSON: {{match_analysis, predicted_questions, star_answers}}"""
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=build_persona_prompt(module="career"),
+            module="career", task_complexity="complex", temperature=0.7,
+            user_id=user_id, db=db,
+        )
+        try:
+            return json.loads(result["content"])
+        except json.JSONDecodeError:
+            return {"raw_response": result["content"]}
+    except Exception as e:
+        logger.warning("面试策略生成失败: %s", e)
+        return {"error": str(e)}

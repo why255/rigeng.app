@@ -229,3 +229,16 @@ class ModuleConnection(BaseModel):
 class ModuleDataFlowResponse(BaseModel):
     """跨模块数据流配置响应。"""
     connections: list[ModuleConnection] = []
+
+
+# ── AI 智能办公对话 ──
+
+class OfficeChatIn(BaseModel):
+    """智能办公 AI 对话请求 — 所有小耕回复由AI模型生成。"""
+    message: str = Field(default="", max_length=4096, description="用户当前消息（初始问候可为空）")
+    module_key: str = Field(default="", description="HR模块key")
+    module_name: str = Field(default="", description="模块名称")
+    tool_key: str = Field(default="", description="工具key")
+    tool_label: str = Field(default="", description="工具名称")
+    context: list[dict] = Field(default_factory=list, description="对话历史 [{role, text}]")
+    question_index: int = Field(default=0, description="已进行到第几个问题")

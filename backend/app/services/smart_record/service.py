@@ -25,10 +25,15 @@ from sqlalchemy.orm import Session
 from ...shared.config import settings
 from ...shared.database import new_uuid, utcnow
 from ...shared.errors import APIError, E_FILE_NOT_FOUND, E_PARAM_FORMAT
+from ...shared.llm_utils import safe_extract_json, LLMParsingError
 from ...shared.models.recording import (
     RECORDING_SCENES, RECORDING_STATUSES,
     ActionItem, ExtractionResult, Recording, TranscriptSegment,
 )
+from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS
+from ...engines.persona import build_persona_prompt
+from ...engines.llm_orchestrator import llm_generate_with_orchestration
+from ...engines.data_foundation import emit_event
 
 logger = logging.getLogger("smart_record")
 
@@ -155,11 +160,133 @@ def stop_recording(db: Session, user_id: str, recording_id: str) -> dict[str, An
 # 转写处理
 # ═══════════════════════════════════════════════
 
-def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
-    """处理转写：模拟ASR转写，生成分段文本。
+def process_audio_chunk(db: Session, user_id: str, recording_id: str,
+                        audio_data: bytes, chunk_index: int = 0) -> dict[str, Any]:
+    """处理实时音频流分片：调用腾讯云 ASR 实时转写。
 
-    生产环境：调用 voice_engine.recognize_speech() 进行真实ASR。
-    MVP阶段：基于场景生成模拟转写数据。
+    前端每5秒发送一个音频chunk（webm/opus格式），
+    后端将其转为WAV后调用腾讯云 SentenceRecognition API 转写，
+    转写结果实时存入 TranscriptSegment。
+
+    Returns:
+        {"text": str, "confidence": float, "segment_index": int}
+    """
+    import subprocess
+    import tempfile
+    import os
+
+    recording = db.query(Recording).filter(
+        Recording.id == recording_id,
+        Recording.user_id == user_id,
+        Recording.deleted_at.is_(None),
+    ).first()
+    if not recording:
+        raise APIError(60002, "录音不存在", 404)
+
+    if not audio_data or len(audio_data) < 100:
+        return {"text": "", "confidence": 0.0, "segment_index": chunk_index, "source": "empty_chunk"}
+
+    # 更新录音时长
+    chunk_duration_sec = 5  # 每个chunk约5秒
+    recording.duration_seconds = (recording.duration_seconds or 0) + chunk_duration_sec
+    db.flush()
+
+    # ── 尝试调用腾讯云 ASR 在线转写 ──
+    try:
+        text, confidence = _transcribe_audio_chunk(audio_data)
+        if text:
+            # 保存转写分段
+            start_sec = chunk_index * chunk_duration_sec
+            end_sec = start_sec + chunk_duration_sec
+
+            ts = TranscriptSegment(
+                recording_id=recording_id,
+                user_id=user_id,
+                segment_index=chunk_index,
+                speaker="未知",
+                speaker_role="speaker",
+                start_time_seconds=float(start_sec),
+                end_time_seconds=float(end_sec),
+                text=text,
+                confidence=confidence,
+                is_candidate=False,
+            )
+            db.add(ts)
+            db.commit()
+
+            logger.info("实时ASR转写成功: recording_id=%s chunk=%d text=%s",
+                        recording_id, chunk_index, text[:50])
+
+            return {
+                "text": text,
+                "confidence": confidence,
+                "segment_index": chunk_index,
+                "source": "tencent_asr",
+            }
+    except Exception as e:
+        logger.warning("腾讯云ASR实时转写失败(chunk=%d): %s，等待后续chunk", chunk_index, e)
+
+    # ASR失败 → 返回空，不阻塞录音
+    return {"text": "", "confidence": 0.0, "segment_index": chunk_index, "source": "asr_failed"}
+
+
+def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
+    """将webm/opus音频chunk转为WAV后调用腾讯云ASR。
+
+    Returns:
+        (text, confidence)
+    """
+    import subprocess
+    import tempfile
+    import os
+
+    # 写入临时文件
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f_in:
+        f_in.write(audio_data)
+        webm_path = f_in.name
+
+    wav_path = webm_path + ".wav"
+    try:
+        # 用 ffmpeg 转 webm/opus → 16kHz 16bit mono WAV
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", webm_path,
+             "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
+             "-loglevel", "error", wav_path],
+            check=True, timeout=15,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        # 读取 WAV 文件并跳过44字节头部
+        with open(wav_path, "rb") as f:
+            raw_audio = f.read()
+        # 取PCM数据（跳过WAV头44字节）
+        pcm_data = raw_audio[44:] if len(raw_audio) > 44 else raw_audio
+        audio_base64 = base64.b64encode(pcm_data).decode("utf-8")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # ffmpeg不可用 → 尝试直接base64编码原始数据
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+    finally:
+        # 清理临时文件
+        for path in [webm_path, wav_path]:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    # 调用腾讯云 ASR
+    from ..voice_engine.service import asr_online
+    result = asr_online(audio_base64, audio_format="wav", sample_rate=16000)
+
+    text = result.get("text", "").strip()
+    confidence = result.get("confidence", 0.0)
+    return text, confidence
+
+
+def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
+    """处理转写：将已收集的实时ASR分段合并为完整转写。
+
+    如果在录音过程中已经通过 process_audio_chunk 实时转写了分段，
+    则此处只需更新状态并返回结果。如果还没有分段（旧录音/离线模式），
+    降级到模拟数据。
     """
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
@@ -169,12 +296,39 @@ def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str
     if not recording:
         raise APIError(60002, "录音不存在", 404)
 
+    # 检查是否已有实时转写分段
+    existing_segments = (
+        db.query(TranscriptSegment)
+        .filter(
+            TranscriptSegment.recording_id == recording_id,
+            TranscriptSegment.deleted_at.is_(None),
+        )
+        .all()
+    )
+
+    if existing_segments:
+        # 已有实时转写结果 → 直接更新状态
+        recording.transcript_status = "done"
+        recording.status = "extracting"
+        recording.extraction_status = "processing"
+        db.commit()
+        logger.info("转写完成（使用实时ASR结果）: recording_id=%s segments=%d",
+                    recording_id, len(existing_segments))
+        return {
+            "recording_id": recording_id,
+            "segments_count": len(existing_segments),
+            "status": "extracting",
+            "source": "realtime_asr",
+        }
+
+    # 没有实时转写结果 → 降级到模拟数据
+    logger.warning("无实时转写数据，使用模拟转写: recording_id=%s", recording_id)
+
     # 清除旧分段（如有）
     db.query(TranscriptSegment).filter(
         TranscriptSegment.recording_id == recording_id,
     ).delete()
 
-    # 模拟转写分段
     mock_segments = _generate_mock_transcript(recording.scene or "日常", recording.duration_seconds or 60)
 
     for i, seg in enumerate(mock_segments):
@@ -197,12 +351,14 @@ def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str
     recording.extraction_status = "processing"
     db.commit()
 
-    logger.info("转写完成: recording_id=%s segments=%d", recording_id, len(mock_segments))
+    logger.info("转写完成（降级模拟）: recording_id=%s segments=%d",
+                recording_id, len(mock_segments))
 
     return {
         "recording_id": recording_id,
         "segments_count": len(mock_segments),
         "status": "extracting",
+        "source": "mock_fallback",
     }
 
 
@@ -312,8 +468,7 @@ def _generate_mock_transcript(scene: str, duration_seconds: int) -> list[dict]:
 def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
     """执行AI萃取：从转写文本中结构化提取关键信息。
 
-    生产环境：调用 voice_engine.llm_generate() 进行真实AI萃取。
-    MVP阶段：基于场景生成模拟萃取数据。
+    优先调用AI引擎（voice_engine.llm_generate），失败时降级到模板生成。
     """
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
@@ -334,9 +489,17 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
         .all()
     )
 
-    # 生成萃取内容
+    # 生成萃取内容（AI优先，mock降级）
     scene = recording.scene or "日常"
-    content_json, summary, action_items_data = _generate_mock_extraction(scene, segments)
+    try:
+        content_json, summary, action_items_data, model_used, tokens = _generate_ai_extraction(
+            scene, segments, user_id=user_id, db=db,
+        )
+    except Exception as e:
+        logger.warning("AI萃取失败，降级到模板萃取: %s", e)
+        content_json, summary, action_items_data = _generate_mock_extraction(scene, segments)
+        model_used = "mock_mvp_fallback"
+        tokens = 0
 
     # 清除旧萃取结果
     db.query(ExtractionResult).filter(
@@ -356,8 +519,8 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
         ),
         content_json=content_json,
         summary=summary,
-        model_used="mock_mvp",
-        extraction_cost_tokens=0,
+        model_used=model_used,
+        extraction_cost_tokens=tokens,
     )
     db.add(extraction)
     db.flush()
@@ -381,13 +544,127 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
     recording.title = _generate_recording_title(scene, content_json)
     db.commit()
 
-    logger.info("萃取完成: recording_id=%s type=%s", recording_id, extraction.extraction_type)
+    logger.info("萃取完成: recording_id=%s type=%s model=%s", recording_id, extraction.extraction_type, model_used)
 
     return {
         "recording_id": recording_id,
         "extraction_type": extraction.extraction_type,
         "status": "completed",
     }
+
+
+def _generate_ai_extraction(
+    scene: str, segments: list, user_id: str | None = None, db: Session | None = None,
+) -> tuple[dict, str, list[dict], str, int]:
+    """调用AI引擎从转录文本中提取结构化信息。
+
+    Returns:
+        (content_json, summary, action_items, model_used, tokens)
+    """
+    # 构建转录文本
+    transcript_text = _build_transcript_text(segments)
+
+    # 根据场景构建不同的prompt
+    if scene == "面试":
+        output_schema = (
+            '{\n'
+            '  "content": {\n'
+            '    "name": "候选人姓名",\n'
+            '    "role": "应聘岗位",\n'
+            '    "avatarBg": "#6B8FBF",\n'
+            '    "years": "工作经验年限(如5年)",\n'
+            '    "school": "教育背景",\n'
+            '    "skills": ["技能1", "技能2"],\n'
+            '    "salary": "期望薪资范围",\n'
+            '    "onboard": "到岗时间",\n'
+            '    "competencies": [\n'
+            '      {"label": "技术能力", "stars": 4},\n'
+            '      {"label": "沟通表达", "stars": 3}\n'
+            '    ]\n'
+            '  },\n'
+            '  "summary": "200字以内的面试综合评估摘要",\n'
+            '  "action_items": [\n'
+            '    {"title": "行动项标题", "description": "详细描述", "priority": "high|medium|low", "due_date": "YYYY-MM-DD"}\n'
+            '  ]\n'
+            '}'
+        )
+        prompt = (
+            f'场景：面试录音\n'
+            f'以下是一段面试录音的文字转录：\n{transcript_text}\n\n'
+            f'请从面试对话中提取候选人的结构化信息。如果某些信息在对话中未提及，请留空或根据上下文合理推断。'
+        )
+    elif scene == "会议":
+        output_schema = (
+            '{\n'
+            '  "content": {\n'
+            '    "meeting_title": "会议标题",\n'
+            '    "date": "YYYY-MM-DD",\n'
+            '    "participants": ["参与者1", "参与者2"],\n'
+            '    "key_decisions": ["关键决策1", "关键决策2"],\n'
+            '    "discussion_points": ["讨论要点1", "讨论要点2"]\n'
+            '  },\n'
+            '  "summary": "200字以内的会议摘要",\n'
+            '  "action_items": [\n'
+            '    {"title": "行动项标题", "description": "详细描述", "priority": "high|medium|low", "due_date": "YYYY-MM-DD"}\n'
+            '  ]\n'
+            '}'
+        )
+        prompt = (
+            f'场景：会议录音\n'
+            f'以下是一段会议录音的文字转录：\n{transcript_text}\n\n'
+            f'请提取会议的关键信息，包括会议标题、参与者、关键决策和讨论要点。'
+        )
+    else:
+        output_schema = (
+            '{\n'
+            '  "content": {\n'
+            '    "topic": "主题",\n'
+            '    "key_insights": ["核心洞察1", "核心洞察2"],\n'
+            '    "tags": ["标签1", "标签2"]\n'
+            '  },\n'
+            '  "summary": "200字以内的内容摘要",\n'
+            '  "action_items": [\n'
+            '    {"title": "行动项标题", "description": "详细描述", "priority": "high|medium|low", "due_date": "YYYY-MM-DD"}\n'
+            '  ]\n'
+            '}'
+        )
+        prompt = (
+            f'场景：日常/自定义录音\n'
+            f'以下是一段录音的文字转录：\n{transcript_text}\n\n'
+            f'请提取录音中的主题、关键洞察和相关标签。'
+        )
+
+    result = llm_generate(
+        prompt=prompt,
+        system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_record", ""),
+        user_id=user_id,
+        db=db,
+        temperature=0.5,
+    )
+    parsed = safe_extract_json(result["content"])
+    if not parsed or not isinstance(parsed, dict):
+        raise LLMParsingError("AI萃取返回无效JSON")
+
+    content = parsed.get("content", {})
+    summary = parsed.get("summary", "")
+    action_items = parsed.get("action_items", [])
+
+    return content, summary, action_items, result["model_used"], result["usage"]["total_tokens"]
+
+
+def _build_transcript_text(segments: list) -> str:
+    """将转录片段列表构建为可传入LLM的文本。"""
+    if not segments:
+        return "（暂无转录文本）"
+    lines = []
+    for seg in segments[:50]:  # 限制50段，避免超出上下文
+        speaker = getattr(seg, "speaker", "") or ""
+        text = getattr(seg, "text", "") or ""
+        if speaker:
+            lines.append(f"[{speaker}]: {text}")
+        else:
+            lines.append(text)
+    return "\n".join(lines)
 
 
 def _generate_mock_extraction(scene: str, segments: list) -> tuple[dict, str, list[dict]]:
@@ -862,12 +1139,19 @@ def get_teleprompter(db: Session, user_id: str, position: str | None = None,
                      stage: str | None = None) -> dict[str, Any]:
     """获取面试提词器问题列表。
 
-    跨模块联动：调用③语音/AI引擎服务（llm_generate）生成面试提问建议。
-    MVP阶段：返回结构化的问题模板库。
+    优先调用AI引擎生成面试提问建议，失败时降级到模板问题库。
     """
     position = position or "HR岗位"
 
-    # MVP: 返回结构化问题模板（生产环境调用AI引擎生成）
+    # 尝试AI生成
+    try:
+        ai_result = _generate_ai_teleprompter(position, user_id=user_id, db=db)
+        if ai_result:
+            return ai_result
+    except Exception as e:
+        logger.warning("AI提词器生成失败，降级到模板: %s", e)
+
+    # 降级：返回结构化问题模板
     questions = [
         {
             "question": f"请候选人简要自我介绍（1-2分钟），重点了解其与{position}相关的核心经验。",
@@ -898,12 +1182,57 @@ def get_teleprompter(db: Session, user_id: str, position: str | None = None,
 
     tips = "面试中注意：①多用追问「能举个例子吗」来验证回答的真实性；②关注候选人的非语言信息（眼神、肢体）；③给候选人充分的提问时间，好的候选人通常问题也很多。"
 
-    # 组装响应
     return {
         "scene": "面试",
         "position": position,
         "questions": questions,
         "tips": tips,
+    }
+
+
+def _generate_ai_teleprompter(
+    position: str, user_id: str | None = None, db: Session | None = None,
+) -> dict | None:
+    """调用AI引擎生成面试提问建议。"""
+    output_schema = (
+        '{\n'
+        '  "questions": [\n'
+        '    {"question": "提问内容", "purpose": "评估目的", "expected_answer_hint": "理想回答要点"},\n'
+        '    ...\n'
+        '  ],\n'
+        '  "tips": "面试官技巧提示(1-2句话)"\n'
+        '}'
+    )
+    prompt = (
+        f'你是一位资深面试官。请为以下岗位生成5个面试提问建议：\n'
+        f'- 岗位：{position}\n\n'
+        f'每个问题应包含：\n'
+        f'- question: 具体的提问内容\n'
+        f'- purpose: 评估目的\n'
+        f'- expected_answer_hint: 理想回答应包含的要点\n\n'
+        f'问题应覆盖：自我介绍与职业脉络、问题解决能力、职业动机、自我认知、主动性等方面。'
+    )
+
+    result = llm_generate(
+        prompt=prompt,
+        system_prompt=MODULE_SYSTEM_PROMPTS.get("smart_record", ""),
+        user_id=user_id,
+        db=db,
+        temperature=0.7,
+    )
+    parsed = safe_extract_json(result["content"])
+    if not parsed or not isinstance(parsed, dict):
+        return None
+
+    questions = parsed.get("questions", [])
+    if len(questions) < 3:
+        return None
+
+    return {
+        "scene": "面试",
+        "position": position,
+        "questions": questions[:8],  # 最多8个问题
+        "tips": parsed.get("tips", ""),
     }
 
 
@@ -931,3 +1260,251 @@ def auto_process_recording(db: Session, recording_id: str, user_id: str) -> dict
         "extraction": extraction_result,
         "status": "completed",
     }
+
+
+# ═══════════════════════════════════════════════
+# 面试场景专用算法（日耕模块算法设计文档_V2.0）
+# ═══════════════════════════════════════════════
+
+def extract_interview(transcript: str, job_position: str = "", user_id=None, db=None) -> dict:
+    """面试场景专用算法：从面试对话中提取结构化信息。
+
+    提取维度：
+      - 面试结构识别（面试阶段划分）
+      - 候选人画像（姓名、经验年限、当前公司/职位）
+      - 能力维度评分（专业能力、沟通表达、团队协作、稳定性，1-5分+证据）
+      - STAR事件萃取（四要素完整性评分20/40/70/100）
+      - 匹配分析（综合评分、推荐等级、权重分解）
+
+    设计原则：
+      - 能力评分必须引用对话中的具体内容作为依据
+      - 缺乏信息的维度标注"信息不足"，不猜测打分
+      - 品牌语："所言成资产，回顾有痕迹"
+    """
+    position_hint = f"\n应聘岗位: {job_position}" if job_position else ""
+
+    prompt = (
+        f"从以下面试对话中提取结构化信息。返回JSON:\n"
+        f"{{\n"
+        f'  "interview_stages": [{{"stage_name": "阶段名称", "start_marker": "开始标志"}}],\n'
+        f'  "candidate_profile": {{"name": "姓名", "experience_years": "经验年限", "current_company": "当前公司", "current_position": "当前职位"}},\n'
+        f'  "capability_scores": [\n'
+        f'    {{"dimension": "专业能力|沟通表达|团队协作|稳定性", "score": 1-5, "evidence": "对话中的具体内容", "note": "信息不足则标注"}}\n'
+        f'  ],\n'
+        f'  "star_events": [\n'
+        f'    {{"situation": "情境", "task": "任务", "action": "行动", "result": "结果", "completeness": 20|40|70|100}}\n'
+        f'  ],\n'
+        f'  "match_analysis": {{\n'
+        f'    "overall_score": 0-100,\n'
+        f'    "recommendation": "强烈推荐|推荐|保留|不推荐",\n'
+        f'    "breakdown": {{"专业能力权重": 0.35, "沟通表达": 0.20, "团队协作": 0.15, "稳定性": 0.15, "薪资期望": 0.15}}\n'
+        f'  }}\n'
+        f"}}\n\n"
+        f"要求：\n"
+        f"- 能力维度评分必须引用对话中的具体内容作为依据\n"
+        f"- 如果对话中缺乏某维度信息，标注'信息不足'而非猜测打分\n"
+        f"- STAR完整性: 四要素齐全=100%, 缺R=70%, 缺A+R=40%, 只有S或T=20%\n\n"
+        f"面试对话内容：\n{transcript}{position_hint}"
+    )
+
+    system_prompt = build_persona_prompt(module="smart_record")
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="smart_record",
+            task_complexity="complex",
+            temperature=0.2,
+            user_id=user_id,
+            db=db,
+        )
+        parsed = safe_extract_json(result["content"])
+        if not parsed or not isinstance(parsed, dict):
+            raise LLMParsingError("面试萃取返回无效JSON")
+
+        # 发射事件到数据底座
+        if user_id:
+            try:
+                emit_event(
+                    user_id=user_id,
+                    module="smart_record",
+                    event_type="record.extracted_interview",
+                    properties={
+                        "job_position": job_position,
+                        "transcript_length": len(transcript),
+                        "model_used": result.get("model_used", "unknown"),
+                    },
+                    db=db,
+                )
+            except Exception as emit_err:
+                logger.warning("事件发射失败（非致命）: %s", emit_err)
+
+        return {
+            "success": True,
+            "data": parsed,
+            "model_used": result.get("model_used", "unknown"),
+            "usage": result.get("usage", {}),
+        }
+    except Exception as e:
+        logger.error("面试萃取失败: %s", e)
+        return {
+            "success": False,
+            "error": str(e),
+            "data": None,
+        }
+
+
+# ═══════════════════════════════════════════════
+# 会议行动项提取（日耕模块算法设计文档_V2.0）
+# ═══════════════════════════════════════════════
+
+def extract_action_items(meeting_transcript: str, meeting_date: str = "",
+                         meeting_title: str = "", user_id=None, db=None) -> dict:
+    """从会议记录中提取所有行动项（待办事项）。
+
+    提取规则：
+      - 只提取明确分配了责任人的事项
+      - '可以考虑''也许可以''要不要'等不确定语气不提取
+      - 已有明确DDL则提取，只有'尽快''有空的时候'则提取但标注deadline_str='待定'
+      - 按优先级排序返回
+
+    每个行动项包含：
+      - action: 具体要做什么（动词开头）
+      - owner: 负责人
+      - deadline: 截止时间
+      - priority: high / medium / low
+      - source: 会议记录的哪一部分提出了这个行动项
+    """
+    date_hint = f"\n会议日期: {meeting_date}" if meeting_date else ""
+    title_hint = f"\n会议标题: {meeting_title}" if meeting_title else ""
+
+    prompt = (
+        f"从会议记录中提取所有行动项(待办事项)。每个行动项必须包含:\n"
+        f"- action: 具体要做什么(动词开头)\n"
+        f"- owner: 负责人\n"
+        f"- deadline: 截止时间\n"
+        f"- priority: high/medium/low\n"
+        f"- source: 会议记录的哪一部分提出了这个行动项\n\n"
+        f"提取规则:\n"
+        f"- 只提取明确分配了责任人的事项\n"
+        f"- '可以考虑''也许可以''要不要'等不确定语气→不提取\n"
+        f"- 已有明确DDL→提取，只有'尽快''有空的时候'→提取但标注deadline_str='待定'\n\n"
+        f"返回JSON数组，按优先级排序\n\n"
+        f"会议记录内容：\n{meeting_transcript}{date_hint}{title_hint}"
+    )
+
+    system_prompt = build_persona_prompt(module="smart_record")
+
+    try:
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="smart_record",
+            task_complexity="medium",
+            temperature=0.2,
+            user_id=user_id,
+            db=db,
+        )
+        parsed = safe_extract_json(result["content"])
+        if not parsed:
+            raise LLMParsingError("会议行动项提取返回无效JSON")
+
+        # 确保返回的是列表
+        if isinstance(parsed, dict):
+            # 兼容LLM返回包裹在对象中的情况
+            action_items_list = parsed.get("action_items", [])
+            if not action_items_list and isinstance(parsed, dict):
+                # 可能是直接返回了数组但被解析为dict
+                action_items_list = [parsed] if any(k in parsed for k in ("action", "owner")) else []
+        elif isinstance(parsed, list):
+            action_items_list = parsed
+        else:
+            action_items_list = []
+
+        # 发射事件到数据底座
+        if user_id:
+            try:
+                emit_event(
+                    user_id=user_id,
+                    module="smart_record",
+                    event_type="record.extracted_action_items",
+                    properties={
+                        "meeting_title": meeting_title,
+                        "meeting_date": meeting_date,
+                        "transcript_length": len(meeting_transcript),
+                        "items_count": len(action_items_list),
+                        "model_used": result.get("model_used", "unknown"),
+                    },
+                    db=db,
+                )
+            except Exception as emit_err:
+                logger.warning("事件发射失败（非致命）: %s", emit_err)
+
+        return {
+            "success": True,
+            "action_items": action_items_list,
+            "total_count": len(action_items_list),
+            "model_used": result.get("model_used", "unknown"),
+            "usage": result.get("usage", {}),
+        }
+    except Exception as e:
+        logger.error("会议行动项提取失败: %s", e)
+        return {
+            "success": False,
+            "error": str(e),
+            "action_items": [],
+            "total_count": 0,
+        }
+
+
+# ═══════════════════════════════════════════════
+# 录音可靠性保障管理器（日耕模块算法设计文档_V2.0）
+# ═══════════════════════════════════════════════
+
+class RecordingReliabilityManager:
+    """录音可靠性保障管理器。
+
+    处理录音过程中的异常场景，保障录音数据不丢失。
+    纯配置/状态管理，不需要LLM调用。
+
+    场景覆盖：
+      - 屏幕关闭：切换到后台录音模式，优化语音采集
+      - 来电中断：保存检查点，暂停录音
+      - 通话结束：恢复录音或重新开始
+    """
+
+    @staticmethod
+    def handle_screen_off() -> dict:
+        """处理屏幕关闭事件。
+
+        录音切换到后台模式，保持语音采集但降低功耗。
+        品牌语："所言成资产，回顾有痕迹"——即使后台录音也不丢失。
+        """
+        return {
+            "status": "recording_in_background",
+            "quality": "speech_optimized",
+        }
+
+    @staticmethod
+    def handle_incoming_call() -> dict:
+        """处理来电中断事件。
+
+        保存检查点数据，暂停录音，确保已录制内容不丢失。
+        """
+        return {
+            "action": "pause_and_checkpoint",
+            "checkpoint": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "mode": "interrupted_by_call",
+                "auto_resume": False,
+            },
+        }
+
+    @staticmethod
+    def handle_call_ended() -> dict:
+        """处理通话结束事件。
+
+        默认恢复录音模式，前端可根据用户选择改为重新开始。
+        """
+        return {"mode": "resume"}

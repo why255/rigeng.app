@@ -222,6 +222,67 @@ def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: 
 
 
 # ═══════════════════════════════════════════════
+# 腾讯云实时语音识别 WebSocket（流式 ASR）
+# ═══════════════════════════════════════════════
+TENCENT_ASR_WS_ENDPOINT = "asr.cloud.tencent.com"
+TENCENT_ASR_WS_PATH = "/asr/v2/"
+
+
+def get_realtime_asr_auth() -> dict[str, Any]:
+    """生成腾讯云实时语音识别 WebSocket 连接所需的签名参数。
+
+    返回前端可直接用于连接 Tencent Cloud ASR WebSocket 的参数。
+    WebSocket URL: wss://asr.cloud.tencent.com/asr/v2/{appid}
+
+    Returns:
+        {"ws_url": "wss://...", "voice_id": "xxx", "appid": "xxx", ...}
+    """
+    import hashlib as _hl
+
+    secret_id = settings.TENCENT_ASR_SECRET_ID
+    secret_key = settings.TENCENT_ASR_SECRET_KEY
+    if not secret_id or not secret_key:
+        raise APIError(50001, "腾讯云ASR未配置密钥（TENCENT_ASR_SECRET_ID/SECRET_KEY）", 503)
+
+    # 获取 appid — 从配置读取或使用默认值
+    appid = getattr(settings, "TENCENT_ASR_APPID", None)
+    if not appid:
+        # 尝试从 SecretId 推导（Tencent Cloud SecretId 格式: AKIDxxxx）
+        raise APIError(50001, "请配置 TENCENT_ASR_APPID（腾讯云账号APPID）", 503)
+
+    timestamp = int(time.time())
+    expired = timestamp + 86400  # 24小时有效
+    nonce = timestamp * 1000 + int(time.time() * 1000) % 1000
+    voice_id = str(uuid.uuid4())
+
+    # 构建签名 — 腾讯云实时ASR使用 HMAC-SHA1 + Base64
+    sign_str = f"{TENCENT_ASR_WS_ENDPOINT}{TENCENT_ASR_WS_PATH}{appid}"
+    signature = base64.b64encode(
+        hmac.new(secret_key.encode("utf-8"), sign_str.encode("utf-8"), hashlib.sha1).digest()
+    ).decode("utf-8")
+
+    ws_url = (
+        f"wss://{TENCENT_ASR_WS_ENDPOINT}{TENCENT_ASR_WS_PATH}{appid}"
+        f"?secretid={secret_id}"
+        f"&timestamp={timestamp}"
+        f"&expired={expired}"
+        f"&nonce={nonce}"
+        f"&voice_id={voice_id}"
+        f"&signature={signature}"
+    )
+
+    logger.info("实时ASR签名已生成: voice_id=%s", voice_id)
+
+    return {
+        "ws_url": ws_url,
+        "voice_id": voice_id,
+        "appid": str(appid),
+        "engine_model_type": settings.TENCENT_ASR_ENGINE,
+        "expired": expired,
+    }
+
+
+# ═══════════════════════════════════════════════
 # 智谱AI GLM（大模型推理/生成）
 # ═══════════════════════════════════════════════
 ZHIPUAI_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
@@ -294,7 +355,13 @@ def llm_generate(prompt: str, system_prompt: str | None = None,
 # 生产环境用 Redis，开发用内存（简化版）
 _conversations: dict[str, list[dict[str, str]]] = {}
 
+# ═══════════════════════════════════════════════
 # 各模块的系统提示词（含品牌语 - 锁定书V1.1）
+# ⚠️ DEPRECATED: 推荐使用 engines.persona.build_persona_prompt() 替代。
+#   该函数提供三层叠加式persona系统（核心人设→模块场景→用户状态），
+#   比此处的静态prompt更完整，严格遵循《日耕模块算法设计文档_V2.0》。
+#   此字典保留用于向后兼容，新模块请使用 engines.persona。
+# ═══════════════════════════════════════════════
 MODULE_SYSTEM_PROMPTS: dict[str, str] = {
     "general": (
         "你是日耕(RiGeng)的AI助手小耕，一位温暖而专业的HR顾问。"
@@ -339,13 +406,22 @@ MODULE_SYSTEM_PROMPTS: dict[str, str] = {
 
 
 def _detect_emotion(text: str) -> dict[str, Any]:
-    """情绪/危机检测（简单关键词 + 规则，生产环境接专业模型）。"""
+    """情绪/危机检测 — 委托给 emotion_service.analyze_emotion（三层检测融合算法）。
+
+    使用延迟导入避免循环依赖（emotion_service -> llm_orchestrator -> voice_engine）。
+    """
+    try:
+        from ..emotion_service.service import analyze_emotion
+        return analyze_emotion(text)
+    except Exception as e:
+        logger.warning("emotion_service.analyze_emotion 不可用，使用本地简易检测: %s", e)
+
+    # === 本地简易回退（原有关键词匹配） ===
     crisis_keywords = ["自杀", "不想活", "死了算了", "结束生命", "自残", "伤害自己",
                        "想死", "活不下去", "没意义了", "绝望", "崩溃"]
     agitation_keywords = ["好烦", "气死", "受不了", "崩溃", "难过", "焦虑", "压抑",
                           "累死了", "撑不住", "想哭", "崩溃了"]
 
-    text_lower = text.lower()
     is_crisis = any(kw in text for kw in crisis_keywords)
     is_agitated = is_crisis or any(kw in text for kw in agitation_keywords)
 
@@ -457,12 +533,24 @@ def llm_generate(prompt: str, system_prompt: str | None = None,
                  context: list[dict[str, str]] | None = None,
                  model: str | None = None, temperature: float | None = None,
                  max_tokens: int | None = None, stream: bool = False,
-                 provider: str | None = None) -> dict[str, Any]:
+                 provider: str | None = None,
+                 user_id: str | None = None, db=None) -> dict[str, Any]:
     """A3/A4 LLM生成回答（统一入口，支持多提供商）。
 
     provider 优先级: 参数 > LLM_PROVIDER 配置 > "auto"
     "auto" 模式: 优先 Anthropic Claude，不可用时降级到智谱AI GLM
+
+    user_id + db: 可选，传入后自动读取用户模型偏好（优先于全局默认模型）。
     """
+    # 读取用户模型偏好（如果未显式指定模型）
+    if model is None and user_id and db is not None:
+        try:
+            from ..user_auth.service import get_preferred_model
+            pref = get_preferred_model(db, user_id)
+            model = pref["model"]
+        except Exception:
+            pass  # 降级到提供商默认模型
+
     provider = provider or settings.LLM_PROVIDER
 
     # auto 模式：检测可用的提供商
@@ -507,7 +595,10 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
                          context: list[dict[str, str]] | None = None,
                          model: str | None = None, temperature: float | None = None,
                          max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
-    """智谱AI GLM 原始实现（内部函数）。"""
+    """智谱AI GLM 原始实现（内部函数）。
+
+    支持余额不足时自动降级到备用模型列表。
+    """
     import urllib.request
 
     if not settings.ZHIPUAI_API_KEY:
@@ -517,6 +608,53 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
     temperature = temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE
     max_tokens = max_tokens or settings.ZHIPUAI_MAX_TOKENS
 
+    # 构建需要尝试的模型列表：用户选择的模型 + 降级备用模型
+    models_to_try = [model]
+    fallback_models = getattr(settings, "ZHIPUAI_FALLBACK_MODELS", [])
+    for fb in fallback_models:
+        if fb not in models_to_try:
+            models_to_try.append(fb)
+
+    last_error: Exception | None = None
+
+    for m in models_to_try:
+        try:
+            return _call_zhipu_api(
+                prompt=prompt, system_prompt=system_prompt, context=context,
+                model=m, temperature=temperature, max_tokens=max_tokens,
+                stream=stream,
+            )
+        except _BalanceInsufficientError:
+            if m != models_to_try[-1]:
+                logger.warning("智谱AI模型 %s 余额不足，尝试降级到 %s", m,
+                               models_to_try[models_to_try.index(m) + 1])
+                continue
+            raise E_LLM_TIMEOUT from None
+        except APIError:
+            raise
+        except Exception as e:
+            last_error = e
+            if m != models_to_try[-1]:
+                logger.warning("智谱AI模型 %s 调用失败: %s，尝试降级", m, e)
+                continue
+
+    if last_error:
+        logger.exception("智谱AI所有模型调用失败")
+    raise E_LLM_TIMEOUT
+
+
+class _BalanceInsufficientError(Exception):
+    """智谱AI余额不足（错误码1113）。"""
+
+
+def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
+                     context: list[dict[str, str]] | None = None,
+                     model: str | None = None, temperature: float | None = None,
+                     max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
+    """单次调用智谱AI API。余额不足时抛 _BalanceInsufficientError。"""
+    import urllib.request
+
+    model = model or settings.ZHIPUAI_MODEL
     messages: list[dict[str, str]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
@@ -527,8 +665,8 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
     body = json.dumps({
         "model": model,
         "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
+        "temperature": temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE,
+        "max_tokens": max_tokens or settings.ZHIPUAI_MAX_TOKENS,
         "stream": stream,
     }).encode("utf-8")
 
@@ -541,37 +679,47 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
         req = urllib.request.Request(ZHIPUAI_ENDPOINT, data=body, headers=headers)
         with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
             result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        try:
+            err_data = json.loads(err_body)
+            err_code = str(err_data.get("error", {}).get("code", ""))
+            err_msg = err_data.get("error", {}).get("message", "")
+            # 余额不足 — 向上抛特殊异常，由外层尝试降级
+            if err_code == "1113":
+                raise _BalanceInsufficientError(err_msg)
+            raise APIError(50020, f"大模型错误({err_code}): {err_msg}", 502)
+        except (_BalanceInsufficientError, APIError):
+            raise
+        except Exception:
+            raise APIError(50020, f"大模型HTTP错误({e.code})", 502)
 
-        if "choices" not in result or not result["choices"]:
-            raise APIError(50020, "大模型返回为空", 502)
+    if "choices" not in result or not result["choices"]:
+        raise APIError(50020, "大模型返回为空", 502)
 
-        choice = result["choices"][0]
-        return {
-            "content": choice["message"]["content"],
-            "model_used": result.get("model", model),
-            "provider": "zhipu",
-            "usage": {
-                "prompt_tokens": result.get("usage", {}).get("prompt_tokens", 0),
-                "completion_tokens": result.get("usage", {}).get("completion_tokens", 0),
-                "total_tokens": result.get("usage", {}).get("total_tokens", 0),
-            },
-        }
-
-    except APIError:
-        raise
-    except Exception as e:
-        logger.exception("智谱AI调用异常")
-        raise E_LLM_TIMEOUT
+    choice = result["choices"][0]
+    return {
+        "content": choice["message"]["content"],
+        "model_used": result.get("model", model),
+        "provider": "zhipu",
+        "usage": {
+            "prompt_tokens": result.get("usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": result.get("usage", {}).get("completion_tokens", 0),
+            "total_tokens": result.get("usage", {}).get("total_tokens", 0),
+        },
+    }
 
 
 def converse(user_input: str, conversation_id: str | None = None,
              module: str = "general", context_meta: dict[str, Any] | None = None,
              provider: str | None = None,
+             user_id: str | None = None,
              db: Any | None = None) -> dict[str, Any]:
     """A5 多轮对话统一入口。
 
     当 db 传入时，自动检索该模块的算法文件并注入 system prompt，
     实现「AI调用时优先检索管理员上传的算法文件」。
+    当 user_id + db 传入时，读取用户模型偏好并传递给 LLM。
     """
     # 1. 情绪检测
     emotion = _detect_emotion(user_input)
@@ -604,12 +752,23 @@ def converse(user_input: str, conversation_id: str | None = None,
     if context_meta:
         system_prompt += f"\n当前上下文: {json.dumps(context_meta, ensure_ascii=False)}"
 
-    # 4. LLM推理（传递 provider 参数）
+    # 4. LLM推理（传递 provider + 用户模型偏好）
     try:
+        # 读取用户模型偏好
+        user_model = None
+        if user_id and db is not None:
+            try:
+                from ..user_auth.service import get_preferred_model
+                pref = get_preferred_model(db, user_id)
+                user_model = pref["model"]
+            except Exception:
+                pass  # 兜底使用全局配置
+
         llm_result = llm_generate(
             prompt=user_input,
             system_prompt=system_prompt,
             context=history,
+            model=user_model,
             provider=provider,
         )
     except APIError:
@@ -649,3 +808,142 @@ def converse(user_input: str, conversation_id: str | None = None,
         "suggestions": None,
         "provider": llm_result.get("provider", "zhipu"),
     }
+
+
+# ═══════════════════════════════════════════════
+# 语音全链路引擎增强 (SK-4.3-01)
+# ═══════════════════════════════════════════════
+
+# 方言识别增强 — System Prompt注入方言提示
+DIALECT_AWARENESS_PROMPT = (
+    "用户可能使用方言表达，请识别口音并理解方言词汇。"
+    "遇到不确定的词：优先根据上下文推测，推测失败的标注[?]并温柔确认。"
+    "支持的方言: 四川话(川渝特色词汇)、粤语(广府话常见词汇)、"
+    "东北话(东北特色词汇)、吴语(上海话常见词汇)。"
+)
+
+# 语音状态存储
+_voice_sessions: dict[str, dict] = {}  # session_id -> state
+
+
+class VoiceSilenceGuardian:
+    """30秒静默守护。
+
+    30秒 → 温柔提醒"小耕还在听哦~"
+    60秒 → 自动暂停，保留已转录内容
+    提醒风格：关切而非催促，绝不用「您还在吗？」(催促感)
+    """
+
+    SILENCE_NUDGE_SECONDS = 30
+    SILENCE_PAUSE_SECONDS = 60
+
+    @staticmethod
+    def check(session_id: str, last_speech_time: float) -> dict:
+        """检查静默时长并返回对应动作。
+
+        Returns:
+            {"action": "continue"|"nudge"|"pause", "message": str|None}
+        """
+        import time
+        elapsed = time.time() - last_speech_time
+
+        if elapsed >= VoiceSilenceGuardian.SILENCE_PAUSE_SECONDS:
+            _voice_sessions.pop(session_id, None)
+            return {
+                "action": "pause",
+                "message": "姐，小耕先去旁边等一下，您随时可以叫我~",
+            }
+
+        if elapsed >= VoiceSilenceGuardian.SILENCE_NUDGE_SECONDS:
+            return {
+                "action": "nudge",
+                "message": "姐，小耕还在听哦~",
+            }
+
+        return {"action": "continue", "message": None}
+
+
+class VoiceInterruptionHandler:
+    """语音中断续接 — 打断时自动保存上下文快照。"""
+
+    SNAPSHOT_TTL_SECONDS = 600  # 10分钟有效期
+
+    @staticmethod
+    def save_snapshot(session_id: str, session_state: dict) -> None:
+        """打断时保存上下文快照。"""
+        snapshot = {
+            "session_id": session_id,
+            "last_sop_step": session_state.get("current_step"),
+            "transcribed_so_far": session_state.get("transcript", ""),
+            "extracted_items": session_state.get("extracted_items", []),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        # 内存存储（生产环境用 Redis: redis.setex(f"voice_snapshot:{session_id}", 600, snapshot)）
+        _voice_sessions[f"snapshot_{session_id}"] = snapshot
+        logger.info("语音中断上下文已保存: session=%s", session_id)
+
+    @staticmethod
+    def try_resume(session_id: str) -> dict:
+        """尝试恢复上下文。"""
+        snapshot_key = f"snapshot_{session_id}"
+        snapshot = _voice_sessions.get(snapshot_key)
+
+        if snapshot:
+            try:
+                snap_time = datetime.fromisoformat(snapshot["timestamp"])
+                elapsed = (datetime.now(timezone.utc) - snap_time).total_seconds()
+                if elapsed < VoiceInterruptionHandler.SNAPSHOT_TTL_SECONDS:
+                    _voice_sessions.pop(snapshot_key, None)
+                    return {
+                        "mode": "resume",
+                        "message": "姐，刚才断了一下。咱们接着来？",
+                        "context": snapshot,
+                    }
+            except (ValueError, KeyError):
+                pass
+
+        return {
+            "mode": "restart",
+            "message": "姐，刚才出了点状况，咱们重新来？",
+        }
+
+
+# ═══════════════════════════════════════════════
+# TTS语音合成（小耕说话）
+# ═══════════════════════════════════════════════
+
+def tts_speak(text: str, emotion_context: str = "neutral") -> dict:
+    """TTS语音合成 — 小耕说话。
+
+    根据情绪上下文选择语音参数：
+    - 负面情绪时语速放慢 (speed=0.9)
+    - 正常情绪时正常语速 (speed=1.0)
+
+    MVP阶段返回参数供前端TTS引擎使用。
+    生产环境接入阿里云TTS API。
+    """
+    params = {
+        "text": text,
+        "speed": 0.9 if emotion_context in ("sad", "anxious", "low") else 1.0,
+        "pitch": 0.0,
+        "volume": 1.0,
+        "engine": "aliyun_tts",  # 阿里云语音合成，中文自然度高
+    }
+    logger.info("TTS合成: text_len=%d emotion=%s", len(text), emotion_context)
+    return params
+
+
+def build_voice_system_prompt(module: str, enable_dialect: bool = True) -> str:
+    """构建语音场景专用的system prompt增强。
+
+    在已有的模块system prompt基础上追加语音相关指令。
+    """
+    extras = []
+    if enable_dialect:
+        extras.append(DIALECT_AWARENESS_PROMPT)
+
+    extras.append(
+        "当前为语音交互模式。用户的输入来自语音识别，可能包含识别错误。"
+        "遇到明显不通顺的地方，请结合上下文理解用户意图，不要逐字较真。"
+    )
+    return "\n".join(extras)

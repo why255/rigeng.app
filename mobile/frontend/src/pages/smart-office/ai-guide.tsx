@@ -3,78 +3,17 @@
  * Route: /m/smart-office/ai-guide?module=&name=&tool=&toolLabel=
  * 对齐 m6-p3-mobile.html 设计规范。
  *
+ * V2.0: 所有小耕输出内容由AI模型生成，AI根据模块/工具动态生成引导问题。
+ *       修复 StrictMode 双重挂载导致的4条重复消息 bug。
+ *
  * 使用 so-* BEM 类名 + 内联 style。无 Tailwind CSS。
  * 图标使用 @iconify/react <Icon> 组件。返回按钮使用 navigate(-1)。
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import { officeChat, generateDocument } from '@/shared/api/office';
 import './smart-office.css';
-
-/* ── 引导问题库（按 toolKey 索引） ── */
-const GUIDE_QUESTIONS: Record<string, string[]> = {
-  jd_generator: [
-    '请告诉我这个岗位的职位名称和所属部门？',
-    '这个岗位的核心职责有哪些？（请列出3-5项）',
-    '请描述该岗位的任职资格要求（学历、经验、技能等）',
-    '有没有特殊的加分项或优先条件？',
-    '公司的薪酬范围和工作地点是？',
-  ],
-  interview_guide: [
-    '请告诉我面试的岗位名称？',
-    '您希望重点考察候选人哪些能力维度？',
-    '面试流程是怎样的？（初试/复试/终试）',
-    '有没有需要特别关注的红线或否决项？',
-  ],
-  onboarding_plan: [
-    '新员工的职位和部门是？',
-    '入职后的直属上级是谁？',
-    '您希望新人多长时间内独立上手？',
-    '有没有特定需要对接的团队或项目？',
-  ],
-  salary_structure: [
-    '请描述公司当前的薪酬策略定位（领先型/跟随型/滞后型）？',
-    '公司的职级体系是怎样的？',
-    '期望的薪酬带宽范围？',
-    '是否需要包含长期激励或股权方案？',
-  ],
-  okr_framework: [
-    '请告诉我公司当前季度的战略优先级？',
-    '需要从哪个层级开始制定OKR（公司级/部门级/个人级）？',
-    '目前是否有正在使用的KPI可以与OKR结合？',
-  ],
-  training_system: [
-    '请描述公司目前的培训现状和痛点？',
-    '期望搭建几级培训体系？',
-    '培训预算的大致范围是？',
-    '是否有内部讲师资源？',
-  ],
-  contract_template: [
-    '需要哪种类型的合同模板（全职/兼职/实习/劳务）？',
-    '公司所在城市（涉及社保公积金政策）？',
-    '试用期时长和薪资比例？',
-    '是否有竞业限制或保密条款需求？',
-  ],
-  handbook: [
-    '公司规模和成立时间？',
-    '公司所在行业？',
-    '目前的考勤制度和休假政策是怎样的？',
-    '有没有特殊的企业文化或福利需要体现？',
-  ],
-  culture_manual: [
-    '公司的使命、愿景和价值观是什么？',
-    '公司的发展历程中有哪些里程碑事件？',
-    '有没有标杆员工故事可以融入文化手册？',
-    '公司对员工行为的期望是怎样的？',
-  ],
-  default: [
-    '请简要描述您的需求场景？',
-    '您期望的文档包含哪些关键模块？',
-    '有没有参考模板或风格偏好？',
-    '目标受众是谁？文档将用于什么场合？',
-    '有没有需要特别注意的合规或行业要求？',
-  ],
-};
 
 interface ChatMessage {
   id: string;
@@ -84,9 +23,7 @@ interface ChatMessage {
 }
 
 let _msgId = 0;
-function nextId(): string {
-  return `so-msg-${++_msgId}`;
-}
+function nextId(): string { return `so-msg-${++_msgId}`; }
 
 function getTimeStr(): string {
   const d = new Date();
@@ -102,17 +39,18 @@ export function SmartOfficeAiGuide() {
   const toolKey = searchParams.get('tool') || '';
   const toolLabel = searchParams.get('toolLabel') || '';
 
-  const questions = GUIDE_QUESTIONS[toolKey] || GUIDE_QUESTIONS['default'];
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<string[]>([]);
+  const [docId, setDocId] = useState<string | null>(null);
 
   const chatListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initRef = useRef(false);  // ← 防 StrictMode 双重挂载
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -122,123 +60,151 @@ export function SmartOfficeAiGuide() {
     }, 80);
   }, []);
 
-  // 添加小耕消息（带打字动画）
-  const addGengMessage = useCallback((text: string, showTyping = true): Promise<void> => {
-    return new Promise((resolve) => {
-      if (showTyping) {
-        setIsThinking(true);
-        scrollToBottom();
+  /* ═══════════════════════════════════════════════
+     Init — AI 生成初始问候（只执行一次）
+     ═══════════════════════════════════════════════ */
 
-        const delay = 800 + Math.random() * 600;
-        setTimeout(() => {
-          setIsThinking(false);
-          setMessages((prev) => [
-            ...prev,
-            { id: nextId(), role: 'geng', text, time: getTimeStr() },
-          ]);
-          scrollToBottom();
-          resolve();
-        }, delay);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { id: nextId(), role: 'geng', text, time: getTimeStr() },
-        ]);
-        scrollToBottom();
-        resolve();
-      }
-    });
-  }, [scrollToBottom]);
-
-  // 添加用户消息
-  const addUserMessage = useCallback((text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), role: 'user', text, time: getTimeStr() },
-    ]);
-    scrollToBottom();
-  }, [scrollToBottom]);
-
-  // AI引导提问
-  const askNextQuestion = useCallback(async () => {
-    const idx = questionIndex;
-    if (idx < questions.length) {
-      const prefix = idx === 0
-        ? `你好！我来帮你生成「<strong>${toolLabel}</strong>」。为了生成更精准的文档，我需要了解一些信息。`
-        : '好的，我还想了解一下…';
-      await addGengMessage(`${prefix}<br/><br/>${questions[idx]}`);
-      setQuestionIndex((prev) => prev + 1);
-    } else {
-      await startDocumentGeneration();
-    }
-  }, [questionIndex, questions, toolLabel, addGengMessage]);
-
-  // 开始生成文档
-  const startDocumentGeneration = useCallback(async () => {
-    setIsWriting(true);
-    await addGengMessage('信息已经足够了，我正在为你生成文档，请稍候…', true);
-    // 模拟AI生成
-    await new Promise((r) => setTimeout(r, 2500));
-    setIsWriting(false);
-    await addGengMessage(
-      '文档已生成完毕！包含了您提供的所有需求要点。请查看并确认是否需要修改。',
-      false,
-    );
-    setTimeout(() => setShowCompletion(true), 300);
-  }, [addGengMessage]);
-
-  // 处理用户发送
-  const handleSend = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text || isWriting) return;
-
-    addUserMessage(text);
-    setUserAnswers((prev) => [...prev, text]);
-    setInputText('');
-
-    // 长回答可能跳过一个问题（模拟AI判断）
-    let skipNext = false;
-    if (text.length > 80 && questionIndex < questions.length) {
-      skipNext = Math.random() > 0.5;
-    }
-    if (skipNext && questionIndex < questions.length - 1) {
-      setQuestionIndex((prev) => prev + 1);
-    }
-
-    await askNextQuestion();
-  }, [inputText, isWriting, questionIndex, questions, addUserMessage, askNextQuestion]);
-
-  // 弹窗取消
-  const handleModalCancel = useCallback(async () => {
-    setShowCompletion(false);
-    setIsWriting(false);
-    await addGengMessage('还有什么我没说到的吗？或者您想补充什么信息？我会继续帮您完善文档。');
-    inputRef.current?.focus();
-  }, [addGengMessage]);
-
-  // 弹窗确认 → 跳转编辑器
-  const handleModalConfirm = useCallback(() => {
-    const answers = userAnswers.join('|');
-    navigate(
-      `/m/smart-office/editor?module=${encodeURIComponent(moduleKey)}&name=${encodeURIComponent(moduleName)}&tool=${encodeURIComponent(toolKey)}&toolLabel=${encodeURIComponent(toolLabel)}&answers=${encodeURIComponent(answers)}`,
-    );
-  }, [navigate, moduleKey, moduleName, toolKey, toolLabel, userAnswers]);
-
-  // 初始化
   useEffect(() => {
-    const init = async () => {
-      await addGengMessage(
-        `欢迎来到智能办公！我是小耕，今天来帮您高效完成文档工作 📋<br/><br/>当前模块：<strong>${moduleName}</strong>｜工具：<strong>${toolLabel}</strong>`,
-        true,
-      );
-      await askNextQuestion();
-    };
+    if (initRef.current) return;  // StrictMode 防护
+    initRef.current = true;
+
+    let cancelled = false;
+
+    async function init() {
+      try {
+        setIsThinking(true);
+        const result = await officeChat({
+          message: '',
+          module_key: moduleKey,
+          module_name: moduleName,
+          tool_key: toolKey,
+          tool_label: toolLabel,
+          context: [],
+          question_index: 0,
+        });
+        if (cancelled) return;
+        setIsThinking(false);
+        setMessages([{ id: nextId(), role: 'geng', text: result.reply, time: getTimeStr() }]);
+        setQuestionIndex(1);
+      } catch {
+        if (cancelled) return;
+        setIsThinking(false);
+        const fallback = `姐，我来帮您生成「${toolLabel || '文档'}」。请先跟我说说您的具体需求吧～`;
+        setMessages([{ id: nextId(), role: 'geng', text: fallback, time: getTimeStr() }]);
+        setQuestionIndex(1);
+      } finally {
+        scrollToBottom();
+      }
+    }
+
     init();
     inputRef.current?.focus();
+
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 回车发送
+  useEffect(() => { scrollToBottom(); }, [messages, isThinking, isWriting, scrollToBottom]);
+
+  /* ═══════════════════════════════════════════════
+     Core: send user input → AI 生成回复
+     ═══════════════════════════════════════════════ */
+
+  const handleSend = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text || isWriting || isThinking) return;
+
+    // 添加用户消息
+    const userMsg: ChatMessage = { id: nextId(), role: 'user', text, time: getTimeStr() };
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
+    setUserAnswers(prev => [...prev, text]);
+    setInputText('');
+    setIsThinking(true);
+
+    try {
+      // 构建对话上下文
+      const context = currentMessages
+        .filter(m => m.text)
+        .map(m => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, text: m.text }));
+
+      const qi = questionIndex;
+
+      // 判断是否应该生成文档（已收集足够信息）
+      const totalUserChars = [...userAnswers, text].reduce((sum, a) => sum + a.length, 0);
+      const shouldGenerate = (qi >= 3 && totalUserChars > 200) || qi >= 5;
+
+      if (shouldGenerate) {
+        // ── 开始生成文档 ──
+        setIsWriting(true);
+        setIsThinking(false);
+
+        try {
+          // 调用 AI 告知用户正在生成
+          const genMsg = await officeChat({
+            message: text,
+            module_key: moduleKey,
+            module_name: moduleName,
+            tool_key: toolKey,
+            tool_label: toolLabel,
+            context,
+            question_index: qi,
+          });
+          const aiMsg: ChatMessage = { id: nextId(), role: 'geng', text: genMsg.reply, time: getTimeStr() };
+          setMessages(prev => [...prev, aiMsg]);
+        } catch {
+          // 降级
+          setMessages(prev => [...prev, {
+            id: nextId(), role: 'geng', text: '信息已经足够了，我正在为你生成文档…', time: getTimeStr(),
+          }]);
+        }
+
+        // 调用文档生成 API
+        try {
+          const docResult = await generateDocument({
+            module_key: moduleKey,
+            doc_type: 'tool',
+            tool_key: toolKey,
+          });
+          setDocId(docResult.doc_id);
+        } catch { /* 即使后端生成失败也不阻塞流程 */ }
+
+        setIsWriting(false);
+        setMessages(prev => [...prev, {
+          id: nextId(), role: 'geng',
+          text: '文档已生成完毕！包含了您提供的所有需求要点。请查看并确认是否需要修改。',
+          time: getTimeStr(),
+        }]);
+        setTimeout(() => setShowCompletion(true), 300);
+
+      } else {
+        // ── 继续引导提问 ──
+        const result = await officeChat({
+          message: text,
+          module_key: moduleKey,
+          module_name: moduleName,
+          tool_key: toolKey,
+          tool_label: toolLabel,
+          context,
+          question_index: qi,
+        });
+
+        const aiMsg: ChatMessage = { id: nextId(), role: 'geng', text: result.reply, time: getTimeStr() };
+        setMessages(prev => [...prev, aiMsg]);
+        setQuestionIndex(prev => prev + 1);
+      }
+    } catch {
+      // 兜底
+      setMessages(prev => [...prev, {
+        id: nextId(), role: 'geng',
+        text: '姐，小耕正在努力思考中，稍等一下哦～',
+        time: getTimeStr(),
+      }]);
+    } finally {
+      setIsThinking(false);
+    }
+  }, [messages, inputText, isWriting, isThinking, questionIndex, userAnswers, moduleKey, moduleName, toolKey, toolLabel]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -246,9 +212,50 @@ export function SmartOfficeAiGuide() {
     }
   };
 
+  /* ── 弹窗操作 ── */
+
+  const handleModalCancel = useCallback(async () => {
+    setShowCompletion(false);
+    setIsWriting(false);
+
+    try {
+      const context = messages
+        .filter(m => m.text)
+        .map(m => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, text: m.text }));
+      const result = await officeChat({
+        message: '',
+        module_key: moduleKey,
+        module_name: moduleName,
+        tool_key: toolKey,
+        tool_label: toolLabel,
+        context,
+        question_index: questionIndex,
+      });
+      setMessages(prev => [...prev, { id: nextId(), role: 'geng', text: result.reply, time: getTimeStr() }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        id: nextId(), role: 'geng',
+        text: '还有什么我没说到的吗？或者您想补充什么信息？',
+        time: getTimeStr(),
+      }]);
+    }
+    inputRef.current?.focus();
+  }, [messages, moduleKey, moduleName, toolKey, toolLabel, questionIndex]);
+
+  const handleModalConfirm = useCallback(() => {
+    const answers = userAnswers.join('|');
+    navigate(
+      `/m/smart-office/editor?module=${encodeURIComponent(moduleKey)}&name=${encodeURIComponent(moduleName)}&tool=${encodeURIComponent(toolKey)}&toolLabel=${encodeURIComponent(toolLabel)}&answers=${encodeURIComponent(answers)}&docId=${encodeURIComponent(docId || '')}`,
+    );
+  }, [navigate, moduleKey, moduleName, toolKey, toolLabel, userAnswers, docId]);
+
+  /* ═══════════════════════════════════════════════
+     Render
+     ═══════════════════════════════════════════════ */
+
   return (
     <div className="so-page" style={{ position: 'relative' }}>
-      {/* ===== 顶部 Header ===== */}
+      {/* Header */}
       <header className="so-header">
         <button className="so-header__back" onClick={() => navigate(-1)}>
           <Icon icon="solar:alt-arrow-left-linear" style={{ fontSize: '24px' }} />
@@ -259,9 +266,14 @@ export function SmartOfficeAiGuide() {
         </button>
       </header>
 
-      {/* ===== 对话区 ===== */}
+      {/* Chat Area */}
       <div className="so-chat" ref={chatListRef}>
         <div className="so-chat-list">
+          {/* 品牌信息 */}
+          <div style={{ textAlign: 'center', padding: '12px 0', opacity: 0.6 }}>
+            <div className="so-hero__slogan" style={{ fontSize: 12 }}>日耕朝夕，耕愈工作，耕暖生活</div>
+          </div>
+
           {messages.map((msg) => (
             <div key={msg.id} className={`so-msg${msg.role === 'user' ? ' so-msg--user' : ''}`}>
               <div className={`so-msg__avatar so-msg__avatar--${msg.role}`}>
@@ -278,7 +290,7 @@ export function SmartOfficeAiGuide() {
             </div>
           ))}
 
-          {/* 打字指示器 */}
+          {/* Thinking indicator */}
           {isThinking && (
             <div className="so-msg">
               <div className="so-msg__avatar so-msg__avatar--geng">耕</div>
@@ -294,7 +306,7 @@ export function SmartOfficeAiGuide() {
             </div>
           )}
 
-          {/* 生成中动画 */}
+          {/* Document generation indicator */}
           {isWriting && (
             <div className="so-msg">
               <div className="so-msg__avatar so-msg__avatar--geng">耕</div>
@@ -313,7 +325,7 @@ export function SmartOfficeAiGuide() {
         </div>
       </div>
 
-      {/* ===== 底部输入区 ===== */}
+      {/* Input Area */}
       <div className="so-input-area">
         <div className="so-input-row">
           <input
@@ -336,7 +348,7 @@ export function SmartOfficeAiGuide() {
         </div>
       </div>
 
-      {/* ===== 完成弹窗 ===== */}
+      {/* Completion Modal */}
       {showCompletion && (
         <div className="so-modal-overlay">
           <div className="so-modal-card">

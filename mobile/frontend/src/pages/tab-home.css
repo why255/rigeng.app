@@ -266,191 +266,418 @@
 }
 
 /* ================================================================
- * 板块二 · 涨薪 (board2 / #tab-career)
+ * 板块二 · 涨薪 (board2 / #tab-career) — 对齐小耕对话设计模板
  * ================================================================ */
 .tab-career {
-  padding: var(--spacing-md) 0;
-}
-.tab-career__header .tab-title {
-  margin-bottom: var(--spacing-xl);
+  padding: 0;
+  background: #f9f5ec;
 }
 
-/* ================================================================
- * 板块三 · 智库 (board3 / #tab-knowledge)
- * ================================================================ */
-.tab-knowledge {
-  padding: var(--spacing-md) 0;
-}
-.tab-knowledge__header .tab-title {
-  margin-bottom: var(--spacing-xl);
-}
-
-/* ================================================================
- * 板块四 · 我的 (board4 / #tab-mine)
- * ================================================================ */
-.tab-mine {
-  margin: calc(-1 * var(--spacing-lg));
-  margin-bottom: calc(-1 * var(--spacing-lg) - var(--tabbar-height));
-}
-
-/* ── 头部渐变背景 ── */
-.tab-mine__header {
-  background: linear-gradient(180deg, #8B4513 0%, #A0522D 100%);
-  padding: 36px var(--spacing-lg) var(--spacing-2xl);
-}
-.tab-mine__profile {
+/* ── Logo 区 ── */
+.tab-career__logo {
   display: flex;
   align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
 }
-.tab-mine__avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.2);
+.tab-career__logo-icon {
+  width: 38px;
+  height: 38px;
+  background: #d62828;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  color: white;
-  flex: none;
-  margin-right: var(--spacing-lg);
 }
-.tab-mine__info {
+.tab-career__logo-icon span {
+  color: #fff;
+  font-size: 20px;
+  font-weight: var(--font-weight-black);
+}
+.tab-career__logo-text {
+  font-size: 20px;
+  color: #8c786a;
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── 标题区 ── */
+.tab-career__header {
+  margin-bottom: 22px;
+}
+.tab-career__title {
+  font-size: 26px;
+  font-weight: var(--font-weight-bold);
+  color: #7a685c;
+  margin-bottom: 4px;
+}
+.tab-career__subtitle {
+  font-size: 14px;
+  color: #a08e80;
+}
+
+/* ── 卡片网格（2 列）── */
+.tab-career__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ── 卡片基底 card-career ── */
+.card-career {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  background: var(--color-brand-white);
+  border-radius: 12px;
+  padding: 20px 12px;
+  box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--easing-default);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-career:active {
+  transform: scale(0.98);
+}
+
+/* ── 图标圆形容器 ── */
+.card-career__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.card-career__icon--green {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+.card-career__icon--blue {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+.card-career__icon--orange {
+  background: #fff3e0;
+  color: #f57c00;
+}
+.card-career__icon--red {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+/* ── 卡片文字 ── */
+.card-career__text {
+  min-width: 0;
+}
+.card-career__title {
+  font-size: 16px;
+  font-weight: var(--font-weight-bold);
+  color: #554840;
+  margin-bottom: 2px;
+}
+.card-career__desc {
+  font-size: 13px;
+  color: #948478;
+}
+
+/* ── 底部装饰线 ── */
+.tab-career__footer-line {
+  width: 40px;
+  height: 3px;
+  background: #e2dad0;
+  border-radius: 2px;
+  margin: 24px auto 0;
+}
+
+/* ================================================================
+ * 板块三 · 智库 (board3 / #tab-knowledge) — 对齐小耕对话设计模板
+ * ================================================================ */
+.tab-knowledge {
+  padding: 0;
+  background: #f9f5ec;
+}
+
+/* ── Logo 区 ── */
+.tab-knowledge__logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.tab-knowledge__logo-icon {
+  width: 38px;
+  height: 38px;
+  background: #d62828;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-knowledge__logo-icon span {
+  color: #fff;
+  font-size: 20px;
+  font-weight: var(--font-weight-black);
+}
+.tab-knowledge__logo-text {
+  font-size: 20px;
+  color: #8c786a;
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── 标题区 ── */
+.tab-knowledge__header {
+  margin-bottom: 22px;
+}
+.tab-knowledge__title {
+  font-size: 26px;
+  font-weight: var(--font-weight-bold);
+  color: #7a685c;
+  margin-bottom: 4px;
+}
+.tab-knowledge__subtitle {
+  font-size: 14px;
+  color: #a08e80;
+}
+
+/* ── 卡片列表（单列竖排）── */
+.tab-knowledge__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── 卡片基底 card-knowledge（横排：图标左 + 文字右）── */
+.card-knowledge {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  gap: 12px;
+  background: var(--color-brand-white);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 10px rgba(122, 104, 92, 0.08);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--easing-default);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-knowledge:active {
+  transform: scale(0.98);
+}
+
+/* ── 图标圆形容器 ── */
+.card-knowledge__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.card-knowledge__icon--indigo {
+  background: #e8eaf6;
+  color: #3f51b5;
+}
+.card-knowledge__icon--teal {
+  background: #e0f2f1;
+  color: #00796b;
+}
+
+/* ── 卡片文字 ── */
+.card-knowledge__text {
+  min-width: 0;
+}
+.card-knowledge__title {
+  font-size: 16px;
+  font-weight: var(--font-weight-bold);
+  color: #554840;
+}
+.card-knowledge__desc {
+  font-size: 13px;
+  color: #948478;
+  margin-top: 2px;
+}
+
+/* ── 底部装饰线 ── */
+.tab-knowledge__footer-line {
+  width: 40px;
+  height: 3px;
+  background: #e2dad0;
+  border-radius: 2px;
+  margin: 24px auto 0;
+}
+
+/* ================================================================
+ * 板块四 · 我的 (board4 / #tab-mine) — 对齐 index-standalone.html 设计
+ * 渐变横幅 + 统计卡片 + 列表菜单，无底部导航栏
+ * ================================================================ */
+.tab-mine {
+  padding: 0;
+  background: #F5F3EF;
+}
+
+/* ── 渐变横幅头部 ── */
+.tab-mine__banner {
+  position: relative;
+  height: 176px;
+  background: linear-gradient(180deg, #CC2936 0%, #E85D3A 100%);
+  padding: 48px 24px 0;
+  flex-shrink: 0;
+}
+.tab-mine__banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tab-mine__banner-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex: 1;
   min-width: 0;
 }
-.tab-mine__name {
-  font-size: 20px;
-  font-weight: var(--font-weight-bold);
-  color: white;
-}
-.tab-mine__phone {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: var(--spacing-xs);
-}
-.tab-mine__badges {
-  margin-top: var(--spacing-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  flex-wrap: wrap;
-}
-.tab-badge {
-  font-size: 12px;
-  padding: 2px 12px;
-  border-radius: var(--radius-full);
-  line-height: 20px;
-}
-.tab-badge--vip {
+.tab-mine__banner-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-.tab-badge--open {
-  font-size: 10px;
-  background: var(--color-success-bg);
-  color: var(--color-success);
-  padding: 1px 6px;
-}
-.tab-mine__settings-btn {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 20px;
-  cursor: pointer;
-  padding: var(--spacing-sm);
-  flex: none;
-  transition: color var(--duration-fast);
-}
-.tab-mine__settings-btn:hover {
-  color: white;
-}
-
-/* ── 统计卡片（悬浮在 header 下方）── */
-.tab-mine__stats {
-  background: var(--color-brand-white);
-  margin: -16px var(--spacing-lg) 0;
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid #E8DDD4;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--spacing-md);
-  position: relative;
-  z-index: 1;
-}
-.tab-mine__stat {
-  text-align: center;
-}
-.tab-mine__stat--bordered {
-  border-left: 1px solid #E8DDD4;
-  border-right: 1px solid #E8DDD4;
-}
-.tab-mine__stat-num {
-  font-size: 20px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-brand-primary);
-}
-.tab-mine__stat-label {
-  font-size: 11px;
-  color: var(--color-neutral-500);
-}
-
-/* ── 功能入口菜单 ── */
-.tab-mine__menu {
-  padding: var(--spacing-xl) var(--spacing-lg);
-  padding-bottom: 0;
-}
-.tab-mine__menu-item {
-  background: var(--color-brand-white);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-lg);
-  cursor: pointer;
-  transition: background var(--duration-fast);
-  border-bottom: 1px solid #F5F0EB;
-  -webkit-tap-highlight-color: transparent;
-}
-.tab-mine__menu-item:first-child {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  border: 1px solid #E8DDD4;
-  border-bottom: 1px solid #F5F0EB;
-}
-.tab-mine__menu-item:not(:first-child):not(:last-child) {
-  border-left: 1px solid #E8DDD4;
-  border-right: 1px solid #E8DDD4;
-}
-.tab-mine__menu-item:last-child {
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  border: 1px solid #E8DDD4;
-  border-top: 1px solid #F5F0EB;
-}
-.tab-mine__menu-item:active {
-  background: var(--color-neutral-25);
-}
-.tab-mine__menu-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-.tab-mine__menu-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  flex: none;
+  color: #fff;
+  flex-shrink: 0;
 }
-.tab-mine__menu-title {
+.tab-mine__banner-info {
+  display: flex;
+  flex-direction: column;
+}
+.tab-mine__banner-name {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+.tab-mine__banner-phone {
+  color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-neutral-900);
 }
-.tab-mine__menu-sub {
+.tab-mine__banner-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.tab-mine__badge {
+  padding: 2px 8px;
   font-size: 12px;
-  color: var(--color-neutral-500);
+  font-weight: 600;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.tab-mine__badge--vip {
+  background: rgba(251, 191, 36, 0.9);
+  color: #92400e;
+}
+.tab-mine__badge--open {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.tab-mine__banner-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+}
+
+/* ── 统计卡片 ── */
+.tab-mine__stats-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  margin: -20px 16px 0;
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+}
+.tab-mine__stats-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+}
+.tab-mine__stats-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.tab-mine__stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 0 8px 24px;
+}
+.tab-mine__stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.tab-mine__stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.tab-mine__stat-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ── 菜单列表卡片 ── */
+.tab-mine__menu-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  margin: 16px 16px 0;
+  overflow: hidden;
+}
+.tab-mine__menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-mine__menu-item:active {
+  background: #f8fafc;
+}
+.tab-mine__menu-item--last {
+  border-bottom: none;
+}
+.tab-mine__menu-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tab-mine__menu-item-label {
+  font-size: 15px;
+  color: #1e293b;
+}
+
+/* ── 底部装饰线 ── */
+.tab-mine__footer-line {
+  width: 40px;
+  height: 3px;
+  background: #e2dad0;
+  border-radius: 2px;
+  margin: 32px auto 0;
 }

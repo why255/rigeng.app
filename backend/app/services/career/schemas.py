@@ -25,6 +25,18 @@ class ResumeUploadResponse(BaseModel):
     message: str = "简历已接收，请开始STAR萃取"
 
 
+class ResumeFileUploadResponse(BaseModel):
+    """简历文件上传+AI解析结果。"""
+    career_progress_id: str
+    filename: str
+    text_preview: str = ""  # 前500字预览
+    text_length: int = 0
+    parsed_summary: str = ""  # AI解析摘要
+    key_skills: list[str] = []  # 提取的技能
+    key_experiences: list[str] = []  # 提取的工作经历
+    suggested_next: str = "erding"  # 建议下一步: erding(二定/策略)
+
+
 class STARExtractionRequest(BaseModel):
     """STAR萃取请求——引导用户补充四要素。"""
     career_progress_id: str
@@ -278,3 +290,14 @@ class FiveStepProgressResponse(BaseModel):
     status: str  # active / paused / completed
     teacher_assigned: bool = False
     step_details: dict = {}  # 各步骤的详细信息
+
+
+# ── AI 高维求职对话 ──
+
+class CareerChatIn(BaseModel):
+    """高维求职 AI 对话请求 — 所有小耕回复由AI模型生成。"""
+    message: str = Field(default="", max_length=4096, description="用户当前消息（初始问候可为空）")
+    step: str = Field(default="yipan", description="当前步骤: yipan|erding|santou|simian|wuxuan")
+    context: list[dict] = Field(default_factory=list, description="对话历史 [{role, text}]")
+    sub_index: int = Field(default=0, description="一盘子进度 0-4（履历梳理/STAR追问/技能晶体/人脉资源/岗位建议）")
+    has_resume: bool = Field(default=False, description="是否已上传简历")
