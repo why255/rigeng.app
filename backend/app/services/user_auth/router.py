@@ -9,16 +9,41 @@ from ...shared.response import ok
 from ...shared.security import CurrentUser, get_current_user, require_role
 from . import service
 from .schemas import (
-    CareModeIn, DisclaimerIn, GrantIn, LoginIn, PasswordChangeIn, ProfileIn,
-    RegisterIn, TeacherAssignIn, ModelPreferenceIn,
+    CareModeIn, CodeLoginIn, DisclaimerIn, GrantIn, LoginIn, PasswordChangeIn,
+    ProfileIn, RegisterIn, SendCodeIn, TeacherAssignIn, ModelPreferenceIn,
 )
 
 router = APIRouter(tags=["①用户/权限"])
 
 
+@router.post("/auth/send-code")  # 发送短信验证码
+def send_code(body: SendCodeIn, db: Session = Depends(get_db)):
+    result = service.send_verification_code(db, phone=body.phone, purpose=body.purpose)
+    return ok(result)
+
+
+@router.post("/auth/login/code")  # 验证码登录
+def login_by_code(body: CodeLoginIn, db: Session = Depends(get_db)):
+    token, user = service.code_login(db, phone=body.phone, code=body.code)
+    return ok({
+        "token": token,
+        "user": {
+            "user_id": user.id,
+            "id": user.id,
+            "phone": user.phone,
+            "nickname": user.nickname,
+            "care_mode": user.care_mode,
+            "voice_type": user.voice_type,
+        },
+        "user_id": user.id,
+        "role": user.role,
+    })
+
+
 @router.post("/auth/register")  # 基础注册（创建账号+试用会员+贡献值余额）
 def register(body: RegisterIn, db: Session = Depends(get_db)):
-    user = service.register(db, phone=body.phone, password=body.password,
+    user = service.register(db, phone=body.phone, code=body.code,
+                            password=body.password,
                             nickname=body.nickname, gender=body.gender, role=body.role)
     return ok({
         "message": "注册成功",

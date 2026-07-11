@@ -176,6 +176,73 @@
   color: var(--color-neutral-300);
 }
 
+/* ── 模式切换 Tab ── */
+.rg-login-mobile__mode-tabs {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid #E0D5C5;
+}
+
+.rg-login-mobile__mode-tab {
+  flex: 1;
+  height: 38px;
+  border: none;
+  background: #FFF;
+  color: #8D6E63;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.rg-login-mobile__mode-tab--active {
+  background: #8B4513;
+  color: #FFF;
+}
+
+.rg-login-mobile__mode-tab:not(.rg-login-mobile__mode-tab--active):hover {
+  background: #FDF8F3;
+}
+
+/* ── 验证码行 ── */
+.rg-login-mobile__code-row {
+  display: flex;
+  gap: 10px;
+}
+
+.rg-login-mobile__code-input {
+  flex: 1;
+}
+
+.rg-login-mobile__code-btn {
+  flex-shrink: 0;
+  height: 46px;
+  padding: 0 16px;
+  border: 1.5px solid #E0D5C5;
+  border-radius: 8px;
+  background: #FFF;
+  color: #8B4513;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.rg-login-mobile__code-btn:hover:not(:disabled) {
+  background: #8B4513;
+  color: #FFF;
+}
+
+.rg-login-mobile__code-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ── 错误提示 ── */
 .rg-login-mobile__error {
   font-size: 13px;

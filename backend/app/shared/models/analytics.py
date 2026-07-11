@@ -45,14 +45,18 @@ class CarePushLog(TimestampMixin, Base):
 
 
 class SmsSendLog(TimestampMixin, Base):
-    """短信发送日志。"""
+    """短信发送日志（含验证码审计）。"""
 
     __tablename__ = "sms_send_log"
 
-    user_id: Mapped[str] = mapped_column(GUID, index=True)
+    user_id: Mapped[str | None] = mapped_column(GUID, index=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    purpose: Mapped[str | None] = mapped_column(String(32), nullable=True)  # register / login
     trigger_condition: Mapped[str | None] = mapped_column(String(64))
     module: Mapped[str | None] = mapped_column(String(8))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class AuditLog(TimestampMixin, Base):

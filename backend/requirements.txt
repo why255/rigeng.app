@@ -13,6 +13,8 @@ python-multipart==0.0.*
 psycopg2-binary==2.9.*
 # 加密
 cryptography==49.*
+# 缓存/队列
+redis==5.*
 # 测试
 pytest==8.*
 httpx==0.28.*

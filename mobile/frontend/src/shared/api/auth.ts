@@ -80,13 +80,30 @@ export async function login(phone: string, password: string): Promise<LoginRespo
   return data;
 }
 
+/** 验证码登录 */
+export async function codeLogin(phone: string, code: string): Promise<LoginResponse> {
+  const data = await apiPost<LoginResponse & { role?: string }>('/auth/login/code', { phone, code });
+  const userWithRole = { ...data.user, role: (data as any).role || 'student' };
+  setAuth(data.token, userWithRole);
+  return data;
+}
+
+/** 发送短信验证码 */
+export async function sendVerificationCode(
+  phone: string,
+  purpose: 'register' | 'login' = 'register',
+): Promise<{ message: string; expires_in: number }> {
+  return apiPost<{ message: string; expires_in: number }>('/auth/send-code', { phone, purpose });
+}
+
 /** 注册 */
 export async function register(
   phone: string,
+  code: string,
   password: string,
   nickname: string,
 ): Promise<RegisterResponse> {
-  const data = await apiPost<RegisterResponse>('/auth/register', { phone, password, nickname });
+  const data = await apiPost<RegisterResponse>('/auth/register', { phone, code, password, nickname });
   return data;
 }
 

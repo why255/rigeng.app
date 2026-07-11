@@ -74,6 +74,10 @@ E_PUSH_RATE = APIError(80001, "超出每周推送上限", 429)
 E_PUSH_NIGHT = APIError(80002, "夜间（21:00-9:00）禁止推送", 403)
 E_SMS_DISABLED = APIError(80003, "短信渠道已禁用", 403)
 E_NEW_USER_QUIET = APIError(80004, "新用户7天免打扰期内", 403)
+E_VERIFY_CODE_COOLDOWN = APIError(80005, "验证码发送过于频繁", 429)
+E_VERIFY_CODE_HOURLY_MAX = APIError(80006, "验证码发送次数超过每小时上限", 429)
+E_VERIFY_CODE_INVALID = APIError(80007, "验证码错误", 400)
+E_VERIFY_CODE_EXPIRED = APIError(80008, "验证码已过期", 400)
 
 # ── 安全 90xxx ──
 E_DESENSITIZE_FAIL = APIError(90001, "脱敏失败", 500)

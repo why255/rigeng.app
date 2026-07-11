@@ -1,9 +1,10 @@
 """①用户/权限服务 业务逻辑层。
 
-实现：注册/登录/当前用户/资料/VIP配额/试用期/免责声明/老师授权(NDA)/关怀模式。
+实现：注册/登录/当前用户/资料/VIP配额/试用期/免责声明/老师授权(NDA)/关怀模式/短信验证码。
 """
 from __future__ import annotations
 
+import secrets
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -12,10 +13,12 @@ from sqlalchemy.orm import Session
 from ...shared import errors
 from ...shared.config import settings
 from ...shared.database import utcnow
+from ...shared.models.analytics import SmsSendLog
 from ...shared.models.user import (
     AuthorizationGrant, CARE_MODES, ContributionBalance, TeacherAssignment,
     User, UserDisclaimer, VipMembership, VOICE_TYPES,
 )
+from ...shared.redis_client import redis_client
 from ...shared.security import create_access_token, hash_password, verify_password
 
 
@@ -24,8 +27,132 @@ def _enum_guard(value, allowed, field):
         raise errors.APIError(errors.E_PARAM_FORMAT.code, f"{field} 取值非法: {value}", 400)
 
 
-def register(db: Session, *, phone: str, password: str, nickname: str | None,
+# ═══════════════════════════════════════════════
+# 短信验证码
+# ═══════════════════════════════════════════════
+
+def _generate_code() -> str:
+    """生成6位密码学安全随机验证码。"""
+    return str(secrets.randbelow(900000) + 100000)
+
+
+def send_verification_code(db: Session, *, phone: str, purpose: str) -> dict:
+    """发送短信验证码。
+
+    控制规则：
+    - SMS_ENABLED=False 时拒绝发送
+    - 同一手机号60秒内只能发1条
+    - 同一手机号每小时最多5条
+    - 验证码5分钟有效，存储于 Redis
+    """
+    if purpose not in ("register", "login"):
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "purpose 必须为 register 或 login", 400)
+
+    if not settings.SMS_ENABLED:
+        raise errors.E_SMS_DISABLED
+
+    # 60s 冷却
+    cooldown_key = f"verify:cooldown:{phone}"
+    if redis_client.exists(cooldown_key):
+        ttl = redis_client.ttl(cooldown_key)
+        raise errors.APIError(
+            errors.E_VERIFY_CODE_COOLDOWN.code,
+            f"验证码发送过于频繁，请在{max(int(ttl), 1)}秒后重试",
+            429,
+        )
+
+    # 每小时上限
+    hourly_key = f"verify:hourly:{phone}"
+    count = redis_client.get(hourly_key)
+    if count and int(count) >= 5:
+        raise errors.E_VERIFY_CODE_HOURLY_MAX
+
+    # 生成验证码并存入 Redis（5分钟过期）
+    code = _generate_code()
+    code_key = f"verify:code:{purpose}:{phone}"
+    redis_client.setex(code_key, 300, code)
+
+    # 设置冷却标记（60秒）
+    redis_client.setex(cooldown_key, 60, "1")
+
+    # 小时计数器（首次设置时加 TTL）
+    new_count = redis_client.incr(hourly_key)
+    if new_count == 1:
+        redis_client.expire(hourly_key, 3600)
+
+    # 调用阿里云发送短信
+    sms_sent = False
+    sms_error = None
+    if settings.ALIYUN_SMS_ACCESS_KEY_ID and settings.ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY:
+        try:
+            from ..push_service.service import send_sms
+            result = send_sms(phone, settings.ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY, {"code": code})
+            sms_sent = result.get("sent", False)
+        except Exception as e:
+            sms_error = str(e)
+    else:
+        # 开发/测试环境：未配置短信时打日志但不报错
+        import logging
+        logging.getLogger("rigeng").warning(f"[DEV] 验证码未发送（短信未配置） phone={phone} code={code}")
+
+    # 记录到 DB
+    log_entry = SmsSendLog(
+        phone=phone,
+        purpose=purpose,
+        trigger_condition=f"verify:{purpose}",
+        module="auth",
+        sent_at=utcnow(),
+        expires_at=utcnow() + timedelta(minutes=5),
+    )
+    db.add(log_entry)
+    db.commit()
+
+    return {
+        "message": "验证码已发送" if sms_sent or not sms_error else "验证码发送中，请稍候",
+        "expires_in": 300,
+    }
+
+
+def _verify_code_in_redis(phone: str, code: str, purpose: str) -> None:
+    """校验验证码（一次性使用，验完即删）。"""
+    code_key = f"verify:code:{purpose}:{phone}"
+    stored = redis_client.get(code_key)
+    if stored is None:
+        raise errors.E_VERIFY_CODE_EXPIRED
+    if stored != code:
+        raise errors.E_VERIFY_CODE_INVALID
+    redis_client.delete(code_key)
+
+
+def code_login(db: Session, *, phone: str, code: str) -> tuple[str, User]:
+    """验证码登录：校验验证码后签发 JWT。"""
+    _verify_code_in_redis(phone, code, "login")
+    user = db.scalar(select(User).where(User.phone == phone))
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    vip = db.scalar(select(VipMembership).where(VipMembership.user_id == user.id))
+    trial_expire = vip.expire_at.isoformat() if vip and vip.expire_at else None
+    token = create_access_token(
+        user_id=user.id, role=user.role,
+        vip_level=vip.level if vip else "trial", trial_expire_at=trial_expire,
+    )
+    # 标记短信已验证
+    log = db.scalar(
+        select(SmsSendLog).where(
+            SmsSendLog.phone == phone,
+            SmsSendLog.purpose == "login",
+        ).order_by(SmsSendLog.sent_at.desc())
+    )
+    if log:
+        log.verified_at = utcnow()
+        db.commit()
+    return token, user
+
+
+def register(db: Session, *, phone: str, code: str, password: str, nickname: str | None,
              gender: str | None, role: str) -> User:
+    """注册：先校验验证码，再创建用户。"""
+    _verify_code_in_redis(phone, code, "register")
     if db.scalar(select(User).where(User.phone == phone)):
         raise errors.APIError(errors.E_PARAM_FORMAT.code, "手机号已注册", 400)
     now = utcnow()

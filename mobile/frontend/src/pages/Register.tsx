@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { register } from '@/shared/api/auth'
+import { register, sendVerificationCode } from '@/shared/api/auth'
 
 /**
  * 移动端 H5 注册页面。
- * 手机号 + 验证码 + 密码 + 确认密码，验证码为前端模拟（控制台可见）。
+ * 手机号 + 短信验证码 + 密码 + 确认密码。
  */
 export function Register() {
   const navigate = useNavigate()
@@ -13,11 +13,11 @@ export function Register() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // 验证码相关
-  const [generatedCode, setGeneratedCode] = useState('')
+  // 验证码倒计时
   const [countdown, setCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -34,38 +34,38 @@ export function Register() {
     }, 1000)
   }, [])
 
-  function handleGetCode() {
+  async function handleGetCode() {
     if (countdown > 0) return
-    if (!phone.trim()) {
-      setError('请先输入手机号')
+    if (!phone.trim() || !/^1[3-9]\d{9}$/.test(phone.trim())) {
+      setError('请先输入正确的手机号')
       return
     }
     setError('')
-    // 生成6位随机验证码并打印到控制台
-    const randomCode = String(Math.floor(100000 + Math.random() * 900000))
-    setGeneratedCode(randomCode)
-    console.log(`[日耕] 验证码：${randomCode}（有效期60秒）`)
-    startCountdown()
+    setSendingCode(true)
+    try {
+      await sendVerificationCode(phone.trim(), 'register')
+      startCountdown()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发送失败，请重试')
+    } finally {
+      setSendingCode(false)
+    }
   }
 
   async function handleSubmit() {
     setError('')
     setSuccess('')
 
-    if (!phone.trim()) {
-      setError('请填写手机号')
-      return
-    }
-    if (!generatedCode) {
-      setError('请先获取验证码')
+    if (!phone.trim() || !/^1[3-9]\d{9}$/.test(phone.trim())) {
+      setError('请填写正确的手机号')
       return
     }
     if (!code.trim()) {
       setError('请填写验证码')
       return
     }
-    if (code.trim() !== generatedCode) {
-      setError('验证码错误')
+    if (code.trim().length !== 6) {
+      setError('验证码为6位数字')
       return
     }
     if (!password.trim()) {
@@ -83,7 +83,7 @@ export function Register() {
 
     setLoading(true)
     try {
-      await register(phone.trim(), password, phone.trim())
+      await register(phone.trim(), code.trim(), password, phone.trim())
       setSuccess('注册成功！即将跳转登录页...')
       setTimeout(() => navigate('/login', { replace: true }), 1500)
     } catch (err) {
@@ -140,10 +140,10 @@ export function Register() {
               <button
                 className="pg-login__code-btn"
                 type="button"
-                disabled={countdown > 0}
+                disabled={countdown > 0 || sendingCode}
                 onClick={handleGetCode}
               >
-                {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                {sendingCode ? '发送中...' : countdown > 0 ? `${countdown}s` : '获取验证码'}
               </button>
             </div>
           </div>

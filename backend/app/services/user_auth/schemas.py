@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class RegisterIn(BaseModel):
     phone: str = Field(min_length=5, max_length=32)
+    code: str = Field(min_length=6, max_length=6)  # 短信验证码（必填）
     password: str = Field(min_length=6, max_length=64)
     nickname: str | None = None
     gender: str | None = None  # male/female
@@ -15,6 +16,16 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     phone: str
     password: str
+
+
+class SendCodeIn(BaseModel):
+    phone: str = Field(min_length=5, max_length=32)
+    purpose: str = "register"  # register / login
+
+
+class CodeLoginIn(BaseModel):
+    phone: str
+    code: str = Field(min_length=6, max_length=6)
 
 
 class ProfileIn(BaseModel):
