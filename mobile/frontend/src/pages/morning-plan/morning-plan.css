@@ -1,7 +1,7 @@
 /**
  * 朝有规划 移动端样式（对齐 m1-p*.html 设计）。
  */
-.mp-mobile-page { width: 100%; max-width: 680px; margin: 0 auto; min-height: 100dvh; background: #F5F3EF; display: flex; flex-direction: column; }
+.mp-mobile-page { width: 100%; max-width: 680px; margin: 0 auto; height: 100dvh; overflow: hidden; background: #F5F3EF; display: flex; flex-direction: column; }
 .mp-mobile-page__header { flex: none; height: 48px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #f0f0f0; z-index: 10; }
 .mp-hero { text-align: center; margin-bottom: 8px; }
 .mp-hero__slogan { font-size: 15px; font-weight: 700; color: #333; margin-bottom: 4px; }

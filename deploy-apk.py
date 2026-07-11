@@ -30,7 +30,7 @@ VOICE_SERVICE_REMOTE = "/opt/rigeng.app/backend/app/services/voice_engine/servic
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MOBILE_DIR = os.path.join(BASE_DIR, "mobile", "frontend")
-DIST_DIR = os.path.join(MOBILE_DIR, "dist", "mobile")
+DIST_DIR = os.path.join(BASE_DIR, "mobile", "dist", "mobile")  # Vite outDir: ../dist/mobile
 APK_SRC = os.path.join(MOBILE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
 
 def run_cmd(cmd, cwd=None, check=True):

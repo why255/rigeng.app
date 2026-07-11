@@ -6,7 +6,7 @@
  * - 颜色硬编码，禁止 CSS 变量
  * - 图标使用 @iconify/react <Icon> 组件
  */
-.sq-mobile-page { width: 100%; max-width: 680px; margin: 0 auto; min-height: 100dvh; background: #F5F3EF; display: flex; flex-direction: column; }
+.sq-mobile-page { width: 100%; max-width: 680px; margin: 0 auto; height: 100dvh; overflow: hidden; background: #F5F3EF; display: flex; flex-direction: column; }
 .sq-mobile-page__header { flex: none; height: 48px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #f0f0f0; z-index: 10; }
 .sq-header-spacer { width: 40px; }
 .sq-header-btn { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #666; background: none; border: none; cursor: pointer; border-radius: 50%; transition: background 0.2s; }
