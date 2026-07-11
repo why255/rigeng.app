@@ -11,6 +11,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - DATABASE_URL=postgresql+psycopg2://rigeng:rigeng@db:5432/rigeng
       - REDIS_URL=redis://redis:6379/0
+      - SMS_ENABLED=${SMS_ENABLED:-false}
+      - ALIYUN_SMS_ACCESS_KEY_ID=${ALIYUN_SMS_ACCESS_KEY_ID:-}
+      - ALIYUN_SMS_ACCESS_KEY_SECRET=${ALIYUN_SMS_ACCESS_KEY_SECRET:-}
+      - ALIYUN_SMS_SIGN_NAME=${ALIYUN_SMS_SIGN_NAME:-长沙仝聚教育科技有限公司}
+      - ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY=${ALIYUN_SMS_TEMPLATE_LOGIN_VERIFY:-}
+      - ALIYUN_SMS_TEMPLATE_ALERT=${ALIYUN_SMS_TEMPLATE_ALERT:-}
     depends_on:
       db:
         condition: service_healthy
