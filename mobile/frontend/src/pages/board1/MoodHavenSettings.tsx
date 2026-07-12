@@ -31,11 +31,6 @@ export function MoodHavenSettings() {
 
   const handleDarkModeChange = (enabled: boolean) => {
     setDarkMode(enabled);
-    if (enabled) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
     localStorage.setItem('mh_darkMode', String(enabled));
     setSaved(false);
   };

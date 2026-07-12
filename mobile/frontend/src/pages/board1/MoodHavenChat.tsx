@@ -53,21 +53,6 @@ export function MoodHavenChat() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    return () => {
-      if (readDarkMode()) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
-    };
-  }, [isDark]);
-
   // ── 色板 ──
   const P = isDark ? {
     pageBg: '#1a1a1a',
@@ -317,7 +302,7 @@ export function MoodHavenChat() {
      ═══════════════════════════════════════════════ */
 
   return (
-    <div className="mh-mobile-page">
+    <div className="mh-mobile-page" data-theme={isDark ? 'dark' : undefined}>
       {/* Header */}
       <header className="mh-mobile-page__header">
         <button className="mh-header-btn" onClick={() => navigate(-1)}>
