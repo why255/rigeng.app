@@ -557,18 +557,18 @@ export interface AIModuleFullInfo extends AIModuleItem {
 }
 
 export function getAIModules() {
-  return apiGet<AIModuleItem[]>('/ai-config/modules')
+  return apiGet<AIModuleItem[]>('/admin/ai-config/modules')
 }
 
 export function getAIModuleDetail(moduleKey: string) {
-  return apiGet<AIModuleFullInfo>(`/ai-config/modules/${moduleKey}`)
+  return apiGet<AIModuleFullInfo>(`/admin/ai-config/modules/${moduleKey}`)
 }
 
 export function getAIConfigHealth() {
   return apiGet<{
     total: number; ok: number; warn: number
     modules: { module_key: string; module_name: string; has_binding: boolean; has_algorithms: boolean; current_model: string | null; status: string }[]
-  }>('/ai-config/health')
+  }>('/admin/ai-config/health')
 }
 
 /* ─────── 模型降级 API ─────── */
