@@ -134,6 +134,21 @@
 .rg-tab__icon { font-size: 24px; line-height: 1; }
 .rg-tab__label { margin-top: 2px; }
 
+/* ── 暗色模式（情绪树洞对话页）── */
+:root[data-theme="dark"] .rg-shell-mobile {
+  background: #1a1a1a;
+}
+:root[data-theme="dark"] .rg-tabbar {
+  background: #1a1a1a;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+:root[data-theme="dark"] .rg-tab {
+  color: #666;
+}
+:root[data-theme="dark"] .rg-tab--active {
+  color: #FFCC80;
+}
+
 /* ---------- 移动端子模块卡片网格（点 Tab 弹出） ---------- */
 .rg-boardgrid {
   display: grid;

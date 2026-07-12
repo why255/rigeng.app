@@ -53,6 +53,26 @@ export function MoodHavenChat() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  // ── 全局暗色：对话页 dark 时设置 <html data-theme="dark"> 让顶部栏+TabBar 也变暗 ──
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    // 动态修改浏览器状态栏颜色
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', isDark ? '#1a1a1a' : '#FDF8F3');
+    }
+    return () => {
+      // 离开对话页始终恢复亮色
+      document.documentElement.removeAttribute('data-theme');
+      const m = document.querySelector('meta[name="theme-color"]');
+      if (m) m.setAttribute('content', '#FDF8F3');
+    };
+  }, [isDark]);
+
   // ── 色板 ──
   const P = isDark ? {
     pageBg: '#1a1a1a',
