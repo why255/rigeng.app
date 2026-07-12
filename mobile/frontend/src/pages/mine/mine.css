@@ -10,7 +10,8 @@
   width: 100%;
   max-width: 680px;
   margin: 0 auto;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   background: #F5F3EF;
   display: flex;
   flex-direction: column;

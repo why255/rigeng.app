@@ -4,7 +4,7 @@
  */
 
 /* ── 页面容器 ── */
-.so-page { width: 100%; max-width: 680px; margin: 0 auto; min-height: 100dvh; background: #F5F3EF; display: flex; flex-direction: column; }
+.so-page { width: 100%; max-width: 680px; margin: 0 auto; height: 100dvh; overflow: hidden; background: #F5F3EF; display: flex; flex-direction: column; }
 
 /* ── Header ── */
 .so-header { flex: none; height: 48px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #f0f0f0; z-index: 10; }
