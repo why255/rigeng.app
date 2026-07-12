@@ -1,7 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ToastProvider } from '@/shared/components/primitives/toast'
 import { ProtectedRoute } from '@/shared/components/auth/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
+import { Capacitor } from '@capacitor/core'
+import { App } from '@capacitor/app'
 
 // Pages
 import { Login } from '@/pages/Login'
@@ -75,6 +78,54 @@ import { AdminUsers } from '@/pages/admin/AdminUsers'
 import { AdminTeachers } from '@/pages/admin/AdminTeachers'
 
 /**
+ * Android 硬件返回键拦截器。
+ * - 4 个 Tab 首页（小耕对话/升职加薪/我的智库/我的主页）：返回键 → 退出应用
+ * - 其他子页面：返回键 → 返回上一历史节点（window.history.back()）
+ */
+function BackButtonHandler() {
+  const location = useLocation()
+  const locationRef = useRef(location)
+
+  // 保持 ref 始终指向最新 location
+  useEffect(() => {
+    locationRef.current = location
+  }, [location])
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    let handle: { remove: () => void } | undefined
+
+    const handler = () => {
+      const path = locationRef.current.pathname
+      // 4 个 Tab 板卡首页 + 根路径 → 退出应用
+      const isTabHome =
+        path === '/' ||
+        path === '/b/board1' ||
+        path === '/b/board2' ||
+        path === '/b/board3' ||
+        path === '/b/board4'
+
+      if (isTabHome) {
+        App.exitApp()
+      } else {
+        window.history.back()
+      }
+    }
+
+    App.addListener('backButton', handler).then(h => {
+      handle = h
+    })
+
+    return () => {
+      handle?.remove()
+    }
+  }, [])
+
+  return null
+}
+
+/**
  * 移动端 H5 路由表 — react-router-dom v6
  * 包含 /b/:board（TabBar 导航板卡网格）
  * 未登录 → 重定向到 /login；已登录 → AppShell
@@ -83,6 +134,7 @@ export function MobileApp() {
   return (
     <BrowserRouter>
       <ToastProvider>
+        <BackButtonHandler />
         <Routes>
           {/* 登录/注册页 — 公开路由 */}
           <Route path="/login" element={<Login defaultRedirect="/" />} />

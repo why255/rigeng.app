@@ -11,12 +11,14 @@
 """
 
 from .persona import build_persona_prompt, MODULE_TONE_PROFILES
-from .llm_orchestrator import (
-    llm_generate_with_orchestration,
-    select_model,
+from .module_registry import (
     get_provider_for_model,
     MODULE_MODEL_MAP,
     MODULE_TEMPERATURE,
+)
+from .llm_orchestrator import (
+    llm_generate_with_orchestration,
+    select_model,
     TASK_COMPLEXITY,
 )
 from .session_context import SessionContext, extract_memory, load_context

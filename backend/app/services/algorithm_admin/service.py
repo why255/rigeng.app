@@ -2,8 +2,9 @@
 
 管理员功能：
   - 上传算法文件（按模块分类）
-  - 删除算法文件
+  - 编辑/删除算法文件
   - 按模块列出算法文件
+  - AI 配置中心聚合查询
 
 AI调用集成：
   - get_algorithms_for_module(): 供 voice_engine 等服务调用，
@@ -17,6 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from ...engines.module_registry import MODULE_REGISTRY
 from ...shared.database import new_uuid, utcnow
 from ...shared.errors import APIError, E_DOC_NOT_FOUND, E_PARAM_FORMAT
 from ...shared.models.algorithm import AlgorithmFile
@@ -31,6 +33,10 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".py", ".yaml", ".yml", ".json", ".csv", ".
 MAX_FILE_SIZE = 2 * 1024 * 1024
 
 
+# ═══════════════════════════════════════════════
+# 算法文件 CRUD
+# ═══════════════════════════════════════════════
+
 def list_algorithms(db: Session, module_key: str | None = None) -> list[dict]:
     """列出算法文件，可按模块筛选。"""
     q = db.query(AlgorithmFile).filter(AlgorithmFile.deleted_at.is_(None))
@@ -40,25 +46,26 @@ def list_algorithms(db: Session, module_key: str | None = None) -> list[dict]:
     return [f.to_dict() for f in q.all()]
 
 
-def list_modules(db: Session) -> list[dict]:
-    """列出所有支持的模块及其文件数量。"""
-    result = []
-    for m in ALGORITHM_MODULES:
-        count = (
-            db.query(AlgorithmFile)
-            .filter(
-                AlgorithmFile.module_key == m["key"],
-                AlgorithmFile.deleted_at.is_(None),
-            )
-            .count()
-        )
-        result.append({
-            "key": m["key"],
-            "name": m["name"],
-            "icon": m["icon"],
-            "file_count": count,
-        })
-    return result
+def get_algorithm_detail(db: Session, algo_id: str) -> dict:
+    """获取算法文件完整内容（非截断预览）。"""
+    algo = db.query(AlgorithmFile).filter(
+        AlgorithmFile.id == algo_id,
+        AlgorithmFile.deleted_at.is_(None),
+    ).first()
+
+    if not algo:
+        raise APIError(E_DOC_NOT_FOUND.code, "算法文件不存在或已删除", 404)
+
+    return {
+        "id": algo.id,
+        "module_key": algo.module_key,
+        "original_filename": algo.original_filename,
+        "content": algo.content,
+        "file_size": algo.file_size,
+        "uploaded_by": algo.uploaded_by,
+        "created_at": algo.created_at.isoformat() if algo.created_at else "",
+        "updated_at": algo.updated_at.isoformat() if algo.updated_at else "",
+    }
 
 
 def upload_algorithm(db: Session, user_id: str, module_key: str,
@@ -129,6 +136,61 @@ def upload_algorithm(db: Session, user_id: str, module_key: str,
     }
 
 
+def update_algorithm(db: Session, user_id: str, algo_id: str,
+                     original_filename: str | None = None,
+                     content: str | None = None) -> dict:
+    """编辑算法文件（文件名和/或内容）。
+
+    至少需要提供 filename 或 content 之一。
+    """
+    algo = db.query(AlgorithmFile).filter(
+        AlgorithmFile.id == algo_id,
+        AlgorithmFile.deleted_at.is_(None),
+    ).first()
+
+    if not algo:
+        raise APIError(E_DOC_NOT_FOUND.code, "算法文件不存在或已删除", 404)
+
+    changed = False
+
+    # 更新文件名
+    if original_filename is not None:
+        ext = "." + original_filename.split(".")[-1].lower() if "." in original_filename else ""
+        if ext not in ALLOWED_EXTENSIONS:
+            raise APIError(E_PARAM_FORMAT.code,
+                           f"不支持的文件类型: {ext}，允许: {', '.join(sorted(ALLOWED_EXTENSIONS))}", 400)
+        algo.original_filename = original_filename
+        changed = True
+
+    # 更新内容
+    if content is not None:
+        content_bytes = content.encode("utf-8")
+        if len(content_bytes) > MAX_FILE_SIZE:
+            raise APIError(E_PARAM_FORMAT.code,
+                           f"文件过大 ({len(content_bytes)} 字节)，最大允许 {MAX_FILE_SIZE} 字节", 400)
+        algo.content = content
+        algo.file_size = len(content_bytes)
+        changed = True
+
+    if not changed:
+        raise APIError(E_PARAM_FORMAT.code, "至少需要提供 filename 或 content", 400)
+
+    algo.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+
+    logger.info("算法文件已更新: id=%s module=%s filename=%s by=%s",
+                algo_id, algo.module_key, algo.original_filename, user_id)
+
+    return {
+        "id": algo.id,
+        "module_key": algo.module_key,
+        "original_filename": algo.original_filename,
+        "file_size": algo.file_size,
+        "created_at": algo.created_at.isoformat() if algo.created_at else "",
+        "updated_at": algo.updated_at.isoformat() if algo.updated_at else "",
+    }
+
+
 def delete_algorithm(db: Session, user_id: str, algo_id: str) -> dict:
     """软删除算法文件。"""
     algo = db.query(AlgorithmFile).filter(
@@ -149,6 +211,131 @@ def delete_algorithm(db: Session, user_id: str, algo_id: str) -> dict:
                 algo_id, module_key, filename, user_id)
 
     return {"deleted_id": algo_id, "module_key": module_key}
+
+
+# ═══════════════════════════════════════════════
+# AI 配置中心 — 模块聚合查询
+# ═══════════════════════════════════════════════
+
+def _get_active_bindings(db: Session) -> dict[str, dict]:
+    """从数据库加载所有模块的活跃模型绑定。
+
+    Returns:
+        {module_key: {model_name, provider_key, model_version, display_name, binding_id}}
+    """
+    try:
+        from ...shared.models.model_config import ModelConfig, ModuleModelBinding
+        rows = db.query(
+            ModuleModelBinding.id,
+            ModuleModelBinding.module_key,
+            ModuleModelBinding.module_display_name,
+            ModelConfig.model_name,
+            ModelConfig.model_version,
+            ModelConfig.provider_key,
+            ModelConfig.display_name,
+        ).join(
+            ModelConfig, ModuleModelBinding.model_config_id == ModelConfig.id,
+        ).filter(
+            ModuleModelBinding.is_active == True,
+            ModelConfig.is_available == True,
+            ModuleModelBinding.deleted_at == None,
+            ModelConfig.deleted_at == None,
+        ).order_by(ModuleModelBinding.created_at.desc()).all()
+
+        result: dict[str, dict] = {}
+        for row in rows:
+            if row.module_key not in result:
+                result[row.module_key] = {
+                    "model_name": row.model_name,
+                    "provider_key": row.provider_key,
+                    "model_version": row.model_version or "",
+                    "display_name": row.display_name or row.model_name,
+                    "binding_id": row.id,
+                }
+        return result
+    except Exception as e:
+        logger.warning("加载模块绑定信息失败: %s", e)
+        return {}
+
+
+def list_modules(db: Session) -> list[dict]:
+    """列出所有 16 个 AI 模块，含文件数和当前模型绑定信息。"""
+    bindings = _get_active_bindings(db)
+
+    # 查询每个模块的文件数（一次查询）
+    from sqlalchemy import func
+    file_counts = dict(
+        db.query(
+            AlgorithmFile.module_key,
+            func.count(AlgorithmFile.id),
+        ).filter(
+            AlgorithmFile.deleted_at.is_(None),
+        ).group_by(AlgorithmFile.module_key).all()
+    )
+
+    result = []
+    for m in ALGORITHM_MODULES:
+        key = m["key"]
+        module_reg = MODULE_REGISTRY.get(key, {})
+        binding = bindings.get(key, {})
+
+        result.append({
+            "key": key,
+            "name": m["name"],
+            "icon": m["icon"],
+            "color": m.get("color", ""),
+            "file_count": file_counts.get(key, 0),
+            "current_model": binding.get("model_name"),
+            "current_provider": binding.get("provider_key"),
+            "current_model_version": binding.get("model_version", ""),
+            "model_display_name": binding.get("display_name", ""),
+            "has_active_binding": key in bindings,
+        })
+
+    return result
+
+
+def get_module_full_info(db: Session, module_key: str) -> dict:
+    """获取单个模块的完整信息（注册表 + 算法文件 + 模型绑定）。"""
+    module_reg = MODULE_REGISTRY.get(module_key)
+    if not module_reg:
+        raise APIError(E_PARAM_FORMAT.code,
+                       f"不支持的模块: {module_key}，有效值: {', '.join(MODULE_REGISTRY.keys())}", 400)
+
+    # 算法文件
+    files = list_algorithms(db, module_key)
+
+    # 模型绑定
+    bindings = _get_active_bindings(db)
+    binding = bindings.get(module_key, {})
+
+    # 降级链（从模块注册表读取）
+    fallback_chain = module_reg.get("fallback_chain", [])
+
+    return {
+        "key": module_key,
+        "name": module_reg["name"],
+        "icon": module_reg["icon"],
+        "color": module_reg.get("color", ""),
+        "description": module_reg.get("description", ""),
+        "ai_capabilities": module_reg.get("ai_capabilities", []),
+        # 算法文件
+        "file_count": len(files),
+        "files": files,
+        # 当前模型绑定
+        "current_model": binding.get("model_name"),
+        "current_provider": binding.get("provider_key"),
+        "current_model_version": binding.get("model_version", ""),
+        "model_display_name": binding.get("display_name", ""),
+        "has_active_binding": module_key in bindings,
+        "binding_id": binding.get("binding_id"),
+        # 默认配置
+        "default_model": module_reg["default_model"],
+        "default_provider": module_reg["provider"],
+        "temperature": module_reg["temperature"],
+        "fallback_chain": fallback_chain,
+        "template_fallback": module_reg.get("template_fallback"),
+    }
 
 
 # ═══════════════════════════════════════════════

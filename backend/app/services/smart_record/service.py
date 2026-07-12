@@ -240,6 +240,8 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
     import tempfile
     import os
 
+    audio_base64 = None
+
     # 写入临时文件
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f_in:
         f_in.write(audio_data)
@@ -261,9 +263,14 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
         # 取PCM数据（跳过WAV头44字节）
         pcm_data = raw_audio[44:] if len(raw_audio) > 44 else raw_audio
         audio_base64 = base64.b64encode(pcm_data).decode("utf-8")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        # ffmpeg不可用 → 尝试直接base64编码原始数据
+        audio_format = "wav"
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        # ffmpeg不可用 → 尝试 pydub（纯Python方案，仍需ffmpeg做解码）
+        # 若pydub也不可用，传递原始数据让ASR尽力处理
+        logger.warning("ffmpeg不可用，chunk转写将使用原始音频格式(chunk=%s): %s",
+                       webm_path[-20:], e)
         audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        audio_format = "webm"
     finally:
         # 清理临时文件
         for path in [webm_path, wav_path]:
@@ -272,9 +279,17 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
             except OSError:
                 pass
 
-    # 调用腾讯云 ASR
-    from ..voice_engine.service import asr_online
-    result = asr_online(audio_base64, audio_format="wav", sample_rate=16000)
+    if not audio_base64:
+        return "", 0.0
+
+    # 调用腾讯云 ASR（使用统一入口，支持多引擎降级）
+    from ..voice_engine.service import recognize_speech
+    try:
+        result = recognize_speech(audio_base64, audio_format=audio_format, sample_rate=16000)
+    except Exception:
+        # recognize_speech 也可能失败（如无密钥配置），尝试直接 asr_online
+        from ..voice_engine.service import asr_online
+        result = asr_online(audio_base64, audio_format=audio_format, sample_rate=16000)
 
     text = result.get("text", "").strip()
     confidence = result.get("confidence", 0.0)
@@ -640,6 +655,7 @@ def _generate_ai_extraction(
         user_id=user_id,
         db=db,
         temperature=0.5,
+        module="smart_record",
     )
     parsed = safe_extract_json(result["content"])
     if not parsed or not isinstance(parsed, dict):
@@ -1219,6 +1235,7 @@ def _generate_ai_teleprompter(
         user_id=user_id,
         db=db,
         temperature=0.7,
+        module="smart_record",
     )
     parsed = safe_extract_json(result["content"])
     if not parsed or not isinstance(parsed, dict):

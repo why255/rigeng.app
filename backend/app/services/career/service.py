@@ -587,6 +587,7 @@ def _generate_ai_skill_crystal(
         user_id=user_id,
         db=db,
         temperature=0.6,
+        module="smart_job",
     )
     parsed = safe_extract_json(result["content"])
     if not parsed or not isinstance(parsed, dict):
@@ -882,6 +883,7 @@ def _generate_ai_job_strategy(
         user_id=user_id,
         db=db,
         temperature=0.7,
+        module="smart_job",
     )
     parsed = safe_extract_json(result["content"])
     if not parsed or not isinstance(parsed, dict):
@@ -1154,6 +1156,7 @@ def _generate_company_intel(company: str, user_id: str | None = None,
             user_id=user_id,
             db=db,
             temperature=0.5,
+            module="smart_job",
         )
         parsed = safe_extract_json(result["content"])
         if parsed and isinstance(parsed, dict):
@@ -1214,6 +1217,7 @@ def _generate_match_analysis(step_data: dict, position: str, company: str,
             user_id=user_id,
             db=db,
             temperature=0.6,
+            module="smart_job",
         )
         content = result.get("content", "").strip()
         if content and len(content) > 50:
@@ -1271,6 +1275,7 @@ def _generate_interview_strategy(company: str, position: str, stage: str,
             user_id=user_id,
             db=db,
             temperature=0.7,
+            module="smart_job",
         )
         content = result.get("content", "").strip()
         if content and len(content) > 50:
@@ -1332,6 +1337,7 @@ def _generate_question_list(company: str, position: str, stage: str,
             user_id=user_id,
             db=db,
             temperature=0.7,
+            module="smart_job",
         )
         parsed = safe_extract_json(result["content"])
         if parsed and isinstance(parsed, dict) and len(parsed.get("questions", [])) >= 5:
@@ -1403,6 +1409,7 @@ def _generate_warm_up_questions(company: str = "", position: str = "",
             user_id=user_id,
             db=db,
             temperature=0.8,
+            module="smart_job",
         )
         parsed = safe_extract_json(result["content"])
         if parsed and isinstance(parsed, dict) and len(parsed.get("questions", [])) >= 2:
@@ -1593,6 +1600,7 @@ def _generate_ai_interview_review(
         user_id=user_id,
         db=db,
         temperature=0.6,
+        module="smart_job",
     )
     parsed = safe_extract_json(result["content"])
     if not parsed or not isinstance(parsed, dict):
@@ -1799,6 +1807,7 @@ def _generate_probation_milestones(company: str, position: str,
             user_id=user_id,
             db=db,
             temperature=0.6,
+            module="smart_job",
         )
         parsed = safe_extract_json(result["content"])
         if parsed and isinstance(parsed, dict) and "day_30" in parsed:

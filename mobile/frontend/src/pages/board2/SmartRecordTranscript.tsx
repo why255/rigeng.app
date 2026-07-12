@@ -35,10 +35,19 @@ export function SmartRecordTranscript() {
         const data = await fetchTranscript(recordingId)
         if (!cancelled) {
           setSegments(data.segments || [])
-          if (data.totalDuration) setTotalDurationStr(data.totalDuration)
+          // 兼容后端 snake_case: duration_seconds → 前端 totalDuration
+          const dur = (data as any).duration_seconds ?? (data as any).totalDuration
+          if (dur) {
+            const sec = typeof dur === 'number' ? dur : parseInt(String(dur), 10)
+            if (!isNaN(sec)) {
+              const m = Math.floor(sec / 60)
+              const s = sec % 60
+              setTotalDurationStr(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+            }
+          }
         }
-      } catch {
-        // 加载失败显示空状态
+      } catch (err) {
+        console.error('[SmartRecord] 获取转写失败, recordingId:', recordingId, err)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -152,8 +161,8 @@ export function SmartRecordTranscript() {
           <div style={{ marginBottom: 16 }}>
             {segments.map((seg, i) => {
               const cs = confidenceStyle(seg.confidence)
-              const isHighlight = seg.isCandidate || (seg as any).highlight
-              const highlightColor = (seg as any).highlightColor || (seg.isCandidate ? 'warm' : '')
+              const isCandidate = seg.is_candidate || seg.isCandidate || (seg as any).highlight
+              const highlightColor = (seg as any).highlightColor || (isCandidate ? 'warm' : '')
               return (
                 <div key={i} className="sr-segment">
                   <div className="sr-segment__header">
@@ -161,7 +170,7 @@ export function SmartRecordTranscript() {
                     <span className="sr-segment__speaker">{seg.speaker}</span>
                     <span className="sr-segment__time">{seg.time}</span>
                   </div>
-                  {isHighlight ? (
+                  {isCandidate ? (
                     <div className={highlightColor === 'gray' ? 'sr-segment__bubble-gray' : 'sr-segment__bubble-warm'}>
                       <p className="sr-segment__text">{seg.text}</p>
                     </div>

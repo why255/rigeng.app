@@ -243,6 +243,7 @@ def _generate_ai_gentle_reply(user_message: str,
             user_id=user_id,
             db=db,
             temperature=0.8,
+            module="evening_review",
         )
         reply = result.get("content", "").strip()
         if reply and len(reply) > 10:

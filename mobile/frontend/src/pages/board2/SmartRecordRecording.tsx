@@ -42,6 +42,8 @@ export function SmartRecordRecording() {
   const [initError, setInitError] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(true)
   const [asrSource, setAsrSource] = useState<string>('')
+  const asrSourceRef = useRef<string>('')  // ref 避免 sendChunkForAsr 闭包过期
+  const wsHasProducedTextRef = useRef(false)  // WebSocket是否真正产出过转写文本
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunkIndexRef = useRef(0)
@@ -58,7 +60,13 @@ export function SmartRecordRecording() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
 
-      const { recordingId: recId } = await startRecording(scene as '面试' | '会议' | '日常' | '自定义')
+      const startRes = await startRecording(scene as '面试' | '会议' | '日常' | '自定义')
+      // 兼容后端 snake_case 返回 recording_id
+      const recId: string = (startRes as any).recording_id || (startRes as any).recordingId || ''
+      if (!recId) {
+        console.error('[SmartRecord] startRecording 返回的recordingId为空，完整响应:', startRes)
+        throw new Error('录音创建失败：未获取到录音ID')
+      }
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
       setRecordingId(recId)
       setIsStarting(false)
@@ -101,12 +109,14 @@ export function SmartRecordRecording() {
     try {
       const auth = await fetchAsrAuth(recId)
       setAsrSource('ws')
+      asrSourceRef.current = 'ws'
 
       const ws = new WebSocket(auth.ws_url)
       asrWsRef.current = ws
       ws.binaryType = 'arraybuffer'
 
       ws.onopen = () => {
+        console.log('[SmartRecord] 腾讯云ASR WebSocket已连接')
         // 发送开始消息（Tencent ASR WebSocket协议）
         const startMsg = JSON.stringify({
           type: 'start',
@@ -130,6 +140,7 @@ export function SmartRecordRecording() {
           if (result.code === 0 && result.result) {
             const text = result.result.voice_text_str || result.result.text || ''
             if (text.trim()) {
+              wsHasProducedTextRef.current = true  // 标记WS确实产出了转写文本
               const now = new Date()
               const timeStr = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
               setTranscriptLines(prev => {
@@ -140,7 +151,7 @@ export function SmartRecordRecording() {
               })
             }
           } else if (result.code !== 0) {
-            console.warn('腾讯云ASR WebSocket错误:', result.code, result.message)
+            console.warn('[SmartRecord] 腾讯云ASR WebSocket错误:', result.code, result.message)
           }
         } catch {
           // 非JSON消息（可能是二进制确认），忽略
@@ -148,35 +159,45 @@ export function SmartRecordRecording() {
       }
 
       ws.onerror = () => {
-        console.warn('腾讯云ASR WebSocket连接错误，降级到HTTP chunk模式')
+        console.warn('[SmartRecord] 腾讯云ASR WebSocket连接错误，降级到HTTP chunk模式')
         setAsrSource('chunk')
+        asrSourceRef.current = 'chunk'
       }
 
       ws.onclose = () => {
-        console.log('腾讯云ASR WebSocket已关闭')
+        console.log('[SmartRecord] 腾讯云ASR WebSocket已关闭')
+        // 如果WS连接了但从未产出文本，降级到chunk模式
+        if (!wsHasProducedTextRef.current) {
+          console.warn('[SmartRecord] WebSocket未产出转写文本，降级到HTTP chunk模式')
+          setAsrSource('chunk')
+          asrSourceRef.current = 'chunk'
+        }
       }
-    } catch {
-      console.warn('无法获取ASR WebSocket授权，使用HTTP chunk模式')
+    } catch (err) {
+      console.warn('[SmartRecord] 无法获取ASR WebSocket授权，使用HTTP chunk模式:', err)
       setAsrSource('chunk')
+      asrSourceRef.current = 'chunk'
     }
   }, [])
 
-  // ── HTTP chunk ASR（兜底）──
+  // ── HTTP chunk ASR（兜底，同时作为WS无产出时的补充）──
   const sendChunkForAsr = useCallback(async (recId: string, chunk: Blob, idx: number) => {
     try {
       const result = await uploadAudioChunk(recId, chunk, idx)
       if (result.text?.trim()) {
-        // WebSocket模式下不重复添加（WS结果更及时）
-        if (asrSource !== 'ws') {
+        // 只有当WebSocket确实产出了转写文本时才跳过chunk结果（避免重复）
+        // 如果WS连接了但没产出文本，chunk结果仍然要显示
+        const currentAsrSource = asrSourceRef.current
+        if (currentAsrSource !== 'ws' || !wsHasProducedTextRef.current) {
           const now = new Date()
           const timeStr = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
           setTranscriptLines(prev => [...prev, { text: result.text, time: timeStr, confidence: result.confidence }])
         }
       }
-    } catch {
-      // chunk上传失败不影响录音
+    } catch (err) {
+      console.error('[SmartRecord] chunk上传/转写失败:', err)
     }
-  }, [asrSource])
+  }, [])  // 空依赖，通过ref读取最新值
 
   useEffect(() => {
     const cleanup = beginRecording()
@@ -218,7 +239,13 @@ export function SmartRecordRecording() {
     }
 
     if (recordingId) {
-      try { await stopRecording(recordingId) } catch { /* */ }
+      try {
+        await stopRecording(recordingId)
+      } catch (err) {
+        console.error('[SmartRecord] 停止录音请求失败:', err)
+      }
+    } else {
+      console.error('[SmartRecord] handleStop: recordingId为空，无法停止录音')
     }
 
     navigate(`/m/smart-record/transcript?id=${recordingId || 'demo'}`)

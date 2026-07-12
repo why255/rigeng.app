@@ -60,11 +60,19 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 | 项 | 值 |
 |---|-----|
 | 版本号 | `0.3.0` |
-| versionCode | `2` |
+| versionCode | `2` ⚠️ `build.gradle` 中仍是 `1`，需手动改 |
 | 下载地址 | `http://47.103.197.189/日耕-latest.apk`（固定不变） |
 | 权限 | INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS |
 | androidScheme | `http`（同协议避免混合内容拦截） |
 | cleartext | `true` |
+
+### 🔧 2026-07-12 录音修复
+
+**问题**：APK 录音按钮点击后报"麦克风权限被拒绝"。
+**根因**：`capacitor.config.ts` 中 `server.url: "http://47.103.197.189"` 导致 WebView 从远程 HTTP 加载页面，非安全上下文 → Chrome 阻止 `getUserMedia()`。
+**修复**：注释掉 `server.url`，APK 从本地 bundle 加载（origin=`http://localhost`，安全上下文），API 仍通过 `window.__RIGENG_API__` 指向远程服务器。
+
+> ⚠️ **构建要求**：Gradle 8.13.0 需要 Java 11+，本机 `JAVA_HOME` 指向 JDK 8 会构建失败。需 `export JAVA_HOME="C:/Program Files/Java/jdk-21.0.10"` 后构建。`build.gradle` 已添加阿里云 Maven 镜像加速。
 
 ### 自主更新机制
 

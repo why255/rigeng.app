@@ -116,8 +116,7 @@ const ADMIN_MENUS: MenuGroup[] = [
       { label: '品牌配置', path: '/admin/settings/brand', icon: 'mingcute:palette-line', roles: ['superadmin'] },
       { label: 'HR 模块', path: '/admin/settings/hr-modules', icon: 'mingcute:layout-line', roles: ['superadmin'] },
       { label: 'ABS 问卷', path: '/admin/settings/abs', icon: 'mingcute:survey-line', roles: ['superadmin'] },
-      { label: '算法管理', path: '/admin/settings/algorithm', icon: 'mingcute:code-line', roles: ['superadmin'] },
-      { label: '模型降级', path: '/admin/settings/model-degradation', icon: 'mingcute:robot-line', roles: ['superadmin'] },
+      { label: 'AI配置中心', path: '/admin/settings/ai-config', icon: 'mingcute:robot-line', roles: ['superadmin'] },
     ],
   },
   // ── 板块八：审计日志 ──

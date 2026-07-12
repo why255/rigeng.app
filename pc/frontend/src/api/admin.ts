@@ -510,6 +510,67 @@ export function deleteAlgorithm(id: string) {
   return apiDelete(`/admin/algorithms/${id}`)
 }
 
+export function getAlgorithmDetail(id: string) {
+  return apiGet<AlgorithmFileDetail>(`/admin/algorithms/${id}/detail`)
+}
+
+export function updateAlgorithm(id: string, data: { original_filename?: string; content?: string }) {
+  return apiPatch<{ id: string; module_key: string; original_filename: string; file_size: number; created_at: string; updated_at: string }>(`/admin/algorithms/${id}`, data)
+}
+
+/* ─────── AI 配置中心 API ─────── */
+
+export interface AIModuleItem {
+  key: string
+  name: string
+  icon: string
+  color: string
+  file_count: number
+  current_model: string | null
+  current_provider: string | null
+  current_model_version: string | null
+  model_display_name: string | null
+  has_active_binding: boolean
+}
+
+export interface AlgorithmFileDetail {
+  id: string
+  module_key: string
+  original_filename: string
+  content: string
+  file_size: number
+  uploaded_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AIModuleFullInfo extends AIModuleItem {
+  description: string
+  ai_capabilities: string[]
+  files: AlgorithmFileItem[]
+  binding_id: string | null
+  default_model: string
+  default_provider: string
+  temperature: number
+  fallback_chain: string[]
+  template_fallback: string | null
+}
+
+export function getAIModules() {
+  return apiGet<AIModuleItem[]>('/ai-config/modules')
+}
+
+export function getAIModuleDetail(moduleKey: string) {
+  return apiGet<AIModuleFullInfo>(`/ai-config/modules/${moduleKey}`)
+}
+
+export function getAIConfigHealth() {
+  return apiGet<{
+    total: number; ok: number; warn: number
+    modules: { module_key: string; module_name: string; has_binding: boolean; has_algorithms: boolean; current_model: string | null; status: string }[]
+  }>('/ai-config/health')
+}
+
 /* ─────── 模型降级 API ─────── */
 
 export interface ModelConfigItem {

@@ -496,16 +496,29 @@ def llm_generate(prompt: str, system_prompt: str | None = None,
                  model: str | None = None, temperature: float | None = None,
                  max_tokens: int | None = None, stream: bool = False,
                  provider: str | None = None,
-                 user_id: str | None = None, db=None) -> dict[str, Any]:
+                 user_id: str | None = None, db=None,
+                 module: str | None = None) -> dict[str, Any]:
     """A3/A4 LLM生成回答（统一入口，支持多提供商）。
 
-    provider 优先级: 参数 > LLM_PROVIDER 配置 > "auto"
-    "auto" 模式: 优先按模块路由（由 orchestrator 决定），否则按可用提供商自动选择
-    "volcano" / "dashscope" / "hunyuan" / "kimi" / "deepseek" / "zhipu" / "anthropic"
+    模型/提供商选择优先级（高→低）:
+      1. 调用方显式传入 model + provider 参数
+      2. 管理员后台 module→模型绑定（ModuleModelBinding 表）★ 所有模块AI模型版本受管理员控制
+      3. 用户模型偏好（user_auth.get_preferred_model）
+      4. LLM_PROVIDER 全局配置
 
-    user_id + db: 可选，传入后自动读取用户模型偏好（优先于全局默认模型）。
+    provider 可选值: "volcano" / "dashscope" / "hunyuan" / "kimi" / "deepseek" / "zhipu" / "anthropic" / "auto"
+
+    module: 可选，传入后自动从 DB 读取管理员配置的模块→模型绑定（惰性导入避免循环依赖）。
     """
-    # 读取用户模型偏好（如果未显式指定模型）
+    # ★ 1) 管理员后台模块→模型绑定（最高优先级，仅当 model + provider 都未显式传入时生效）
+    if module and model is None and provider is None and db is not None:
+        try:
+            from ..engines.llm_orchestrator import select_model
+            model, provider = select_model(module, db=db)
+        except Exception:
+            pass  # DB 不可用时降级到后续逻辑
+
+    # 2) 读取用户模型偏好（如果未显式指定模型且未被模块绑定覆盖）
     if model is None and user_id and db is not None:
         try:
             from ..user_auth.service import get_preferred_model
@@ -1125,6 +1138,9 @@ def converse(user_input: str, conversation_id: str | None = None,
             context=history,
             model=user_model,
             provider=provider,
+            module=module,
+            user_id=user_id,
+            db=db,
         )
     except APIError:
         # LLM超时/不可用→返回温和降级回复

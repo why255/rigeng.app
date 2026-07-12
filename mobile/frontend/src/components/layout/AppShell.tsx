@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react'
 import { TabBar } from './TabBar'
 import { checkApkUpdate, type UpdateInfo } from '@/shared/api/versionApi'
 import { Capacitor } from '@capacitor/core'
+import { App } from '@capacitor/app'
 
 /**
  * 移动端 H5 全局外壳：
@@ -20,8 +21,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!Capacitor.isNativePlatform()) return
 
     try {
-      // 当前 APK versionCode = 2 (build.gradle 中定义)
-      const currentVersionCode = 2
+      // 动态获取当前 APK versionCode（从 build.gradle 的 versionCode）
+      const info = await App.getInfo()
+      const currentVersionCode = parseInt(info.build, 10) || 0
       const result = await checkApkUpdate(currentVersionCode)
       if (result.needs_update && result.update) {
         setUpdateInfo(result.update)

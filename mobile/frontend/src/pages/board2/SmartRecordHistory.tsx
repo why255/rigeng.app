@@ -29,8 +29,16 @@ export function SmartRecordHistory() {
     setLoading(true)
     try {
       const res = await fetchHistory(1, 50)
-      setRecordings(res.items || [])
-    } catch {
+      // 兼容后端直接返回数组（而非 {items, total} 对象）
+      if (Array.isArray(res)) {
+        setRecordings(res)
+      } else if (res && Array.isArray((res as any).items)) {
+        setRecordings((res as any).items)
+      } else {
+        setRecordings([])
+      }
+    } catch (err) {
+      console.error('[SmartRecord] 历史列表加载失败:', err)
       setRecordings([])
     } finally {
       setLoading(false)

@@ -41,10 +41,14 @@ export function SmartRecordHome() {
         fetchTodayStats(),
         fetchRecentRecordings(),
       ])
-      setStats(s)
+      // 兼容后端 snake_case: total_minutes → totalMinutes
+      setStats({
+        count: (s as any).count ?? s.count ?? 0,
+        totalMinutes: (s as any).total_minutes ?? s.totalMinutes ?? 0,
+      })
       setRecentRecordings(Array.isArray(r) ? r : [])
-    } catch {
-      // 加载失败显示空状态
+    } catch (err) {
+      console.error('[SmartRecord] 首页数据加载失败:', err)
     } finally {
       setLoading(false)
     }

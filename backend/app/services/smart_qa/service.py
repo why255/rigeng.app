@@ -447,6 +447,7 @@ def _generate_ai_four_element_answer(
             user_id=user_id,
             db=db,
             temperature=0.7,
+            module="smart_qa",
         )
         parsed = safe_extract_json(result["content"])
         if parsed and isinstance(parsed, dict) and "elements" in parsed:

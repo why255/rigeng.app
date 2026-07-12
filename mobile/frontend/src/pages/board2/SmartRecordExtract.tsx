@@ -27,9 +27,17 @@ export function SmartRecordExtract() {
     async function load() {
       try {
         const result = await fetchExtraction(recordingId)
-        if (!cancelled) setData(result)
-      } catch {
-        // 加载失败显示空状态
+        if (!cancelled) {
+          // 兼容后端 snake_case: avatar_bg → avatarBg, recording_id → recordingId
+          const mapped: ExtractionResult = {
+            ...result,
+            avatarBg: (result as any).avatar_bg || result.avatarBg || '#BCAAA4',
+            recordingId: (result as any).recording_id || result.recordingId || recordingId,
+          }
+          setData(mapped)
+        }
+      } catch (err) {
+        console.error('[SmartRecord] 获取萃取结果失败, recordingId:', recordingId, err)
       } finally {
         if (!cancelled) setLoading(false)
       }

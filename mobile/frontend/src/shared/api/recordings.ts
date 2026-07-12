@@ -36,7 +36,10 @@ export interface Recording {
 
 export interface TodayStats {
   count: number
-  totalMinutes: number
+  total_minutes?: number  // 后端 snake_case
+  totalMinutes?: number   // 前端 camelCase
+  completed_count?: number
+  processing_count?: number
 }
 
 export interface RecordingListResponse {
@@ -51,13 +54,20 @@ export interface TranscriptSegment {
   time: string
   text: string
   confidence: number
-  isCandidate?: boolean
+  is_candidate?: boolean   // 后端 snake_case
+  isCandidate?: boolean    // 前端 camelCase（兼容）
 }
 
 export interface TranscriptResponse {
-  recordingId: string
+  // 兼容后端 snake_case 和前端 camelCase
+  recording_id?: string
+  recordingId?: string
   segments: TranscriptSegment[]
-  totalDuration: string
+  duration_seconds?: number
+  totalDuration?: string
+  title?: string
+  scene?: string
+  audio_url?: string
 }
 
 export interface Competency {
@@ -67,21 +77,26 @@ export interface Competency {
 
 export interface ExtractionResult {
   id: string
-  recordingId: string
+  recording_id?: string
+  recordingId?: string
   name: string
   role: string
-  avatarBg: string
+  avatar_bg?: string
+  avatarBg?: string
   years: string
   school: string
   skills: string[]
   salary: string
   onboard: string
   competencies: Competency[]
-  scene: SceneType
+  scene?: SceneType
 }
 
 export interface StartRecordingResponse {
-  recordingId: string
+  recording_id?: string    // 后端 snake_case
+  recordingId?: string     // 前端 camelCase（兼容）
+  scene?: string
+  status?: string
   uploadUrl?: string
 }
 
@@ -108,7 +123,7 @@ export function startRecording(scene: SceneType): Promise<StartRecordingResponse
 export function uploadAudioChunk(recordingId: string, chunk: Blob, chunkIndex: number = 0): Promise<{ text: string; confidence: number; segment_index: number }> {
   const formData = new FormData()
   formData.append('chunk', chunk)
-  formData.append('recordingId', recordingId)
+  formData.append('recording_id', recordingId)  // 后端期望 snake_case 字段名
   formData.append('chunk_index', String(chunkIndex))
   const token = localStorage.getItem('rg_token') ?? ''
   return fetch('/api/v1/recordings/chunk', {
@@ -139,8 +154,8 @@ export function fetchAsrAuth(recordingId: string): Promise<AsrAuthResponse> {
 }
 
 /** 停止录音 */
-export function stopRecording(recordingId: string): Promise<{ recordingId: string }> {
-  return apiPost<{ recordingId: string }>('/recordings/stop', { recordingId })
+export function stopRecording(recordingId: string): Promise<{ recording_id?: string; recordingId?: string; status?: string }> {
+  return apiPost('/recordings/stop', { recording_id: recordingId })
 }
 
 /* ---------- 转写 API ---------- */
