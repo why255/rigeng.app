@@ -75,6 +75,32 @@
   overflow-y: auto;
 }
 
+/* 所有使用 height:100dvh 全高容器的模块页面 — 禁止外层 .rg-page 滚动，
+   让内部的 flex:1;overflow-y:auto 区域独立滚动，确保顶部栏+输入框固定。
+   同时缩短容器高度为 100dvh-80px，为底部固定 TabBar (80px) 留出空间。 */
+.rg-page:has(.mp-mobile-page),
+.rg-page:has(.sq-mobile-page),
+.rg-page:has(.cm-mobile-page),
+.rg-page:has(.sr-page),
+.rg-page:has(.kb-page),
+.rg-page:has(.so-page),
+.rg-page:has(.mm-page),
+.rg-page:has(.mh-mobile-page) {
+  padding: 0;
+  overflow: hidden;
+}
+/* 对应容器高度调整：减掉固定 TabBar 的 80px */
+.rg-page:has(.mp-mobile-page) .mp-mobile-page,
+.rg-page:has(.sq-mobile-page) .sq-mobile-page,
+.rg-page:has(.cm-mobile-page) .cm-mobile-page,
+.rg-page:has(.sr-page) .sr-page,
+.rg-page:has(.kb-page) .kb-page,
+.rg-page:has(.so-page) .so-page,
+.rg-page:has(.mm-page) .mm-page,
+.rg-page:has(.mh-mobile-page) .mh-mobile-page {
+  height: calc(100dvh - 80px);
+}
+
 /* ---------- 底部 Tab 栏（80px + safe-area） ---------- */
 .rg-tabbar {
   position: fixed;
