@@ -372,7 +372,7 @@ def _write_audit(db: Session, operator_id: str, action: str,
         text(
             "INSERT INTO admin_audit_log "
             "(id, operator_id, action, target_user_id, detail, created_at, schema_version) "
-            "VALUES (:id, :oid, :action, :tid, :detail::jsonb, :now, 1)",
+            "VALUES (:id, :oid, :action, :tid, CAST(:detail AS jsonb), :now, 1)",
         ).bindparams(id=a_id, oid=operator_id, action=action, tid=target_user_id,
                      detail=detail_json, now=utcnow()),
     )
@@ -782,3 +782,269 @@ def degrade_module(db: Session, operator_id: str, module_key: str,
         "new_provider": mc.provider_key,
         "degraded": True,
     }
+
+
+# ═══════════════════════════════════════════════
+# 携君库文档管理
+# ═══════════════════════════════════════════════
+
+from ...shared.models.knowledge import Document, FileObject
+
+# HR八大模块（携君库分类）
+XIEJUN_CATEGORIES = [
+    "人力资源规划", "招聘与配置", "培训与开发", "绩效管理",
+    "薪酬福利管理", "劳动关系管理", "组织发展", "员工关系",
+]
+
+# 自动归类关键词映射
+CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "人力资源规划": ["人力规划", "人力资源规划", "组织架构", "岗位编制", "人力预算", "人员规划"],
+    "招聘与配置": ["招聘", "面试", "配置", "入职", "人才引进", "猎头", "校招", "社招"],
+    "培训与开发": ["培训", "开发", "学习", "课程", "讲师", "教练", "mentor", "培养"],
+    "绩效管理": ["绩效", "KPI", "OKR", "考核", "评估", "目标管理", "BSC"],
+    "薪酬福利管理": ["薪酬", "福利", "工资", "薪资", "奖金", "股权", "激励", "补贴", "公积金"],
+    "劳动关系管理": ["劳动", "合同", "法务", "合规", "仲裁", "纠纷", "工伤", "社保"],
+    "组织发展": ["组织发展", "OD", "变革", "文化", "价值观", "梯队", "继任", "领导力"],
+    "员工关系": ["员工关系", "ER", "满意度", "敬业度", "沟通", "团建", "活动", "关怀"],
+}
+
+
+def _auto_categorize(title: str, filename: str = "") -> str:
+    """根据标题和文件名自动归类到HR八大模块。"""
+    text = f"{title} {filename}".lower()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in text:
+                return category
+    return "人力资源规划"  # 默认归类
+
+
+def list_xiejun_documents(
+    db: Session,
+    category: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """分页查询携君库（public）文档列表。"""
+    base = db.query(Document).filter(
+        Document.library_type == "public",
+        Document.deleted_at == None,
+    )
+
+    if category:
+        base = base.filter(Document.hr_category == category)
+    if status:
+        base = base.filter(Document.status == status)
+
+    total = base.count()
+    rows = base.order_by(Document.updated_at.desc()).offset(
+        (page - 1) * page_size,
+    ).limit(page_size).all()
+
+    items = []
+    for d in rows:
+        items.append({
+            "id": d.id,
+            "title": d.title or "",
+            "category": d.hr_category or "未分类",
+            "author": "安老师",
+            "status": d.status,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else "",
+            "views": 0,
+            "file_object_id": d.file_object_id,
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+def get_xiejun_stats(db: Session) -> dict:
+    """携君库文档统计。"""
+    from sqlalchemy import func as F
+
+    base = db.query(Document).filter(
+        Document.library_type == "public",
+        Document.deleted_at == None,
+    )
+
+    total = base.count()
+    published = base.filter(Document.status == "published").count()
+    draft = base.filter(Document.status == "draft").count()
+    archived = base.filter(Document.status == "recycled").count()
+
+    # 按分类统计
+    cat_rows = db.execute(
+        select(Document.hr_category, F.count(Document.id))
+        .where(
+            Document.library_type == "public",
+            Document.deleted_at == None,
+        )
+        .group_by(Document.hr_category)
+    ).all()
+    by_category = {row[0] or "未分类": row[1] for row in cat_rows}
+
+    return {
+        "total": total,
+        "published": published,
+        "draft": draft,
+        "archived": archived,
+        "by_category": by_category,
+    }
+
+
+def upload_xiejun_document(
+    db: Session,
+    operator_id: str,
+    file_content: bytes,
+    filename: str,
+    file_type: str,
+    title: str | None = None,
+) -> dict:
+    """上传文档到携君库：存文件 + 创建Document记录 + 自动归类。
+
+    Args:
+        file_content: 文件原始字节
+        filename: 原始文件名
+        file_type: document / image / pdf 等
+        title: 文档标题（默认取文件名）
+    """
+    import hashlib
+    import os
+
+    size_bytes = len(file_content)
+
+    # 1. 计算校验和
+    checksum = hashlib.sha256(file_content).hexdigest()
+
+    # 2. 创建 FileObject 记录
+    file_id = new_uuid()
+    storage_dir = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "storage", "xiejun",
+    )
+    os.makedirs(storage_dir, exist_ok=True)
+    ext = os.path.splitext(filename)[1] or ""
+    storage_url = os.path.join(storage_dir, f"{file_id}{ext}")
+
+    # 3. 写入本地磁盘
+    with open(storage_url, "wb") as f:
+        f.write(file_content)
+
+    file_obj = FileObject(
+        id=file_id,
+        storage_url=storage_url,
+        file_type=file_type,
+        size_bytes=size_bytes,
+        compress_status="raw",
+        storage_layer="cloud",
+        checksum=checksum,
+    )
+    db.add(file_obj)
+    db.flush()
+
+    # 4. 确定标题和自动归类
+    doc_title = title or os.path.splitext(filename)[0]
+    hr_category = _auto_categorize(doc_title, filename)
+
+    # 5. 创建 Document 记录（携君库 = public，无 owner）
+    doc = Document(
+        owner_user_id=None,  # 携君库文档无个人归属
+        library_type="public",
+        doc_type="sop",  # 默认类型，后续可扩展
+        source_module=None,
+        hr_category=hr_category,
+        title=doc_title,
+        content={"filename": filename, "file_type": file_type, "size_bytes": size_bytes},
+        status="published",  # 管理员上传直接发布
+        audit_status="passed",
+        watermark_required=True,
+        copy_char_limit=500,
+        file_object_id=file_id,
+        vector_status="pending",
+        version=1,
+    )
+    db.add(doc)
+    db.flush()
+
+    _write_audit(db, operator_id, "upload_xiejun_doc", None, {
+        "doc_id": doc.id,
+        "title": doc_title,
+        "category": hr_category,
+        "filename": filename,
+        "size_bytes": size_bytes,
+    })
+
+    db.commit()
+    db.refresh(doc)
+
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "category": doc.hr_category,
+        "status": doc.status,
+        "filename": filename,
+        "size_bytes": size_bytes,
+        "auto_categorized": True,
+    }
+
+
+def update_xiejun_document(
+    db: Session,
+    operator_id: str,
+    doc_id: str,
+    data,
+) -> dict:
+    """更新携君库文档（标题、分类、状态等）。"""
+    d = db.get(Document, doc_id)
+    if not d or d.deleted_at is not None:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "文档不存在", 404)
+    if d.library_type != "public":
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "非携君库文档", 400)
+
+    changes = {}
+    if data.title is not None:
+        d.title = data.title
+        changes["title"] = data.title
+    if data.hr_category is not None:
+        d.hr_category = data.hr_category
+        changes["hr_category"] = data.hr_category
+    if data.status is not None:
+        d.status = data.status
+        changes["status"] = data.status
+
+    if changes:
+        _write_audit(db, operator_id, "update_xiejun_doc", None, {
+            "doc_id": doc_id, "changes": changes,
+        })
+
+    db.commit()
+    db.refresh(d)
+    return {
+        "id": d.id,
+        "title": d.title,
+        "category": d.hr_category,
+        "status": d.status,
+        "updated": True,
+    }
+
+
+def delete_xiejun_document(
+    db: Session,
+    operator_id: str,
+    doc_id: str,
+) -> dict:
+    """软删除携君库文档。"""
+    d = db.get(Document, doc_id)
+    if not d or d.deleted_at is not None:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "文档不存在", 404)
+    if d.library_type != "public":
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "非携君库文档", 400)
+
+    d.status = "recycled"
+    d.deleted_at = utcnow()
+
+    _write_audit(db, operator_id, "delete_xiejun_doc", None, {
+        "doc_id": doc_id, "title": d.title,
+    })
+
+    db.commit()
+    return {"id": doc_id, "deleted": True}

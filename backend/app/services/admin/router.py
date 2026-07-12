@@ -3,7 +3,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -18,6 +18,7 @@ from .schemas import (
     ModelConfigUpdate,
     ModuleModelBindingCreate,
     ModuleModelBindingUpdate,
+    XiejunDocumentUpdate,
 )
 
 router = APIRouter(tags=["管理后台"], prefix="/admin")
@@ -302,3 +303,77 @@ def degrade_module(
     return ok(service.degrade_module(
         db, operator.user_id, body.module_key, body.new_model_config_id,
     ))
+
+
+# ═══════════════════════════════════════════════
+# 携君库文档管理
+# ═══════════════════════════════════════════════
+
+
+@router.get("/xiejun/documents")
+def list_xiejun_documents(
+    category: str | None = Query(None, description="按分类筛选"),
+    status: str | None = Query(None, description="按状态筛选: published/draft/recycled"),
+    page_no: int = Query(1, alias="page", ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """携君库文档列表（分页+筛选）。"""
+    return ok(service.list_xiejun_documents(
+        db, category=category, status=status, page=page_no, page_size=page_size,
+    ))
+
+
+@router.get("/xiejun/stats")
+def get_xiejun_stats(
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """携君库文档统计（总数、分类统计）。"""
+    return ok(service.get_xiejun_stats(db))
+
+
+@router.post("/xiejun/documents/upload")
+async def upload_xiejun_document(
+    file: UploadFile = File(...),
+    title: str | None = Form(None),
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """上传文档到携君库（自动归类）。"""
+    content = await file.read()
+    filename = file.filename or "untitled"
+    # 根据扩展名推断文件类型
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    doc_type_map = {
+        "pdf": "document", "doc": "document", "docx": "document",
+        "xls": "document", "xlsx": "document", "ppt": "document", "pptx": "document",
+        "txt": "document", "md": "document", "csv": "document",
+        "png": "image", "jpg": "image", "jpeg": "image", "gif": "image",
+    }
+    file_type = doc_type_map.get(ext, "document")
+    return ok(service.upload_xiejun_document(
+        db, operator.user_id, content, filename, file_type, title,
+    ))
+
+
+@router.patch("/xiejun/documents/{doc_id}")
+def update_xiejun_document(
+    doc_id: str,
+    body: XiejunDocumentUpdate,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """更新携君库文档（标题、分类、状态）。"""
+    return ok(service.update_xiejun_document(db, operator.user_id, doc_id, body))
+
+
+@router.delete("/xiejun/documents/{doc_id}")
+def delete_xiejun_document(
+    doc_id: str,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """删除携君库文档（软删除）。"""
+    return ok(service.delete_xiejun_document(db, operator.user_id, doc_id))

@@ -137,3 +137,15 @@ class ModelDegradeRequest(BaseModel):
     """一键降级：将模块切换到新的模型版本。"""
     module_key: str = Field(..., description="模块标识")
     new_model_config_id: str = Field(..., description="目标模型版本的ID")
+
+
+# ═══════════════════════════════════════════════
+# 携君库文档管理
+# ═══════════════════════════════════════════════
+
+class XiejunDocumentUpdate(BaseModel):
+    """更新携君库文档。"""
+    title: str | None = None
+    hr_category: str | None = None
+    status: str | None = None  # published / draft / archived
+    author: str | None = None
