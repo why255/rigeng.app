@@ -14,9 +14,9 @@ sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 # ═══════════════════ 修改这里 ═══════════════════
-VERSION = "0.3.1"
-VERSION_CODE = 3
-RELEASE_NOTES = "多模型接入:豆包Seed2.0Pro/通义千问Qwen3.7/KimiK2.5/DeepSeekV4/通义听悟ASR/通义TTS-HD/智谱GLM4.5"
+VERSION = "0.0.1"
+VERSION_CODE = 1
+RELEASE_NOTES = "日耕首个正式版：朝有规划/暮有复盘/情绪树洞/智能记录/智能问答/智能办公/职业导师/知识库，全模块顶部栏+输入框固定"
 IS_CRITICAL = False
 # ═══════════════════════════════════════════════
 
