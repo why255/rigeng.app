@@ -1154,7 +1154,7 @@
   flex-direction: column;
 }
 /* light theme overrides */
-.mh-mobile-page:not([data-theme="dark"]) .mh-mobile-page {
+.mh-mobile-page:not([data-theme="dark"]) {
   background: #F5F3EF;
 }
 .mh-mobile-page__header {
