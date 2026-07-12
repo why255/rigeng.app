@@ -50,3 +50,4 @@ from .acquire_client import (  # noqa: F401
     ClientContract, ComplianceReminder,
 )
 from .algorithm import AlgorithmFile  # noqa: F401
+from .model_config import ModelConfig, ModuleModelBinding  # noqa: F401

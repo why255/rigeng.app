@@ -94,3 +94,46 @@ class AdminAuditLogItem(BaseModel):
     target_user_id: str | None = None
     detail: dict | None = None
     created_at: str = ""
+
+
+# ═══════════════════════════════════════════════
+# 模型降级
+# ═══════════════════════════════════════════════
+
+class ModelConfigCreate(BaseModel):
+    """新增模型版本。"""
+    provider_key: str = Field(..., description="提供商: volcano|dashscope|hunyuan|kimi|deepseek|zhipu|anthropic")
+    model_name: str = Field(..., description="API模型标识符")
+    model_version: str = Field(..., description="版本号")
+    display_name: str | None = None
+    is_available: bool = True
+
+
+class ModelConfigUpdate(BaseModel):
+    """更新模型版本（所有字段可选）。"""
+    provider_key: str | None = None
+    model_name: str | None = None
+    model_version: str | None = None
+    display_name: str | None = None
+    is_available: bool | None = None
+
+
+class ModuleModelBindingCreate(BaseModel):
+    """新增模块→模型绑定。"""
+    module_key: str = Field(..., description="模块标识")
+    module_display_name: str | None = None
+    model_config_id: str = Field(..., description="绑定的模型版本ID")
+    is_active: bool = True
+
+
+class ModuleModelBindingUpdate(BaseModel):
+    """更新绑定（降级时使用）。"""
+    model_config_id: str | None = None
+    is_active: bool | None = None
+    module_display_name: str | None = None
+
+
+class ModelDegradeRequest(BaseModel):
+    """一键降级：将模块切换到新的模型版本。"""
+    module_key: str = Field(..., description="模块标识")
+    new_model_config_id: str = Field(..., description="目标模型版本的ID")

@@ -64,6 +64,7 @@ export const ADMIN_ROUTES: AdminRouteConfig[] = [
   { path: '/admin/settings/hr-modules', meta: { title: 'HR 模块', roles: ['superadmin'] } },
   { path: '/admin/settings/abs', meta: { title: 'ABS 问卷', roles: ['superadmin'] } },
   { path: '/admin/settings/algorithm', meta: { title: '算法管理', roles: ['superadmin'] } },
+  { path: '/admin/settings/model-degradation', meta: { title: '模型降级', roles: ['superadmin'] } },
 
   // 审计日志
   { path: '/admin/audit', meta: { title: '审计日志', roles: ['superadmin'] } },

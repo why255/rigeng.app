@@ -19,6 +19,10 @@ from typing import Any
 
 logger = logging.getLogger("llm_orchestrator")
 
+# ── DB 覆盖缓存（30秒 TTL，避免每次 LLM 调用都查 DB）──
+_db_override_cache: dict[str, dict[str, tuple[str, str]]] = {}
+_db_override_cache_time: float = 0.0
+
 # ═══════════════════════════════════════════════
 # 任务复杂度枚举（保留向后兼容）
 # ═══════════════════════════════════════════════
@@ -130,21 +134,83 @@ def get_provider_for_model(model: str) -> str:
     return _MODEL_TO_PROVIDER.get(model, "zhipu")
 
 
-def select_model(module: str, task_complexity: str = "medium") -> tuple[str, str]:
-    """按模块选择最佳模型和提供商（Excel Sheet2 映射）。
+def select_model(module: str, task_complexity: str = "medium",
+                  db: Any = None) -> tuple[str, str]:
+    """按模块选择最佳模型和提供商（Excel Sheet2 映射 + DB 覆盖）。
+
+    优先从数据库读取覆盖配置（管理员可在后台动态调整），
+    DB 不可用时回退到硬编码的 MODULE_MODEL_MAP。
 
     Returns:
         (model_name, provider_name)
     """
+    # 1) 尝试 DB 覆盖（管理员后台配置）
+    if db:
+        db_overrides = _load_db_overrides_cached(db)
+        if module in db_overrides:
+            model, provider = db_overrides[module]
+            logger.debug("模块路由(DB覆盖): %s → %s (%s)", module, model, provider)
+            return model, provider
+
+    # 2) 硬编码默认映射
     entry = MODULE_MODEL_MAP.get(module)
     if entry:
         model, provider = entry
-        logger.debug("模块路由: %s → %s (%s)", module, model, provider)
+        logger.debug("模块路由(默认): %s → %s (%s)", module, model, provider)
         return model, provider
 
-    # 未匹配模块 → 默认豆包
+    # 3) 未匹配模块 → 默认豆包
     logger.debug("模块 %s 未匹配，使用默认豆包", module)
     return ("doubao-seed-2-0-pro", "volcano")
+
+
+def _load_db_overrides(db: Any) -> dict[str, tuple[str, str]]:
+    """从数据库加载模块→(模型, 提供商)的覆盖映射。
+
+    只返回 is_active=True 且模型 is_available=True 的记录。
+    如果模块有多个活跃绑定（异常情况），取最新的一条。
+    异常时返回空 dict，不影响系统正常运行。
+    """
+    if db is None:
+        return {}
+    try:
+        from ..shared.models.model_config import ModelConfig, ModuleModelBinding
+        rows = db.query(
+            ModuleModelBinding.module_key,
+            ModelConfig.model_name,
+            ModelConfig.provider_key,
+            ModuleModelBinding.created_at,
+        ).join(
+            ModelConfig, ModuleModelBinding.model_config_id == ModelConfig.id,
+        ).filter(
+            ModuleModelBinding.is_active == True,
+            ModelConfig.is_available == True,
+            ModuleModelBinding.deleted_at == None,
+            ModelConfig.deleted_at == None,
+        ).order_by(ModuleModelBinding.module_key, ModuleModelBinding.created_at.desc()).all()
+
+        result: dict[str, tuple[str, str]] = {}
+        for row in rows:
+            # 每个 module_key 只取第一条（最新的）
+            if row.module_key not in result:
+                result[row.module_key] = (row.model_name, row.provider_key)
+                logger.debug("DB覆盖: %s -> %s (%s)", row.module_key, row.model_name, row.provider_key)
+        return result
+    except Exception as e:
+        logger.warning("加载DB模型覆盖配置失败，使用硬编码默认: %s", e)
+        return {}
+
+
+def _load_db_overrides_cached(db: Any) -> dict[str, tuple[str, str]]:
+    """带缓存的 DB 覆盖加载（30秒 TTL）。"""
+    global _db_override_cache, _db_override_cache_time
+    now = time.time()
+    if now - _db_override_cache_time < 30:
+        return _db_override_cache.get("data", {})
+    data = _load_db_overrides(db)
+    _db_override_cache = {"data": data}
+    _db_override_cache_time = now
+    return data
 
 
 def _get_temperature(module: str, override: float | None = None) -> float:
@@ -214,7 +280,7 @@ def llm_generate_with_orchestration(
         # 显式指定提供商 → 使用该提供商的默认模型
         preferred_model = None
     else:
-        preferred_model, provider = select_model(module, task_complexity)
+        preferred_model, provider = select_model(module, task_complexity, db=db)
 
     # 获取温度
     actual_temperature = _get_temperature(module, temperature)

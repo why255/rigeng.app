@@ -78,6 +78,7 @@ import { AdminSettingsFlags } from '@/pages/admin/AdminSettingsFlags'
 import { AdminSettingsHrModules } from '@/pages/admin/AdminSettingsHrModules'
 import { AdminSettingsAbs } from '@/pages/admin/AdminSettingsAbs'
 import { AdminAlgorithm } from '@/pages/admin/AdminAlgorithm'
+import { AdminModelDegradation } from '@/pages/admin/AdminModelDegradation'
 import { AdminAuditLogs } from '@/pages/admin/AdminAuditLogs'
 import { PlaceholderPage } from '@/pages/admin/PlaceholderPage'
 
@@ -211,6 +212,7 @@ function AdminRoutes() {
       <Route path="settings/hr-modules" element={<AdminSettingsHrModules />} />
       <Route path="settings/abs" element={<AdminSettingsAbs />} />
       <Route path="settings/algorithm" element={<AdminAlgorithm />} />
+      <Route path="settings/model-degradation" element={<AdminModelDegradation />} />
       <Route path="audit" element={<AdminAuditLogs />} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>

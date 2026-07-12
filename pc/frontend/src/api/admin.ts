@@ -509,3 +509,89 @@ export function uploadAlgorithm(moduleKey: string, filename: string, content: st
 export function deleteAlgorithm(id: string) {
   return apiDelete(`/admin/algorithms/${id}`)
 }
+
+/* ─────── 模型降级 API ─────── */
+
+export interface ModelConfigItem {
+  id: string
+  provider_key: string
+  model_name: string
+  model_version: string
+  display_name: string | null
+  is_available: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProviderInfo {
+  key: string
+  name: string
+}
+
+export interface ModuleModelBindingItem {
+  id: string
+  module_key: string
+  module_display_name: string | null
+  model_config_id: string
+  is_active: boolean
+  model_name?: string
+  model_version?: string
+  provider_key?: string
+  display_name?: string
+  created_at: string
+  updated_at: string
+}
+
+export function getProviders() {
+  return apiGet<ProviderInfo[]>('/admin/providers')
+}
+
+export function getModelConfigs(params?: Record<string, string>) {
+  return apiGet<PageResponse<ModelConfigItem>>('/admin/models', params)
+}
+
+export function getModelConfig(id: string) {
+  return apiGet<ModelConfigItem>(`/admin/models/${id}`)
+}
+
+export function createModelConfig(data: Partial<ModelConfigItem>) {
+  return apiPost<ModelConfigItem>('/admin/models', data)
+}
+
+export function updateModelConfig(id: string, data: Partial<ModelConfigItem>) {
+  return apiPatch<ModelConfigItem>(`/admin/models/${id}`, data)
+}
+
+export function deleteModelConfig(id: string) {
+  return apiDelete(`/admin/models/${id}`)
+}
+
+export function getModuleBindings(params?: Record<string, string>) {
+  return apiGet<PageResponse<ModuleModelBindingItem>>('/admin/module-bindings', params)
+}
+
+export function createModuleBinding(data: {
+  module_key: string
+  module_display_name?: string
+  model_config_id: string
+}) {
+  return apiPost<ModuleModelBindingItem>('/admin/module-bindings', data)
+}
+
+export function updateModuleBinding(id: string, data: Partial<ModuleModelBindingItem>) {
+  return apiPatch<ModuleModelBindingItem>(`/admin/module-bindings/${id}`, data)
+}
+
+export function deleteModuleBinding(id: string) {
+  return apiDelete(`/admin/module-bindings/${id}`)
+}
+
+export function degradeModule(moduleKey: string, newModelConfigId: string) {
+  return apiPost<{
+    id: string; module_key: string; old_model: string | null
+    new_model: string; new_provider: string; degraded: boolean
+  }>('/admin/module-bindings/degrade', {
+    module_key: moduleKey,
+    new_model_config_id: newModelConfigId,
+  })
+}

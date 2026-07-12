@@ -411,3 +411,374 @@ def _teacher_profile_dict(tp: TeacherProfile | None) -> dict | None:
         "service_status": tp.service_status,
         "rating": float(tp.rating) if tp.rating else None,
     }
+
+
+# ═══════════════════════════════════════════════
+# 模型降级
+# ═══════════════════════════════════════════════
+
+PROVIDERS = [
+    {"key": "volcano", "name": "火山引擎 (豆包)"},
+    {"key": "dashscope", "name": "阿里云 (通义千问)"},
+    {"key": "hunyuan", "name": "腾讯混元"},
+    {"key": "kimi", "name": "月之暗面 (Kimi)"},
+    {"key": "deepseek", "name": "DeepSeek"},
+    {"key": "zhipu", "name": "智谱 (GLM)"},
+    {"key": "anthropic", "name": "Anthropic (Claude)"},
+]
+
+from ...shared.models.model_config import ModelConfig, ModuleModelBinding
+
+
+def list_providers() -> list[dict]:
+    """返回可用的模型提供商列表。"""
+    return PROVIDERS
+
+
+# ── ModelConfig CRUD ──
+
+def list_model_configs(
+    db: Session,
+    provider_key: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """分页查询模型版本列表。"""
+    base = db.query(ModelConfig).filter(ModelConfig.deleted_at == None)
+    if provider_key:
+        base = base.filter(ModelConfig.provider_key == provider_key)
+
+    total = base.count()
+    rows = base.order_by(ModelConfig.provider_key, ModelConfig.created_at.desc()).offset(
+        (page - 1) * page_size,
+    ).limit(page_size).all()
+
+    items = []
+    for r in rows:
+        items.append({
+            "id": r.id,
+            "provider_key": r.provider_key,
+            "model_name": r.model_name,
+            "model_version": r.model_version,
+            "display_name": r.display_name,
+            "is_available": r.is_available,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "updated_at": r.updated_at.isoformat() if r.updated_at else "",
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+def get_model_config(db: Session, config_id: str) -> dict:
+    """获取单个模型版本详情。"""
+    mc = db.get(ModelConfig, config_id)
+    if not mc or mc.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "模型版本不存在", 404)
+    return {
+        "id": mc.id,
+        "provider_key": mc.provider_key,
+        "model_name": mc.model_name,
+        "model_version": mc.model_version,
+        "display_name": mc.display_name,
+        "is_available": mc.is_available,
+        "created_at": mc.created_at.isoformat() if mc.created_at else "",
+        "updated_at": mc.updated_at.isoformat() if mc.updated_at else "",
+    }
+
+
+def create_model_config(db: Session, operator_id: str, data) -> dict:
+    """新增模型版本。"""
+    mc = ModelConfig(
+        provider_key=data.provider_key,
+        model_name=data.model_name,
+        model_version=data.model_version,
+        display_name=data.display_name,
+        is_available=data.is_available,
+    )
+    db.add(mc)
+    _write_audit(db, operator_id, "create_model_config", None, {
+        "provider_key": data.provider_key,
+        "model_name": data.model_name,
+        "model_version": data.model_version,
+    })
+    db.commit()
+    db.refresh(mc)
+    return {
+        "id": mc.id,
+        "provider_key": mc.provider_key,
+        "model_name": mc.model_name,
+        "model_version": mc.model_version,
+        "display_name": mc.display_name,
+        "is_available": mc.is_available,
+    }
+
+
+def update_model_config(db: Session, operator_id: str, config_id: str, data) -> dict:
+    """更新模型版本（启禁用、改名等）。"""
+    mc = db.get(ModelConfig, config_id)
+    if not mc or mc.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "模型版本不存在", 404)
+
+    changes = {}
+    if data.provider_key is not None:
+        mc.provider_key = data.provider_key
+        changes["provider_key"] = data.provider_key
+    if data.model_name is not None:
+        mc.model_name = data.model_name
+        changes["model_name"] = data.model_name
+    if data.model_version is not None:
+        mc.model_version = data.model_version
+        changes["model_version"] = data.model_version
+    if data.display_name is not None:
+        mc.display_name = data.display_name
+        changes["display_name"] = data.display_name
+    if data.is_available is not None:
+        mc.is_available = data.is_available
+        changes["is_available"] = data.is_available
+
+    if changes:
+        _write_audit(db, operator_id, "update_model_config", None, {
+            "model_config_id": config_id, "changes": changes,
+        })
+
+    db.commit()
+    db.refresh(mc)
+    return {"id": mc.id, "updated": True, "changes": changes}
+
+
+def delete_model_config(db: Session, operator_id: str, config_id: str) -> dict:
+    """软删除模型版本。"""
+    mc = db.get(ModelConfig, config_id)
+    if not mc or mc.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "模型版本不存在", 404)
+
+    # 检查是否有活跃绑定
+    active_bindings = db.query(ModuleModelBinding).filter(
+        ModuleModelBinding.model_config_id == config_id,
+        ModuleModelBinding.is_active == True,
+        ModuleModelBinding.deleted_at == None,
+    ).count()
+    if active_bindings > 0:
+        raise errors.APIError(
+            errors.E_PARAM_FORMAT.code,
+            f"该模型版本有 {active_bindings} 个活跃绑定，请先降级这些模块后再删除",
+            400,
+        )
+
+    mc.deleted_at = utcnow()
+    _write_audit(db, operator_id, "delete_model_config", None, {
+        "model_config_id": config_id,
+    })
+    db.commit()
+    return {"id": config_id, "deleted": True}
+
+
+# ── ModuleModelBinding CRUD ──
+
+def list_module_bindings(
+    db: Session,
+    module_key: str | None = None,
+    is_active: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """分页查询模块绑定列表（JOIN 模型信息）。"""
+    base = db.query(
+        ModuleModelBinding.id.label("binding_id"),
+        ModuleModelBinding.module_key,
+        ModuleModelBinding.module_display_name,
+        ModuleModelBinding.model_config_id,
+        ModuleModelBinding.is_active,
+        ModuleModelBinding.created_at,
+        ModuleModelBinding.updated_at,
+        ModelConfig.model_name,
+        ModelConfig.model_version,
+        ModelConfig.provider_key,
+        ModelConfig.display_name,
+    ).join(
+        ModelConfig, ModuleModelBinding.model_config_id == ModelConfig.id,
+    ).filter(
+        ModuleModelBinding.deleted_at == None,
+    )
+
+    if module_key:
+        base = base.filter(ModuleModelBinding.module_key == module_key)
+    if is_active is not None:
+        base = base.filter(ModuleModelBinding.is_active == is_active)
+
+    total = base.count()
+    rows = base.order_by(
+        ModuleModelBinding.module_key,
+        ModuleModelBinding.created_at.desc(),
+    ).offset((page - 1) * page_size).limit(page_size).all()
+
+    items = []
+    for r in rows:
+        items.append({
+            "id": r.binding_id,
+            "module_key": r.module_key,
+            "module_display_name": r.module_display_name,
+            "model_config_id": r.model_config_id,
+            "is_active": r.is_active,
+            "model_name": r.model_name,
+            "model_version": r.model_version,
+            "provider_key": r.provider_key,
+            "display_name": r.display_name,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "updated_at": r.updated_at.isoformat() if r.updated_at else "",
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+def get_module_binding(db: Session, binding_id: str) -> dict:
+    """获取单个绑定详情。"""
+    b = db.get(ModuleModelBinding, binding_id)
+    if not b or b.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "绑定不存在", 404)
+
+    mc = db.get(ModelConfig, b.model_config_id)
+    return {
+        "id": b.id,
+        "module_key": b.module_key,
+        "module_display_name": b.module_display_name,
+        "model_config_id": b.model_config_id,
+        "is_active": b.is_active,
+        "model_name": mc.model_name if mc else None,
+        "model_version": mc.model_version if mc else None,
+        "provider_key": mc.provider_key if mc else None,
+        "created_at": b.created_at.isoformat() if b.created_at else "",
+        "updated_at": b.updated_at.isoformat() if b.updated_at else "",
+    }
+
+
+def create_module_binding(db: Session, operator_id: str, data) -> dict:
+    """新增模块→模型绑定。"""
+    # 验证 model_config_id 存在
+    mc = db.get(ModelConfig, data.model_config_id)
+    if not mc or mc.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "模型版本不存在", 404)
+
+    b = ModuleModelBinding(
+        module_key=data.module_key,
+        module_display_name=data.module_display_name,
+        model_config_id=data.model_config_id,
+        is_active=data.is_active if data.is_active is not None else True,
+    )
+    db.add(b)
+    _write_audit(db, operator_id, "create_module_binding", None, {
+        "module_key": data.module_key,
+        "model_config_id": data.model_config_id,
+    })
+    db.commit()
+    db.refresh(b)
+    return {
+        "id": b.id,
+        "module_key": b.module_key,
+        "module_display_name": b.module_display_name,
+        "model_config_id": b.model_config_id,
+        "is_active": b.is_active,
+    }
+
+
+def update_module_binding(db: Session, operator_id: str, binding_id: str, data) -> dict:
+    """更新绑定（降级操作入口）。"""
+    b = db.get(ModuleModelBinding, binding_id)
+    if not b or b.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "绑定不存在", 404)
+
+    changes = {}
+    if data.model_config_id is not None:
+        mc = db.get(ModelConfig, data.model_config_id)
+        if not mc or mc.deleted_at:
+            raise errors.APIError(errors.E_PARAM_FORMAT.code, "目标模型版本不存在", 404)
+        b.model_config_id = data.model_config_id
+        changes["model_config_id"] = data.model_config_id
+    if data.is_active is not None:
+        b.is_active = data.is_active
+        changes["is_active"] = data.is_active
+    if data.module_display_name is not None:
+        b.module_display_name = data.module_display_name
+        changes["module_display_name"] = data.module_display_name
+
+    if changes:
+        _write_audit(db, operator_id, "update_module_binding", None, {
+            "binding_id": binding_id, "changes": changes,
+        })
+
+    db.commit()
+    db.refresh(b)
+    return {"id": b.id, "updated": True, "changes": changes}
+
+
+def delete_module_binding(db: Session, operator_id: str, binding_id: str) -> dict:
+    """软删除绑定。"""
+    b = db.get(ModuleModelBinding, binding_id)
+    if not b or b.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "绑定不存在", 404)
+
+    b.deleted_at = utcnow()
+    _write_audit(db, operator_id, "delete_module_binding", None, {
+        "binding_id": binding_id,
+    })
+    db.commit()
+    return {"id": binding_id, "deleted": True}
+
+
+def degrade_module(db: Session, operator_id: str, module_key: str,
+                   new_model_config_id: str) -> dict:
+    """一键降级：将指定模块切换到新模型版本。
+
+    1. 验证目标模型存在且可用
+    2. 将当前活跃绑定设为 inactive
+    3. 创建新的活跃绑定
+    """
+    # 验证目标模型
+    mc = db.get(ModelConfig, new_model_config_id)
+    if not mc or mc.deleted_at:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "目标模型版本不存在", 404)
+    if not mc.is_available:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, "目标模型版本已被禁用", 400)
+
+    # 查找旧模型信息（用于审计）
+    old_bindings = db.query(ModuleModelBinding).filter(
+        ModuleModelBinding.module_key == module_key,
+        ModuleModelBinding.is_active == True,
+        ModuleModelBinding.deleted_at == None,
+    ).all()
+
+    old_model = None
+    # 停用所有旧活跃绑定
+    for ob in old_bindings:
+        ob.is_active = False
+        if ob.model_config_id:
+            old_mc = db.get(ModelConfig, ob.model_config_id)
+            if old_mc:
+                old_model = old_mc.model_name
+
+    # 创建新绑定
+    b = ModuleModelBinding(
+        module_key=module_key,
+        module_display_name=old_bindings[0].module_display_name if old_bindings else None,
+        model_config_id=new_model_config_id,
+        is_active=True,
+    )
+    db.add(b)
+
+    _write_audit(db, operator_id, "degrade_module", None, {
+        "module_key": module_key,
+        "old_model": old_model,
+        "new_model": mc.model_name,
+        "new_model_config_id": new_model_config_id,
+    })
+
+    db.commit()
+    db.refresh(b)
+    return {
+        "id": b.id,
+        "module_key": module_key,
+        "old_model": old_model,
+        "new_model": mc.model_name,
+        "new_provider": mc.provider_key,
+        "degraded": True,
+    }

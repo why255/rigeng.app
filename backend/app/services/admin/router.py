@@ -13,6 +13,11 @@ from . import service
 from .schemas import (
     AssignStudentRequest,
     ChangeRoleRequest,
+    ModelDegradeRequest,
+    ModelConfigCreate,
+    ModelConfigUpdate,
+    ModuleModelBindingCreate,
+    ModuleModelBindingUpdate,
 )
 
 router = APIRouter(tags=["管理后台"], prefix="/admin")
@@ -154,4 +159,146 @@ def get_audit_logs(
     return ok(service.get_audit_logs(
         db, target_user_id=target_user_id, action=action,
         page=page_no, page_size=page_size,
+    ))
+
+
+# ═══════════════════════════════════════════════
+# 模型降级
+# ═══════════════════════════════════════════════
+
+# ── 提供商 ──
+
+@router.get("/providers")
+def get_providers(
+    _op: CurrentUser = Depends(_admin),
+):
+    """可用的模型提供商列表。"""
+    return ok(service.list_providers())
+
+
+# ── 模型版本 CRUD ──
+
+@router.get("/models")
+def list_models(
+    provider_key: str | None = Query(None, description="按提供商过滤"),
+    page_no: int = Query(1, alias="page", ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """模型版本列表（分页+筛选）。"""
+    return ok(service.list_model_configs(
+        db, provider_key=provider_key, page=page_no, page_size=page_size,
+    ))
+
+
+@router.get("/models/{model_id}")
+def get_model(
+    model_id: str,
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """模型版本详情。"""
+    return ok(service.get_model_config(db, model_id))
+
+
+@router.post("/models")
+def create_model(
+    body: ModelConfigCreate,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """新增模型版本。"""
+    return ok(service.create_model_config(db, operator.user_id, body))
+
+
+@router.patch("/models/{model_id}")
+def update_model(
+    model_id: str,
+    body: ModelConfigUpdate,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """更新模型版本（启禁用、改名等）。"""
+    return ok(service.update_model_config(db, operator.user_id, model_id, body))
+
+
+@router.delete("/models/{model_id}")
+def delete_model(
+    model_id: str,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """软删除模型版本（需先解绑所有模块）。"""
+    return ok(service.delete_model_config(db, operator.user_id, model_id))
+
+
+# ── 模块绑定 CRUD ──
+
+@router.get("/module-bindings")
+def list_bindings(
+    module_key: str | None = Query(None, description="按模块过滤"),
+    is_active: bool | None = Query(None, description="按活跃状态过滤"),
+    page_no: int = Query(1, alias="page", ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """模块绑定列表（含模型版本信息）。"""
+    return ok(service.list_module_bindings(
+        db, module_key=module_key, is_active=is_active,
+        page=page_no, page_size=page_size,
+    ))
+
+
+@router.get("/module-bindings/{binding_id}")
+def get_binding(
+    binding_id: str,
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """单个绑定详情。"""
+    return ok(service.get_module_binding(db, binding_id))
+
+
+@router.post("/module-bindings")
+def create_binding(
+    body: ModuleModelBindingCreate,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """新增模块→模型绑定。"""
+    return ok(service.create_module_binding(db, operator.user_id, body))
+
+
+@router.patch("/module-bindings/{binding_id}")
+def update_binding(
+    binding_id: str,
+    body: ModuleModelBindingUpdate,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """更新绑定（降级切换模型）。"""
+    return ok(service.update_module_binding(db, operator.user_id, binding_id, body))
+
+
+@router.delete("/module-bindings/{binding_id}")
+def delete_binding(
+    binding_id: str,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """软删除绑定。"""
+    return ok(service.delete_module_binding(db, operator.user_id, binding_id))
+
+
+@router.post("/module-bindings/degrade")
+def degrade_module(
+    body: ModelDegradeRequest,
+    operator: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """一键降级：将模块切换到新的模型版本。"""
+    return ok(service.degrade_module(
+        db, operator.user_id, body.module_key, body.new_model_config_id,
     ))
