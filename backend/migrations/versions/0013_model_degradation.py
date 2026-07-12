@@ -25,7 +25,9 @@ def _types(dialect: str) -> dict:
         "TS": "TIMESTAMP",
         "NOW": "NOW()" if pg else "CURRENT_TIMESTAMP",
         "INT": "INTEGER",
-        "BOOL": "BOOLEAN" if pg else "INTEGER",  # SQLite: 0/1
+        "BOOL": "BOOLEAN" if pg else "INTEGER",
+        "BOOL_TRUE": "true" if pg else "1",
+        "INSERT_IGNORE": "ON CONFLICT DO NOTHING" if pg else "OR IGNORE",
         "V64": "VARCHAR(64)",
         "V128": "VARCHAR(128)",
         "V255": "VARCHAR(255)",
@@ -49,7 +51,7 @@ def upgrade() -> None:
             model_name {t['V128']} NOT NULL,
             model_version {t['V64']} NOT NULL,
             display_name {t['V255']},
-            is_available {t['BOOL']} DEFAULT 1,
+            is_available {t['BOOL']} DEFAULT {t['BOOL_TRUE']},
             created_at {t['TS']} NOT NULL DEFAULT {t['NOW']},
             updated_at {t['TS']} NOT NULL DEFAULT {t['NOW']},
             schema_version {t['INT']} DEFAULT 1,
@@ -69,7 +71,7 @@ def upgrade() -> None:
             module_key {t['V64']} NOT NULL,
             module_display_name {t['V128']},
             model_config_id {t['UUID']} NOT NULL REFERENCES model_config(id),
-            is_active {t['BOOL']} DEFAULT 1,
+            is_active {t['BOOL']} DEFAULT {t['BOOL_TRUE']},
             created_at {t['TS']} NOT NULL DEFAULT {t['NOW']},
             updated_at {t['TS']} NOT NULL DEFAULT {t['NOW']},
             schema_version {t['INT']} DEFAULT 1,
@@ -103,9 +105,10 @@ def upgrade() -> None:
     for provider_key, model_name, version, display_name in models:
         mid = _uuid.uuid4().hex
         op.execute(
-            f"INSERT OR IGNORE INTO model_config "
+            f"INSERT INTO model_config "
             f"(id, provider_key, model_name, model_version, display_name, is_available, created_at, updated_at, schema_version) "
-            f"VALUES ('{mid}', '{provider_key}', '{model_name}', '{version}', '{display_name}', 1, '{now}', '{now}', 1)"
+            f"VALUES ('{mid}', '{provider_key}', '{model_name}', '{version}', '{display_name}', {t['BOOL_TRUE']}, '{now}', '{now}', 1) "
+            f"ON CONFLICT (provider_key, model_name) DO NOTHING"
         )
 
     # ── 种子数据：模块→模型绑定 ──
@@ -130,12 +133,12 @@ def upgrade() -> None:
     ]
     for module_key, display_name, model_name in bindings:
         bid = _uuid.uuid4().hex
-        # Subquery to get the model_config_id
         op.execute(
-            f"INSERT OR IGNORE INTO module_model_binding "
+            f"INSERT INTO module_model_binding "
             f"(id, module_key, module_display_name, model_config_id, is_active, created_at, updated_at, schema_version) "
-            f"SELECT '{bid}', '{module_key}', '{display_name}', id, 1, '{now}', '{now}', 1 "
-            f"FROM model_config WHERE model_name = '{model_name}' AND deleted_at IS NULL"
+            f"SELECT '{bid}', '{module_key}', '{display_name}', id, {t['BOOL_TRUE']}, '{now}', '{now}', 1 "
+            f"FROM model_config WHERE model_name = '{model_name}' AND deleted_at IS NULL "
+            f"ON CONFLICT (module_key, model_config_id) DO NOTHING"
         )
 
 
