@@ -5,12 +5,22 @@
  * 错误抛出标准 ApiError。
  */
 
-import { Capacitor } from '@capacitor/core';
+/**
+ * 解析 API 基地址：
+ * - APK/Capacitor 原生：使用 index.html 注入的 window.__RIGENG_API__（如 http://47.96.187.229）
+ * - 浏览器 H5：回退到相对路径 /api/v1（走 Vite 代理或 Nginx 反代）
+ *
+ * ⚠️ 不能硬编码 https://rigeng365.com — 服务器尚未配置 SSL 证书，HTTPS 请求会失败。
+ */
+export function resolveBaseUrl(): string {
+  try {
+    const rigengApi = (window as any).__RIGENG_API__ as string | undefined;
+    if (rigengApi) return `${rigengApi}/api/v1`;
+  } catch {}
+  return '/api/v1';
+}
 
-/** Capacitor 原生平台使用绝对地址，浏览器使用相对路径（走 Vite 代理或 Nginx 反代） */
-const BASE_URL = Capacitor.isNativePlatform()
-  ? 'http://47.103.197.189/api/v1'
-  : '/api/v1';
+const BASE_URL = resolveBaseUrl();
 
 export class ApiError extends Error {
   code: number;

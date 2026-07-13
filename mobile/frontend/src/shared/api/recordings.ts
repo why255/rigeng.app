@@ -15,7 +15,7 @@
  *   POST   /api/recordings/:id/archive     归档到知识库
  */
 
-import { apiGet, apiPost } from './api'
+import { apiGet, apiPost, resolveBaseUrl } from './api'
 
 /* ---------- 类型定义 ---------- */
 
@@ -126,7 +126,7 @@ export function uploadAudioChunk(recordingId: string, chunk: Blob, chunkIndex: n
   formData.append('recording_id', recordingId)  // 后端期望 snake_case 字段名
   formData.append('chunk_index', String(chunkIndex))
   const token = localStorage.getItem('rg_token') ?? ''
-  return fetch('/api/v1/recordings/chunk', {
+  return fetch(`${resolveBaseUrl()}/recordings/chunk`, {
     method: 'POST',
     body: formData,
     headers: { Authorization: `Bearer ${token}` },
@@ -168,7 +168,7 @@ export function fetchTranscript(recordingId: string): Promise<TranscriptResponse
 /** 获取音频流 URL */
 export function getAudioUrl(recordingId: string): string {
   const token = localStorage.getItem('rg_token') ?? ''
-  return `/api/v1/recordings/${recordingId}/audio?token=${encodeURIComponent(token)}`
+  return `${resolveBaseUrl()}/recordings/${recordingId}/audio?token=${encodeURIComponent(token)}`
 }
 
 /* ---------- 萃取 API ---------- */

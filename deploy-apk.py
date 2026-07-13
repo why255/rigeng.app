@@ -15,8 +15,8 @@ sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 # ═══════════════════ 修改这里 ═══════════════════
 VERSION = "1.2.0"
-VERSION_CODE = 12
-RELEASE_NOTES = "v1.2: 🎤 通义千问Qwen3.5-Omni语音识别引擎 — 替换已停服的通义听悟，Base64音频直传，延迟<2s，智能记录/朝有规划/暮有复盘/情绪树洞/智能问答全模块语音输入升级"
+VERSION_CODE = 13
+RELEASE_NOTES = "v1.2: 🎤 通义千问Qwen3.5-Omni语音识别引擎 + 修复APK录音实时转写API路径问题"
 IS_CRITICAL = False
 # ═══════════════════════════════════════════════
 
