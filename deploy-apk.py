@@ -14,9 +14,9 @@ sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 # ═══════════════════ 修改这里 ═══════════════════
-VERSION = "1.2.0"
-VERSION_CODE = 13
-RELEASE_NOTES = "v1.2: 🎤 通义千问Qwen3.5-Omni语音识别引擎 + 修复APK录音实时转写API路径问题"
+VERSION = "1.3.0"
+VERSION_CODE = 14
+RELEASE_NOTES = "v1.3: 🎤 通义千问Qwen3.5-Omni语音识别引擎 + 修复APK智能记录实时转写API路径bug + 全模块语音输入升级"
 IS_CRITICAL = False
 # ═══════════════════════════════════════════════
 
