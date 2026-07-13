@@ -1,15 +1,22 @@
-# 日耕 App 当前状态 — 2026-07-11
+# 日耕 App 当前状态 — 2026-07-12
 
-## 服务器
+## 版本
 
 | 项 | 值 |
 |---|-----|
-| **生产 IP** | `47.103.197.189` ⬅️ 唯一可用服务器 |
-| 域名 | ~~`rigeng365.com`~~ ❌ 不可用（指向 47.96.187.229，无法登录） |
-| 部署方式 | Docker Compose (`/opt/rigeng.app/docker-compose.yml`) |
-| SSH | `root / Why20060220!`（密钥 `id_ed25519` 可免密） |
+| **当前版本** | `0.6.0` |
+| versionCode | `6` |
+| 更新内容 | 语音输入模式分离 - 按住说话全新设计(2x话筒+呼吸波纹+上滑取消) + 点击说话紧凑内联UI + 全局设置切换 |
 
-> ⚠️ **47.96.187.229 无法登录**：SSH 密钥（`日耕.pem`）不在当前机器上，密码验证被拒（`Permission denied (publickey,password)`）。域名 `rigeng365.com` 的 DNS A 记录指向此 IP，因此域名也无法使用。当前所有服务走 `47.103.197.189` 直连。
+| 项 | 值 |
+|---|-----|
+| **生产 IP** | `47.96.187.229` ⬅️ 当前唯一生产服务器 |
+| 域名 | `rigeng365.com` ✅ 指向 47.96.187.229 |
+| 旧服务器 | ~~`47.103.197.189`~~ ❌ 2026-07-12 到期 |
+| 部署方式 | Docker Compose (`/opt/rigeng.app/docker-compose.yml`) |
+| SSH | `ssh -i rigeng.pem root@47.96.187.229`，密钥位置 `D:\rigeng.app\rigeng.pem` |
+
+> ⚠️ **47.103.197.189 今日到期**，所有代码已迁移至 47.96.187.229。
 
 ### 容器
 
@@ -47,9 +54,20 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 | 文件 | 作用 |
 |------|------|
 | `shared/api/voice.ts` | 在线 ASR API + webm→WAV 转码 |
-| `shared/hooks/useVoiceInput.ts` | 通用语音录制 Hook（替代 SpeechRecognition） |
+| `shared/hooks/useVoiceInput.ts` | 通用语音录制 Hook（hold/click双模式） |
 | `shared/api/versionApi.ts` | APK 版本检查 |
 | `components/layout/AppShell.tsx` | 全局外壳 + 顶部更新横幅 + H5 版本轮询 |
+| `shared/components/chat/VoiceMessageBubble.tsx` | 语音消息气泡组件 |
+| `pages/mine/SettingsPage.tsx` | 设置页（含语音输入方式切换） |
+
+### 语音模式
+
+| 模式 | 行为 | UI |
+|------|------|-----|
+| **按住说话** (hold, 默认) | 点麦克风→58vh浮层→2x大按钮144px→2x呼吸波纹→上滑取消 | 全屏浮层 + 取消区 |
+| **点击说话** (click) | 点麦克风→直接录音→计时在话筒下→再点结束 | 紧凑内联 + 脉冲按钮 |
+
+全局设置: `localStorage.rg_voice_input_mode`，路径 `/settings`。
 
 ---
 
@@ -59,18 +77,27 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 
 | 项 | 值 |
 |---|-----|
-| 版本号 | `0.3.0` |
-| versionCode | `2` ⚠️ `build.gradle` 中仍是 `1`，需手动改 |
-| 下载地址 | `http://47.103.197.189/日耕-latest.apk`（固定不变） |
+| 版本号 | `0.6.0` |
+| versionCode | `6` |
+| 下载地址 | `http://47.96.187.229/rigeng-latest.apk` |
 | 权限 | INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS |
 | androidScheme | `http`（同协议避免混合内容拦截） |
 | cleartext | `true` |
 
-### 🔧 2026-07-12 录音修复
+### 🔧 2026-07-12 录音修复（v0.2.0）
 
-**问题**：APK 录音按钮点击后报"麦克风权限被拒绝"。
-**根因**：`capacitor.config.ts` 中 `server.url: "http://47.103.197.189"` 导致 WebView 从远程 HTTP 加载页面，非安全上下文 → Chrome 阻止 `getUserMedia()`。
+**问题1（v0.1.0）**：APK 录音按钮点击后报"麦克风权限被拒绝"。
+**根因**：`capacitor.config.ts` 中 `server.url: "http://47.96.187.229"` 导致 WebView 从远程 HTTP 加载页面，非安全上下文 → Chrome 阻止 `getUserMedia()`。
 **修复**：注释掉 `server.url`，APK 从本地 bundle 加载（origin=`http://localhost`，安全上下文），API 仍通过 `window.__RIGENG_API__` 指向远程服务器。
+
+**问题2（v0.2.0）**：按住说话松手不发送，体验像点击说话。
+**根因1**：Android WebView 中 `getUserMedia()` 在 `pointerdown` 期间调用会中断 pointer 事件流 → `pointerup` 永不触发。
+**根因2**：用户快速松手时 `stopRecording` 在 `getUserMedia` 完成前执行，`mediaRecorderRef.current` 为 null，音频丢失。
+**修复**：`useVoiceInput.ts` + `VoiceButton.tsx`：
+- `setPointerCapture(e.pointerId)` 显式捕获 pointer，确保松手收到 `pointerup`
+- `lostpointercapture` 兜底监听器（系统回收 pointer 时自动取消录音）
+- `getUserMedia` 完成后检查 `recordingRef.current`，若已被取消则立即释放流
+- 新增 `onPointerCancel` 处理 pointer 取消事件
 
 > ⚠️ **构建要求**：Gradle 8.13.0 需要 Java 11+，本机 `JAVA_HOME` 指向 JDK 8 会构建失败。需 `export JAVA_HOME="C:/Program Files/Java/jdk-21.0.10"` 后构建。`build.gradle` 已添加阿里云 Maven 镜像加速。
 
@@ -156,7 +183,7 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 
 - `voice_engine/service.py` 中 `asr_online()` 的 `DataLen` 已修复（`len(audio_base64)` → `len(audio_bytes)`）
 - 后端代码在 Docker 镜像内（非 bind mount），每次改代码需 `docker compose up -d --build backend`
-- **2026-07-11 登录 Failed to fetch 已修复**：CORS `allow_origins` 缺少 `http://localhost`（Capacitor WebView origin），已添加并部署到 47.103.197.189
+- **2026-07-11 登录 Failed to fetch 已修复**：CORS `allow_origins` 缺少 `http://localhost`（Capacitor WebView origin），已添加并部署到 47.96.187.229
 - **2026-07-11 腾讯混元 Hy3 Key 缺失**：Excel中未提供，`smart_record` 模块目前降级到通义千问。需联系腾讯云获取 Key 填入 `HUNYUAN_SECRET_ID` / `HUNYUAN_SECRET_KEY`
 
 ---
@@ -165,7 +192,7 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 
 1. 改 `deploy-apk.py` 顶部的 `VERSION` / `VERSION_CODE` / `RELEASE_NOTES`
 2. 运行 `python deploy-apk.py`
-3. APK 自动覆盖 `日耕-latest.apk`，同时保留版本化副本
+3. APK 自动覆盖 `rigeng-latest.apk`，同时保留版本化副本
 
 ---
 
@@ -174,7 +201,7 @@ Vite + React + TypeScript + Capacitor，目录 `mobile/frontend/`，端口 `5182
 | 本地路径 | 服务器路径 |
 |---------|-----------|
 | `mobile/frontend/dist/mobile/` | `/opt/rigeng.app/mobile/dist/mobile/`（nginx bind mount） |
-| `mobile/frontend/android/.../app-debug.apk` | `/opt/rigeng.app/mobile/dist/mobile/日耕-latest.apk` |
+| `mobile/frontend/android/.../app-debug.apk` | `/opt/rigeng.app/mobile/dist/mobile/rigeng-latest.apk` |
 | `backend/app/main.py` | `/opt/rigeng.app/backend/app/main.py`（Docker 内 `/app/app/main.py`） |
 | `backend/app/services/voice_engine/service.py` | `/opt/rigeng.app/backend/app/services/voice_engine/service.py` |
 | `backend/app/engines/llm_orchestrator.py` | `/opt/rigeng.app/backend/app/engines/llm_orchestrator.py` |
