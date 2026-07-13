@@ -8,6 +8,7 @@ API 端点（匹配前端 recordings.ts API封装）：
   POST   /recordings/stop               — 停止录音（触发处理流水线）
   POST   /recordings/{id}/asr-auth      — 获取实时ASR WebSocket授权
   GET    /recordings/{id}/transcript    — 获取转写文本
+  GET    /recordings/{id}/audio         — 下载/流式播放录音音频
   GET    /recordings/{id}/extraction    — 获取萃取结果
   POST   /recordings/{id}/archive       — 归档到知识库
   POST   /recordings/{id}/sync-actions  — 行动项同步到朝有规划
@@ -20,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, WebSocket
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -58,7 +60,10 @@ def stop(
     db: Session = Depends(get_db),
 ):
     """停止录音：更新状态→transcribing，自动触发转写+萃取流水线。"""
-    result = service.stop_recording(db, user.user_id, body.recording_id)
+    result = service.stop_recording(
+        db, user.user_id, body.recording_id,
+        duration_seconds=body.duration_seconds or 0,
+    )
     # 自动触发处理流水线
     service.auto_process_recording(db, body.recording_id, user.user_id)
     return ok(result)
@@ -87,6 +92,21 @@ def upload_chunk(
         db, user.user_id, recording_id, audio_data, chunk_index,
     )
     return ok(result)
+
+
+@router.get("/{recording_id}/audio")
+def audio(
+    recording_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """流式播放/下载录音音频文件。"""
+    info = service.serve_recording_audio(db, recording_id, user.user_id)
+    return FileResponse(
+        path=info["file_path"],
+        media_type=info.get("content_type", "audio/webm"),
+        headers={"Content-Length": str(info.get("file_size", 0))},
+    )
 
 
 @router.post("/{recording_id}/asr-auth")

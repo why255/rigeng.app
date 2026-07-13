@@ -49,6 +49,8 @@ export function SmartRecordRecording() {
   const chunkIndexRef = useRef(0)
   const stoppingRef = useRef(false)
   const asrWsRef = useRef<WebSocket | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null)
 
   // 初始化录音 — 对齐原型 m4p2
   const beginRecording = useCallback(async () => {
@@ -72,7 +74,7 @@ export function SmartRecordRecording() {
       setIsStarting(false)
 
       // ── 启动 WebSocket 实时 ASR（可选，失败不影响录音）──
-      startRealtimeAsr(recId)
+      startRealtimeAsr(recId, stream)
 
       // ── 启动 MediaRecorder（HTTP chunk 模式作为兜底）──
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -105,7 +107,7 @@ export function SmartRecordRecording() {
   }, [scene])
 
   // ── WebSocket 实时 ASR ──
-  const startRealtimeAsr = useCallback(async (recId: string) => {
+  const startRealtimeAsr = useCallback(async (recId: string, pcmStream: MediaStream) => {
     try {
       const auth = await fetchAsrAuth(recId)
       setAsrSource('ws')
@@ -132,6 +134,41 @@ export function SmartRecordRecording() {
           },
         })
         ws.send(startMsg)
+
+        // ── 启动 PCM 音频采集 → WebSocket ──
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+            sampleRate: 16000,
+          })
+          audioContextRef.current = audioContext
+          // iOS Safari 需要显式 resume
+          if (audioContext.state === 'suspended') {
+            audioContext.resume().catch(() => {})
+          }
+
+          const source = audioContext.createMediaStreamSource(pcmStream)
+          // ScriptProcessorNode: bufferSize=4096 @16kHz ≈ 256ms/帧, ~4次/秒
+          const processor = audioContext.createScriptProcessor(4096, 1, 1)
+          pcmProcessorRef.current = processor
+
+          processor.onaudioprocess = (e) => {
+            if (ws.readyState !== WebSocket.OPEN) return
+            const floatSamples = e.inputBuffer.getChannelData(0)
+            // Float32 [-1.0, 1.0] → Int16 PCM
+            const int16 = new Int16Array(floatSamples.length)
+            for (let i = 0; i < floatSamples.length; i++) {
+              const s = Math.max(-1, Math.min(1, floatSamples[i]))
+              int16[i] = s < 0 ? s * 32768 : s * 32767
+            }
+            ws.send(int16.buffer)
+          }
+
+          source.connect(processor)
+          processor.connect(audioContext.destination)
+          console.log('[SmartRecord] PCM音频采集已启动, sampleRate=%d', audioContext.sampleRate)
+        } catch (pcmErr) {
+          console.warn('[SmartRecord] PCM音频采集启动失败，仅使用HTTP chunk模式:', pcmErr)
+        }
       }
 
       ws.onmessage = (event) => {
@@ -203,6 +240,19 @@ export function SmartRecordRecording() {
     const cleanup = beginRecording()
     return () => {
       cleanup.then((fn) => fn?.())
+      // 组件卸载时清理 PCM 采集资源
+      if (pcmProcessorRef.current) {
+        try { pcmProcessorRef.current.disconnect() } catch {}
+        pcmProcessorRef.current = null
+      }
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close() } catch {}
+        audioContextRef.current = null
+      }
+      if (asrWsRef.current) {
+        try { asrWsRef.current.close() } catch {}
+        asrWsRef.current = null
+      }
     }
   }, [beginRecording])
 
@@ -226,6 +276,16 @@ export function SmartRecordRecording() {
 
     if (intervalRef.current) clearInterval(intervalRef.current)
 
+    // ── 停止 PCM 音频采集（先于 WebSocket 关闭和 MediaRecorder 停止）──
+    if (pcmProcessorRef.current) {
+      try { pcmProcessorRef.current.disconnect() } catch {}
+      pcmProcessorRef.current = null
+    }
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close() } catch {}
+      audioContextRef.current = null
+    }
+
     // 发送 WebSocket 结束消息
     if (asrWsRef.current && asrWsRef.current.readyState === WebSocket.OPEN) {
       asrWsRef.current.send(JSON.stringify({ type: 'end' }))
@@ -240,7 +300,7 @@ export function SmartRecordRecording() {
 
     if (recordingId) {
       try {
-        await stopRecording(recordingId)
+        await stopRecording(recordingId, seconds)
       } catch (err) {
         console.error('[SmartRecord] 停止录音请求失败:', err)
       }

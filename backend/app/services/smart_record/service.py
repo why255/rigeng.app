@@ -16,6 +16,11 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -30,12 +35,28 @@ from ...shared.models.recording import (
     RECORDING_SCENES, RECORDING_STATUSES,
     ActionItem, ExtractionResult, Recording, TranscriptSegment,
 )
-from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS
+from ...shared.models.knowledge import FileObject
+from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS, recognize_speech, asr_online
 from ...engines.persona import build_persona_prompt
 from ...engines.llm_orchestrator import llm_generate_with_orchestration
 from ...engines.data_foundation import emit_event
 
 logger = logging.getLogger("smart_record")
+
+# ── 音频存储 ──
+RECORDINGS_STORAGE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "storage", "recordings")
+
+
+def _chunk_dir(recording_id: str) -> str:
+    p = os.path.join(RECORDINGS_STORAGE, recording_id, "chunks")
+    os.makedirs(p, exist_ok=True)
+    return p
+
+
+def _audio_path(recording_id: str) -> str:
+    d = os.path.join(RECORDINGS_STORAGE, recording_id)
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "audio.webm")
 
 # 场景→颜色映射
 SCENE_COLORS: dict[str, str] = {
@@ -127,8 +148,12 @@ def start_recording(db: Session, user_id: str, scene: str) -> dict[str, Any]:
     }
 
 
-def stop_recording(db: Session, user_id: str, recording_id: str) -> dict[str, Any]:
-    """停止录音：更新状态→transcribing，记录时长，触发异步转写。"""
+def stop_recording(db: Session, user_id: str, recording_id: str, duration_seconds: int = 0) -> dict[str, Any]:
+    """停止录音：更新状态→transcribing，记录时长，触发异步转写。
+
+    Args:
+        duration_seconds: 客户端测量的真实录音时长（秒），优先于chunk估算值
+    """
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
         Recording.user_id == user_id,
@@ -140,6 +165,13 @@ def stop_recording(db: Session, user_id: str, recording_id: str) -> dict[str, An
 
     if recording.status != "recording":
         raise APIError(20001, "该录音已停止或已处理", 400)
+
+    # ── 使用客户端测量真实时长（优先于chunk估算值）──
+    if duration_seconds > 0:
+        recording.duration_seconds = duration_seconds
+
+    # ── 合并音频chunk为完整文件 ──
+    _finalize_recording_audio(db, recording_id, user_id)
 
     recording.status = "transcribing"
     recording.transcript_status = "processing"
@@ -162,19 +194,15 @@ def stop_recording(db: Session, user_id: str, recording_id: str) -> dict[str, An
 
 def process_audio_chunk(db: Session, user_id: str, recording_id: str,
                         audio_data: bytes, chunk_index: int = 0) -> dict[str, Any]:
-    """处理实时音频流分片：调用腾讯云 ASR 实时转写。
+    """处理实时音频流分片：保存音频 + 调用腾讯云 ASR 实时转写。
 
     前端每5秒发送一个音频chunk（webm/opus格式），
-    后端将其转为WAV后调用腾讯云 SentenceRecognition API 转写，
-    转写结果实时存入 TranscriptSegment。
+    后端：1) 保存chunk到磁盘供后续音频回放；2) 转为WAV后调用ASR实时转写；
+    3) 转写结果实时存入 TranscriptSegment。
 
     Returns:
         {"text": str, "confidence": float, "segment_index": int}
     """
-    import subprocess
-    import tempfile
-    import os
-
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
         Recording.user_id == user_id,
@@ -186,16 +214,21 @@ def process_audio_chunk(db: Session, user_id: str, recording_id: str,
     if not audio_data or len(audio_data) < 100:
         return {"text": "", "confidence": 0.0, "segment_index": chunk_index, "source": "empty_chunk"}
 
-    # 更新录音时长
-    chunk_duration_sec = 5  # 每个chunk约5秒
-    recording.duration_seconds = (recording.duration_seconds or 0) + chunk_duration_sec
-    db.flush()
+    # ── 1) 保存音频chunk到磁盘 ──
+    try:
+        cdir = _chunk_dir(recording_id)
+        cpath = os.path.join(cdir, f"{chunk_index:04d}.webm")
+        with open(cpath, "wb") as f:
+            f.write(audio_data)
+    except Exception as e:
+        logger.warning("保存音频chunk失败(chunk=%d): %s", chunk_index, e)
 
-    # ── 尝试调用腾讯云 ASR 在线转写 ──
+    # ── 2) 尝试调用 ASR 实时转写 ──
     try:
         text, confidence = _transcribe_audio_chunk(audio_data)
         if text:
             # 保存转写分段
+            chunk_duration_sec = 5
             start_sec = chunk_index * chunk_duration_sec
             end_sec = start_sec + chunk_duration_sec
 
@@ -296,13 +329,61 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
     return text, confidence
 
 
-def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
-    """处理转写：将已收集的实时ASR分段合并为完整转写。
+def _finalize_recording_audio(db: Session, recording_id: str, user_id: str) -> None:
+    """合并已保存的音频chunk为完整webm文件，创建FileObject记录。"""
+    cdir = _chunk_dir(recording_id)
+    if not os.path.isdir(cdir):
+        logger.warning("无音频chunk目录: recording_id=%s", recording_id)
+        return
 
-    如果在录音过程中已经通过 process_audio_chunk 实时转写了分段，
-    则此处只需更新状态并返回结果。如果还没有分段（旧录音/离线模式），
-    降级到模拟数据。
-    """
+    chunk_files = sorted([f for f in os.listdir(cdir) if f.endswith('.webm')])
+    if not chunk_files:
+        logger.warning("无音频chunk可合并: recording_id=%s", recording_id)
+        return
+
+    apath = _audio_path(recording_id)
+    total_size = 0
+    try:
+        with open(apath, "wb") as out:
+            for cf in chunk_files:
+                cpath = os.path.join(cdir, cf)
+                with open(cpath, "rb") as cin:
+                    data = cin.read()
+                    out.write(data)
+                    total_size += len(data)
+    except OSError as e:
+        logger.error("音频合并失败: recording_id=%s err=%s", recording_id, e)
+        return
+
+    # 创建 FileObject
+    file_obj = FileObject(
+        storage_url=apath,
+        file_type="audio",
+        size_bytes=total_size,
+        compress_status="raw",
+        storage_layer="cloud",
+    )
+    db.add(file_obj)
+    db.flush()
+
+    # 关联到 Recording
+    recording = db.query(Recording).filter(Recording.id == recording_id).first()
+    if recording:
+        recording.file_object_id = file_obj.id
+        recording.file_size_bytes = total_size
+    db.commit()
+
+    logger.info("音频已合并: recording_id=%s size=%d chunks=%d", recording_id, total_size, len(chunk_files))
+
+    # 清理chunk临时文件
+    try:
+        shutil.rmtree(cdir)
+    except OSError:
+        pass
+
+
+def serve_recording_audio(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
+    """获取录音音频文件的路径和信息，供 StreamingResponse 使用。"""
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
         Recording.user_id == user_id,
@@ -311,7 +392,102 @@ def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str
     if not recording:
         raise APIError(60002, "录音不存在", 404)
 
-    # 检查是否已有实时转写分段
+    # 优先通过 file_object_id 查找
+    if recording.file_object_id:
+        file_obj = db.query(FileObject).filter(
+            FileObject.id == recording.file_object_id,
+            FileObject.deleted_at.is_(None),
+        ).first()
+        if file_obj and file_obj.storage_url and os.path.isfile(file_obj.storage_url):
+            return {
+                "file_path": file_obj.storage_url,
+                "content_type": "audio/webm",
+                "file_size": file_obj.size_bytes or 0,
+            }
+
+    # 降级：直接查找合并后的音频文件
+    apath = _audio_path(recording_id)
+    if os.path.isfile(apath):
+        return {
+            "file_path": apath,
+            "content_type": "audio/webm",
+            "file_size": os.path.getsize(apath),
+        }
+
+    raise E_FILE_NOT_FOUND
+
+
+def _batch_transcribe_audio(
+    db: Session, recording_id: str, user_id: str, recording_duration_sec: int = 0
+) -> int:
+    """对合并后的完整音频文件进行批量ASR转写。
+
+    返回创建的 TranscriptSegment 数量，失败时返回0。
+    """
+    apath = _audio_path(recording_id)
+    if not os.path.isfile(apath):
+        logger.warning("批量转写：音频文件不存在 recording_id=%s", recording_id)
+        return 0
+
+    with open(apath, "rb") as f:
+        audio_data = f.read()
+    if len(audio_data) < 500:
+        return 0
+
+    # 尝试转写
+    text = ""
+    confidence = 0.0
+    try:
+        text, confidence = _transcribe_audio_chunk(audio_data)
+    except Exception as e:
+        logger.warning("批量转写ASR失败: recording_id=%s err=%s", recording_id, e)
+        return 0
+
+    if not text.strip():
+        logger.info("批量转写：ASR返回空文本 recording_id=%s", recording_id)
+        return 0
+
+    # 按中文标点拆分为句子
+    sentences = re.split(r'(?<=[。！？.!?\n])\s*', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if not sentences:
+        sentences = [text.strip()]
+
+    total_dur = recording_duration_sec or max(len(sentences) * 5, 10)
+    for i, sent in enumerate(sentences):
+        start_sec = round(i * total_dur / len(sentences), 1)
+        end_sec = round((i + 1) * total_dur / len(sentences), 1)
+        ts = TranscriptSegment(
+            recording_id=recording_id,
+            user_id=user_id,
+            segment_index=i,
+            speaker="未知",
+            speaker_role="speaker",
+            start_time_seconds=start_sec,
+            end_time_seconds=end_sec,
+            text=sent,
+            confidence=confidence,
+            is_candidate=False,
+        )
+        db.add(ts)
+    db.commit()
+
+    logger.info("批量转写完成: recording_id=%s sentences=%d confidence=%.2f",
+                recording_id, len(sentences), confidence)
+    return len(sentences)
+
+
+def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str, Any]:
+    """处理转写：优先使用实时ASR分段，无则尝试批量ASR转写完整音频。"""
+    recording = db.query(Recording).filter(
+        Recording.id == recording_id,
+        Recording.user_id == user_id,
+        Recording.deleted_at.is_(None),
+    ).first()
+    if not recording:
+        raise APIError(60002, "录音不存在", 404)
+
+    # 1) 检查是否已有实时转写分段
     existing_segments = (
         db.query(TranscriptSegment)
         .filter(
@@ -322,12 +498,11 @@ def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str
     )
 
     if existing_segments:
-        # 已有实时转写结果 → 直接更新状态
         recording.transcript_status = "done"
         recording.status = "extracting"
         recording.extraction_status = "processing"
         db.commit()
-        logger.info("转写完成（使用实时ASR结果）: recording_id=%s segments=%d",
+        logger.info("转写完成（实时ASR）: recording_id=%s segments=%d",
                     recording_id, len(existing_segments))
         return {
             "recording_id": recording_id,
@@ -336,49 +511,44 @@ def process_transcript(db: Session, recording_id: str, user_id: str) -> dict[str
             "source": "realtime_asr",
         }
 
-    # 没有实时转写结果 → 降级到模拟数据
-    logger.warning("无实时转写数据，使用模拟转写: recording_id=%s", recording_id)
+    # 2) 尝试批量转写完整音频
+    seg_count = _batch_transcribe_audio(
+        db, recording_id, user_id,
+        recording_duration_sec=recording.duration_seconds or 0,
+    )
 
-    # 清除旧分段（如有）
-    db.query(TranscriptSegment).filter(
-        TranscriptSegment.recording_id == recording_id,
-    ).delete()
+    if seg_count > 0:
+        recording.transcript_status = "done"
+        recording.status = "extracting"
+        recording.extraction_status = "processing"
+        db.commit()
+        logger.info("转写完成（批量ASR）: recording_id=%s segments=%d",
+                    recording_id, seg_count)
+        return {
+            "recording_id": recording_id,
+            "segments_count": seg_count,
+            "status": "extracting",
+            "source": "batch_asr",
+        }
 
-    mock_segments = _generate_mock_transcript(recording.scene or "日常", recording.duration_seconds or 60)
-
-    for i, seg in enumerate(mock_segments):
-        ts = TranscriptSegment(
-            recording_id=recording_id,
-            user_id=user_id,
-            segment_index=i,
-            speaker=seg.get("speaker", "未知"),
-            speaker_role=seg.get("speaker_role", "unknown"),
-            start_time_seconds=seg.get("start_sec", i * 10.0),
-            end_time_seconds=seg.get("end_sec", (i + 1) * 10.0),
-            text=seg.get("text", ""),
-            confidence=seg.get("confidence", 0.95),
-            is_candidate=seg.get("is_candidate", False),
-        )
-        db.add(ts)
-
-    recording.transcript_status = "done"
+    # 3) 无法转写 — 标记失败但继续流程
+    logger.warning("无法转写: recording_id=%s scene=%s dur=%ds",
+                   recording_id, recording.scene, recording.duration_seconds or 0)
+    recording.transcript_status = "failed"
     recording.status = "extracting"
     recording.extraction_status = "processing"
     db.commit()
 
-    logger.info("转写完成（降级模拟）: recording_id=%s segments=%d",
-                recording_id, len(mock_segments))
-
     return {
         "recording_id": recording_id,
-        "segments_count": len(mock_segments),
+        "segments_count": 0,
         "status": "extracting",
-        "source": "mock_fallback",
+        "source": "failed",
     }
 
 
 def get_transcript(db: Session, user_id: str, recording_id: str) -> dict[str, Any]:
-    """获取转写结果。如果尚未转写，触发转写处理。"""
+    """获取转写结果。如果尚未转写且录音已停止，触发转写处理。"""
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
         Recording.user_id == user_id,
@@ -387,8 +557,8 @@ def get_transcript(db: Session, user_id: str, recording_id: str) -> dict[str, An
     if not recording:
         raise APIError(60002, "录音不存在", 404)
 
-    # 如果尚未转写，触发转写
-    if recording.transcript_status != "done":
+    # 如果尚未转写且录音已停止，触发转写（失败的不重试，避免循环）
+    if recording.transcript_status not in ("done", "failed") and recording.status != "recording":
         process_transcript(db, recording_id, user_id)
         db.refresh(recording)
 
@@ -484,6 +654,7 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
     """执行AI萃取：从转写文本中结构化提取关键信息。
 
     优先调用AI引擎（voice_engine.llm_generate），失败时降级到模板生成。
+    无转写文本时跳过（不生成假数据）。
     """
     recording = db.query(Recording).filter(
         Recording.id == recording_id,
@@ -503,6 +674,19 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
         .order_by(TranscriptSegment.segment_index)
         .all()
     )
+
+    # ── 无转写文本时：不生成萃取，标记待处理 ──
+    if not segments:
+        logger.warning("无转写文本，跳过萃取: recording_id=%s", recording_id)
+        recording.extraction_status = "pending"
+        recording.status = "completed"
+        db.commit()
+        return {
+            "recording_id": recording_id,
+            "extraction_type": "",
+            "status": "completed",
+            "source": "no_transcript",
+        }
 
     # 生成萃取内容（AI优先，mock降级）
     scene = recording.scene or "日常"
@@ -767,7 +951,7 @@ def get_extraction(db: Session, user_id: str, recording_id: str) -> dict[str, An
         raise APIError(60002, "录音不存在", 404)
 
     # 如果尚未萃取，触发萃取
-    if recording.extraction_status != "done":
+    if recording.extraction_status not in ("done", "pending"):
         process_extraction(db, recording_id, user_id)
         db.refresh(recording)
 
@@ -782,7 +966,22 @@ def get_extraction(db: Session, user_id: str, recording_id: str) -> dict[str, An
     )
 
     if not extraction:
-        raise APIError(60002, "萃取结果不存在", 404)
+        # 无转写文本导致萃取被跳过 — 返回空结果
+        return {
+            "recording_id": recording.id,
+            "extraction_type": "",
+            "name": "",
+            "role": "",
+            "avatar_bg": "#BCAAA4",
+            "years": "",
+            "school": "",
+            "skills": [],
+            "salary": "",
+            "onboard": "",
+            "competencies": [],
+            "summary": "",
+            "action_items": [],
+        }
 
     content = extraction.content_json or {}
     competencies = [

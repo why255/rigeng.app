@@ -154,8 +154,8 @@ export function fetchAsrAuth(recordingId: string): Promise<AsrAuthResponse> {
 }
 
 /** 停止录音 */
-export function stopRecording(recordingId: string): Promise<{ recording_id?: string; recordingId?: string; status?: string }> {
-  return apiPost('/recordings/stop', { recording_id: recordingId })
+export function stopRecording(recordingId: string, durationSeconds?: number): Promise<{ recording_id?: string; recordingId?: string; status?: string }> {
+  return apiPost('/recordings/stop', { recording_id: recordingId, duration_seconds: durationSeconds ?? 0 })
 }
 
 /* ---------- 转写 API ---------- */

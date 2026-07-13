@@ -21,6 +21,7 @@ class RecordingStartResponse(BaseModel):
 class RecordingStopRequest(BaseModel):
     """停止录音请求。"""
     recording_id: str
+    duration_seconds: int = Field(default=0, description="客户端测量的真实录音时长（秒）")
 
 
 class RecordingStopResponse(BaseModel):
