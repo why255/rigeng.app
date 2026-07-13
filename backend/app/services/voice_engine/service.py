@@ -196,12 +196,11 @@ def asr_offline(audio_data: bytes, sample_rate: int = 16000) -> dict[str, Any]:
 
 def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000,
                      prefer_offline: bool = False, engine: str | None = None) -> dict[str, Any]:
-    """语音识别统一入口：通义千问 Omni → 腾讯云在线 → Vosk离线。
+    """语音识别统一入口：腾讯云在线 → Vosk离线。
 
     引擎优先级（可自动降级）:
-    1. 通义千问 Qwen Omni ASR（阿里云百炼，Excel #5 — 默认首选）
-    2. 腾讯云 ASR（备用在线引擎）
-    3. Vosk 离线 ASR（无网环境）
+    1. 腾讯云 ASR（在线引擎）
+    2. Vosk 离线 ASR（无网环境）
     """
     # 离线优先模式
     if prefer_offline and settings.offline_asr_enabled:
@@ -213,17 +212,7 @@ def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: 
         except (APIError, Exception):
             pass
 
-    # 在线识别：首选通义千问 Omni（Excel #5）
-    if settings.DASHSCOPE_API_KEY:
-        try:
-            result = asr_qwen_omni(audio_base64, audio_format, sample_rate)
-            if result["confidence"] >= 0.5 or result["text"].strip():
-                return result
-            logger.warning("通义千问ASR低置信度，尝试腾讯云ASR")
-        except (APIError, Exception) as e:
-            logger.warning("通义千问ASR不可用，降级到腾讯云ASR: %s", e)
-
-    # 备用在线：腾讯云 ASR
+    # 在线识别：腾讯云 ASR
     if settings.TENCENT_ASR_SECRET_ID:
         try:
             result = asr_online(audio_base64, audio_format, sample_rate, engine)

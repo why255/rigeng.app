@@ -36,7 +36,7 @@ from ...shared.models.recording import (
     ActionItem, ExtractionResult, Recording, TranscriptSegment,
 )
 from ...shared.models.knowledge import FileObject
-from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS, recognize_speech, asr_online
+from ..voice_engine.service import llm_generate, MODULE_SYSTEM_PROMPTS, asr_online, asr_qwen_omni
 from ...engines.persona import build_persona_prompt
 from ...engines.llm_orchestrator import llm_generate_with_orchestration
 from ...engines.data_foundation import emit_event
@@ -217,7 +217,10 @@ def process_audio_chunk(db: Session, user_id: str, recording_id: str,
     # ── 1) 保存音频chunk到磁盘 ──
     try:
         cdir = _chunk_dir(recording_id)
-        cpath = os.path.join(cdir, f"{chunk_index:04d}.webm")
+        # 检测音频格式：WAV 文件以 "RIFF" 开头，webm 以特殊字节开头
+        is_wav = audio_data[:4] == b'RIFF'
+        ext = ".wav" if is_wav else ".webm"
+        cpath = os.path.join(cdir, f"{chunk_index:04d}{ext}")
         with open(cpath, "wb") as f:
             f.write(audio_data)
     except Exception as e:
@@ -264,7 +267,11 @@ def process_audio_chunk(db: Session, user_id: str, recording_id: str,
 
 
 def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
-    """将webm/opus音频chunk转为WAV后调用腾讯云ASR。
+    """将音频chunk转为PCM后调用腾讯云ASR。
+
+    支持两种输入格式：
+      - webm/opus: 需要 ffmpeg 转码为 WAV
+      - WAV/PCM: 直接提取 PCM 数据（前端原生采集已输出 WAV）
 
     Returns:
         (text, confidence)
@@ -275,53 +282,60 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
 
     audio_base64 = None
 
-    # 写入临时文件
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f_in:
-        f_in.write(audio_data)
-        webm_path = f_in.name
-
-    wav_path = webm_path + ".wav"
-    try:
-        # 用 ffmpeg 转 webm/opus → 16kHz 16bit mono WAV
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", webm_path,
-             "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
-             "-loglevel", "error", wav_path],
-            check=True, timeout=15,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        # 读取 WAV 文件并跳过44字节头部
-        with open(wav_path, "rb") as f:
-            raw_audio = f.read()
-        # 取PCM数据（跳过WAV头44字节）
-        pcm_data = raw_audio[44:] if len(raw_audio) > 44 else raw_audio
+    # ── 检测是否已经是 WAV 格式 ──
+    if audio_data[:4] == b'RIFF' and len(audio_data) > 44:
+        # 已经是 WAV，直接提取 PCM 数据（跳过 44 字节 WAV 头）
+        pcm_data = audio_data[44:]
         audio_base64 = base64.b64encode(pcm_data).decode("utf-8")
         audio_format = "wav"
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        # ffmpeg不可用 → 尝试 pydub（纯Python方案，仍需ffmpeg做解码）
-        # 若pydub也不可用，传递原始数据让ASR尽力处理
-        logger.warning("ffmpeg不可用，chunk转写将使用原始音频格式(chunk=%s): %s",
-                       webm_path[-20:], e)
-        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
-        audio_format = "webm"
-    finally:
-        # 清理临时文件
-        for path in [webm_path, wav_path]:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
+    else:
+        # webm/opus 格式，需要 ffmpeg 转码
+        # 写入临时文件
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f_in:
+            f_in.write(audio_data)
+            webm_path = f_in.name
+
+        wav_path = webm_path + ".wav"
+        try:
+            # 用 ffmpeg 转 webm/opus → 16kHz 16bit mono WAV
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", webm_path,
+                 "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
+                 "-loglevel", "error", wav_path],
+                check=True, timeout=15,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            # 读取 WAV 文件并跳过44字节头部
+            with open(wav_path, "rb") as f:
+                raw_audio = f.read()
+            # 取PCM数据（跳过WAV头44字节）
+            pcm_data = raw_audio[44:] if len(raw_audio) > 44 else raw_audio
+            audio_base64 = base64.b64encode(pcm_data).decode("utf-8")
+            audio_format = "wav"
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            # ffmpeg不可用 → 传递原始数据让ASR尽力处理
+            logger.warning("ffmpeg不可用，chunk转写将使用原始音频格式(chunk=%s): %s",
+                           webm_path[-20:], e)
+            audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+            audio_format = "webm"
+        finally:
+            # 清理临时文件
+            for path in [webm_path, wav_path]:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
     if not audio_base64:
         return "", 0.0
 
-    # 调用腾讯云 ASR（使用统一入口，支持多引擎降级）
-    from ..voice_engine.service import recognize_speech
+    # 智能记录专用：通义千问 Qwen3.5-Omni ASR（最快、支持Base64直传）
+    from ..voice_engine.service import asr_qwen_omni
     try:
-        result = recognize_speech(audio_base64, audio_format=audio_format, sample_rate=16000)
+        result = asr_qwen_omni(audio_base64, audio_format=audio_format, sample_rate=16000)
     except Exception:
-        # recognize_speech 也可能失败（如无密钥配置），尝试直接 asr_online
         from ..voice_engine.service import asr_online
+        logger.info("Qwen Omni不可用，降级到腾讯云ASR")
         result = asr_online(audio_base64, audio_format=audio_format, sample_rate=16000)
 
     text = result.get("text", "").strip()
@@ -330,27 +344,63 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
 
 
 def _finalize_recording_audio(db: Session, recording_id: str, user_id: str) -> None:
-    """合并已保存的音频chunk为完整webm文件，创建FileObject记录。"""
+    """合并已保存的音频chunk为完整音频文件，创建FileObject记录。
+
+    支持 webm 和 WAV 两种 chunk 格式：
+      - webm: 直接拼接字节（webm 格式支持简单拼接）
+      - WAV:  只保留第一个 chunk 的 WAV 头，后续 chunk 去除 44 字节头后拼接
+    """
+    import struct
+
     cdir = _chunk_dir(recording_id)
     if not os.path.isdir(cdir):
         logger.warning("无音频chunk目录: recording_id=%s", recording_id)
         return
 
-    chunk_files = sorted([f for f in os.listdir(cdir) if f.endswith('.webm')])
-    if not chunk_files:
+    # 扫描所有音频 chunk（webm + wav）
+    all_files = sorted([
+        f for f in os.listdir(cdir)
+        if f.endswith('.webm') or f.endswith('.wav')
+    ])
+    if not all_files:
         logger.warning("无音频chunk可合并: recording_id=%s", recording_id)
         return
+
+    # 检测格式：如果有任何 .wav 文件则按 WAV 合并，否则按 webm 拼接
+    has_wav = any(f.endswith('.wav') for f in all_files)
 
     apath = _audio_path(recording_id)
     total_size = 0
     try:
         with open(apath, "wb") as out:
-            for cf in chunk_files:
+            for i, cf in enumerate(all_files):
                 cpath = os.path.join(cdir, cf)
                 with open(cpath, "rb") as cin:
                     data = cin.read()
+
+                if has_wav and cf.endswith('.wav'):
+                    # WAV 合并：第一个 chunk 保留完整 WAV 头，
+                    # 后续 chunk 去掉 44 字节头仅拼接 PCM 数据
+                    if i == 0:
+                        out.write(data)
+                        total_size += len(data)
+                    else:
+                        pcm = data[44:] if len(data) > 44 else data
+                        out.write(pcm)
+                        total_size += len(pcm)
+                else:
+                    # webm 直接拼接
                     out.write(data)
                     total_size += len(data)
+
+        # 如果是 WAV 合并，修正总长度字段（RIFF header offset 4）
+        if has_wav and total_size > 44:
+            with open(apath, "r+b") as f:
+                f.seek(4)
+                f.write(struct.pack('<I', total_size - 8))
+                # 修正 data chunk 大小（offset 40）
+                f.seek(40)
+                f.write(struct.pack('<I', total_size - 44))
     except OSError as e:
         logger.error("音频合并失败: recording_id=%s err=%s", recording_id, e)
         return
