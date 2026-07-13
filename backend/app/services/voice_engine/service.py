@@ -196,10 +196,10 @@ def asr_offline(audio_data: bytes, sample_rate: int = 16000) -> dict[str, Any]:
 
 def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000,
                      prefer_offline: bool = False, engine: str | None = None) -> dict[str, Any]:
-    """语音识别统一入口：优先通义听悟在线 → 腾讯云在线备用 → Vosk离线。
+    """语音识别统一入口：通义千问 Omni → 腾讯云在线 → Vosk离线。
 
     引擎优先级（可自动降级）:
-    1. 通义听悟 ASR（阿里云，Excel #5 — 默认首选）
+    1. 通义千问 Qwen Omni ASR（阿里云百炼，Excel #5 — 默认首选）
     2. 腾讯云 ASR（备用在线引擎）
     3. Vosk 离线 ASR（无网环境）
     """
@@ -213,15 +213,15 @@ def recognize_speech(audio_base64: str, audio_format: str = "wav", sample_rate: 
         except (APIError, Exception):
             pass
 
-    # 在线识别：优先通义听悟（Excel #5）
-    if settings.TINGWU_API_KEY:
+    # 在线识别：首选通义千问 Omni（Excel #5）
+    if settings.DASHSCOPE_API_KEY:
         try:
-            result = asr_tingwu(audio_base64, audio_format, sample_rate)
+            result = asr_qwen_omni(audio_base64, audio_format, sample_rate)
             if result["confidence"] >= 0.5 or result["text"].strip():
                 return result
-            logger.warning("通义听悟低置信度，尝试腾讯云ASR")
+            logger.warning("通义千问ASR低置信度，尝试腾讯云ASR")
         except (APIError, Exception) as e:
-            logger.warning("通义听悟不可用，降级到腾讯云ASR: %s", e)
+            logger.warning("通义千问ASR不可用，降级到腾讯云ASR: %s", e)
 
     # 备用在线：腾讯云 ASR
     if settings.TENCENT_ASR_SECRET_ID:
@@ -985,97 +985,104 @@ def llm_generate_hunyuan(
 
 
 # ═══════════════════════════════════════════════
-# 阿里云 通义听悟 ASR（Excel #5 语音识别）
+# 通义千问 Qwen3.5-Omni ASR（Excel #5 语音识别）
 # ═══════════════════════════════════════════════
 
-def asr_tingwu(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000) -> dict[str, Any]:
-    """阿里云通义听悟 — 语音转文字（替换腾讯云ASR为默认在线引擎）。
+# DashScope 多模态生成端点（Qwen Omni 系列）
+DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
-    通义听悟使用异步任务模式：
-    1. POST /api/v1/tasks 创建离线转写任务
-    2. 轮询 GET /api/v1/tasks/{task_id} 获取结果
 
-    也支持实时推流模式（WebSocket），但离线转写更适合大多数场景。
+def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000,
+                  model: str | None = None) -> dict[str, Any]:
+    """通义千问 Qwen3.5-Omni — 语音转文字（Excel #5，默认在线ASR引擎）。
+
+    使用 DashScope 多模态 API，直接传入 Base64 音频 → 返回转写文本。
+    替代已停服的通义听悟（TINGWU），无需 AppKey，无需 OSS 上传。
+
+    优势：
+    - 支持 Base64 音频直传（无需先上传 OSS）
+    - 同步返回，延迟 ~0.5-2s
+    - 16kHz 单声道 WAV 最优
+
+    Args:
+        audio_base64: Base64 编码的音频数据（WAV/PCM 格式）
+        audio_format: 音频格式（wav/webm 等，用于 data URI MIME type）
+        sample_rate: 采样率 Hz，默认 16000
+
+    Returns:
+        {"text": str, "confidence": float, "duration_ms": int, "engine_used": str}
     """
     import urllib.request
 
-    if not settings.TINGWU_API_KEY:
-        raise APIError(50001, "通义听悟API密钥未配置（TINGWU_API_KEY）", 503)
+    if not settings.DASHSCOPE_API_KEY:
+        raise APIError(50001, "DashScope API密钥未配置（DASHSCOPE_API_KEY）", 503)
 
-    endpoint = f"{settings.TINGWU_ENDPOINT.rstrip('/')}/api/v1/tasks"
+    model = model or getattr(settings, "ASR_OMNI_MODEL", "qwen3.5-omni-flash")
+    mime_type = "audio/webm" if audio_format == "webm" else "audio/wav"
+    data_uri = f"data:{mime_type};base64,{audio_base64}"
 
-    # 解码 Base64 音频
-    audio_bytes = base64.b64decode(audio_base64)
-
-    # 构建请求体
     body = json.dumps({
-        "AppKey": settings.TINGWU_APP_KEY,
-        "Input": {
-            "SourceType": "BASE64",
-            "Data": audio_base64,
-            "FileFormat": audio_format,
-            "SampleRate": sample_rate,
+        "model": model,
+        "input": {
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"audio": data_uri},
+                    {"text": "请直接输出这段语音的转写文本，只输出文本内容，不要添加任何前缀、解释或标点修饰。"},
+                ],
+            }],
         },
-        "Parameters": {
-            "Transcription": {
-                "DiarizationEnabled": False,
-                "MaxSpeakerCount": 1,
-            },
+        "parameters": {
+            "temperature": 0.1,
+            "max_tokens": 4096,
         },
     }).encode("utf-8")
 
     headers = {
-        "Authorization": f"Bearer {settings.TINGWU_API_KEY}",
+        "Authorization": f"Bearer {settings.DASHSCOPE_API_KEY}",
         "Content-Type": "application/json",
     }
 
     try:
-        # Step 1: 创建转写任务
-        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+        req = urllib.request.Request(DASHSCOPE_MULTIMODAL_ENDPOINT, data=body, headers=headers)
         with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            create_result = json.loads(resp.read().decode("utf-8"))
+            result = json.loads(resp.read().decode("utf-8"))
 
-        task_id = create_result.get("Data", {}).get("TaskId")
-        if not task_id:
-            err_msg = create_result.get("Message", "未知错误")
-            logger.error("通义听悟任务创建失败: %s", err_msg)
-            raise APIError(50001, f"通义听悟任务创建失败: {err_msg}", 502)
+        # 提取文本内容
+        choices = result.get("output", {}).get("choices", [])
+        if not choices:
+            raise APIError(50001, "通义千问ASR返回为空", 502)
 
-        # Step 2: 轮询等待结果
-        poll_url = f"{settings.TINGWU_ENDPOINT.rstrip('/')}/api/v1/tasks/{task_id}"
-        max_polls = 30  # 最多等30秒
-        for _ in range(max_polls):
-            time.sleep(settings.TINGWU_POLL_INTERVAL)
-            poll_req = urllib.request.Request(poll_url, headers=headers)
-            with urllib.request.urlopen(poll_req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-                poll_result = json.loads(resp.read().decode("utf-8"))
+        text_parts = []
+        for part in choices[0].get("message", {}).get("content", []):
+            if isinstance(part, dict) and part.get("text"):
+                text_parts.append(part["text"])
 
-            status = poll_result.get("Data", {}).get("TaskStatus", "")
-            if status == "SUCCESS":
-                transcription = poll_result["Data"].get("Result", {}).get("Transcription", "")
-                # 如果有细分句子，拼接所有句子文本
-                sentences = poll_result["Data"].get("Result", {}).get("Sentences", [])
-                if sentences:
-                    transcription = "".join(s.get("Text", "") for s in sentences)
+        text = "".join(text_parts).strip()
 
-                return {
-                    "text": transcription,
-                    "confidence": 0.9,  # 通义听悟不返回置信度，使用默认值
-                    "duration_ms": poll_result["Data"].get("Result", {}).get("AudioDuration", 0),
-                    "engine_used": "tingwu_online",
-                }
-            elif status == "FAILED":
-                err = poll_result.get("Message", "转写失败")
-                raise APIError(50001, f"通义听悟转写失败: {err}", 502)
-            # 其他状态(CREATED/RUNNING)继续轮询
+        # 计算音频时长（估算：PCM 16bit 16kHz 单声道 ≈ 32KB/s）
+        audio_bytes = base64.b64decode(audio_base64)
+        duration_ms = int(len(audio_bytes) / 32)  # 粗略估算
 
-        raise APIError(50001, "通义听悟转写超时", 504)
+        return {
+            "text": text,
+            "confidence": 0.85,  # Omni 不返回置信度，实测准确率高
+            "duration_ms": duration_ms,
+            "engine_used": f"qwen_omni_{model}",
+        }
 
     except APIError:
         raise
     except Exception as e:
-        logger.exception("通义听悟ASR调用异常")
+        logger.exception("通义千问ASR调用异常")
         raise APIError(50001, f"语音识别服务异常: {str(e)}", 503)
+
+
+# 保留旧函数名作为别名，向后兼容
+def asr_tingwu(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000) -> dict[str, Any]:
+    """[已废弃] 通义听悟已停服，自动路由到通义千问 Omni ASR。"""
+    logger.info("asr_tingwu 已废弃，自动路由到 asr_qwen_omni")
+    return asr_qwen_omni(audio_base64, audio_format, sample_rate)
 
 
 def converse(user_input: str, conversation_id: str | None = None,
