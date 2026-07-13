@@ -1,13 +1,13 @@
 {
-  "apk_version": "0.9.0",
-  "apk_version_code": 9,
+  "apk_version": "1.1.0",
+  "apk_version_code": 11,
   "apk_url": "http://47.96.187.229/rigeng-latest.apk",
-  "sha256": "c25731bfb4c70843e0c79f23640602cf744067f95f865ee91f4bdfd816b4bceb",
-  "h5_version": "0.9.0",
-  "version": "0.9.0",
-  "h5_build_time": "2026-07-13T14:20:32+08:00",
-  "release_notes": "v0.9: 智能记录实时转写(WebSocket PCM音频流+AudioContext采 集) + 录音音频保存播放 + 批量ASR转写完整音频 + 真实录音时长",
+  "sha256": "3f1e2c85b918540c8cb1db0531a172e969d60a2cb69c38f950295418c2409051",
+  "h5_version": "1.1.0",
+  "version": "1.1.0",
+  "h5_build_time": "2026-07-13T15:33:15+08:00",
+  "release_notes": "v1.1: 🎙️ 智能录音原生采集引擎重构 — 热更新模式下录音正常，HTTP/HTTPS自适应，按住说话同步优化",
   "is_critical": false,
   "force_update": false,
-  "min_apk_version_code": 7
+  "min_apk_version_code": 9
 }

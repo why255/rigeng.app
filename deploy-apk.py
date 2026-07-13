@@ -14,9 +14,9 @@ sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 # ═══════════════════ 修改这里 ═══════════════════
-VERSION = "0.9.0"
-VERSION_CODE = 9
-RELEASE_NOTES = "v0.9: 智能记录实时转写(WebSocket PCM音频流+AudioContext采 集) + 录音音频保存播放 + 批量ASR转写完整音频 + 真实录音时长"
+VERSION = "1.2.0"
+VERSION_CODE = 12
+RELEASE_NOTES = "v1.2: 🎤 通义千问Qwen3.5-Omni语音识别引擎 — 替换已停服的通义听悟，Base64音频直传，延迟<2s，智能记录/朝有规划/暮有复盘/情绪树洞/智能问答全模块语音输入升级"
 IS_CRITICAL = False
 # ═══════════════════════════════════════════════
 
