@@ -1,13 +1,13 @@
 {
-  "apk_version": "1.3.0",
-  "apk_version_code": 14,
+  "apk_version": "1.4.0",
+  "apk_version_code": 15,
   "apk_url": "http://47.96.187.229/rigeng-latest.apk",
-  "sha256": "cbab4f493afe43820b6b651f4b5ea1d70a3c089b805618c50b10c1fd3bfe3db3",
-  "h5_version": "1.3.0",
-  "version": "1.3.0",
-  "h5_build_time": "2026-07-13T16:55:00+08:00",
-  "release_notes": "v1.3: 🎤 通义千问Qwen3.5-Omni语音识别引擎 + 修复APK智能记录实时转写API路径bug + 全模块语音输入升级",
+  "sha256": "649d1f166955d98765e6adcf56d52409788080390f3c817e53bc910a0ee70859",
+  "h5_version": "1.4.0",
+  "version": "1.4.0",
+  "h5_build_time": "2026-07-13T17:00:00+08:00",
+  "release_notes": "v1.4: 🎤 Qwen3.5-Omni智能记录实时转写 + API路径修复 + 模块隔离，其他模块保持腾讯云ASR不变",
   "is_critical": false,
   "force_update": false,
-  "min_apk_version_code": 12
+  "min_apk_version_code": 13
 }

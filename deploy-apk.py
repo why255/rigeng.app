@@ -14,9 +14,9 @@ sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
 # ═══════════════════ 修改这里 ═══════════════════
-VERSION = "1.3.0"
-VERSION_CODE = 14
-RELEASE_NOTES = "v1.3: 🎤 智能记录接入通义千问Qwen3.5-Omni语音识别 — 仅限智能记录模块，其他模块保持不变"
+VERSION = "1.4.0"
+VERSION_CODE = 15
+RELEASE_NOTES = "v1.4: 🎤 Qwen3.5-Omni智能记录实时转写 + API路径修复 + 模块隔离，其他模块保持腾讯云ASR不变"
 IS_CRITICAL = False
 # ═══════════════════════════════════════════════
 
