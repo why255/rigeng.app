@@ -902,6 +902,9 @@ def upload_xiejun_document(
 ) -> dict:
     """上传文档到携君库：存文件 + 创建Document记录 + 自动归类。
 
+    增强（2026-07-15）：若上传 .md 文件，自动解析YAML frontmatter
+    并按合同约定映射字段。
+
     Args:
         file_content: 文件原始字节
         filename: 原始文件名
@@ -941,26 +944,63 @@ def upload_xiejun_document(
     db.add(file_obj)
     db.flush()
 
-    # 4. 确定标题和自动归类
+    # 4. 确定标题和分类
     doc_title = title or os.path.splitext(filename)[0]
     hr_category = _auto_categorize(doc_title, filename)
 
-    # 5. 创建 Document 记录（携君库 = public，无 owner）
+    # 5. 检查是否为 .md 文件 → 尝试解析 YAML frontmatter
+    yaml_fields: dict = {}
+    content_body: dict = {"filename": filename, "file_type": file_type, "size_bytes": size_bytes}
+
+    if ext.lower() == ".md":
+        try:
+            from ..knowledge_base.yaml_mapper import (
+                extract_yaml_frontmatter,
+                map_yaml_to_document,
+                validate_required_fields,
+            )
+            md_text = file_content.decode("utf-8")
+            yaml_data, body_text = extract_yaml_frontmatter(md_text)
+            missing = validate_required_fields(yaml_data)
+            if not missing:
+                # 按合同约定映射字段
+                yaml_fields = map_yaml_to_document(yaml_data, body_text, filename)
+                if yaml_fields.get("title"):
+                    doc_title = yaml_fields["title"]
+                if yaml_fields.get("hr_module"):
+                    hr_category = yaml_fields["hr_module"]
+                # 使用 YAML 解析后的 content
+                content_body = yaml_fields.pop("content", content_body)
+            else:
+                # 缺少必填字段，回退到普通上传
+                _write_audit(db, operator_id, "upload_xiejun_yaml_warn", None, {
+                    "filename": filename,
+                    "missing_fields": missing,
+                })
+        except Exception as e:
+            # YAML解析失败不阻塞上传，回退到普通模式
+            _write_audit(db, operator_id, "upload_xiejun_yaml_error", None, {
+                "filename": filename,
+                "error": str(e)[:200],
+            })
+
+    # 6. 创建 Document 记录（合并YAML字段）
     doc = Document(
         owner_user_id=None,  # 携君库文档无个人归属
         library_type="public",
-        doc_type="sop",  # 默认类型，后续可扩展
+        doc_type=yaml_fields.pop("doc_type", "sop"),
         source_module=None,
         hr_category=hr_category,
         title=doc_title,
-        content={"filename": filename, "file_type": file_type, "size_bytes": size_bytes},
-        status="published",  # 管理员上传直接发布
-        audit_status="passed",
-        watermark_required=True,
-        copy_char_limit=500,
+        content=content_body,
+        status=yaml_fields.pop("status", "published"),
+        audit_status=yaml_fields.pop("audit_status", "passed"),
+        watermark_required=yaml_fields.pop("watermark_required", True),
+        copy_char_limit=yaml_fields.pop("copy_char_limit", 500),
         file_object_id=file_id,
         vector_status="pending",
         version=1,
+        **yaml_fields,  # 合并所有合同约定字段
     )
     db.add(doc)
     db.flush()
@@ -971,6 +1011,7 @@ def upload_xiejun_document(
         "category": hr_category,
         "filename": filename,
         "size_bytes": size_bytes,
+        "has_yaml": bool(yaml_fields),
     })
 
     db.commit()
@@ -984,6 +1025,7 @@ def upload_xiejun_document(
         "filename": filename,
         "size_bytes": size_bytes,
         "auto_categorized": True,
+        "yaml_parsed": bool(yaml_fields),
     }
 
 

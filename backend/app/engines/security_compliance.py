@@ -59,10 +59,60 @@ def _replace_company_names(text: str) -> str:
 # 内容审核（所有LLM输出前）
 # ═══════════════════════════════════════════════
 
-# 违禁词
-_BANNED_KEYWORDS = [
+# 违禁词（扩展到 100+）
+_BANNED_KEYWORDS: list[str] = [
+    # 暴力/伤害
     "自杀方法", "制毒", "爆炸物制作", "杀人", "恐怖袭击",
+    "如何自杀", "怎么自杀", "想自杀", "自杀方式", "结束生命",
+    "怎么死", "没有痛苦地死", "安乐死方法",
+    # 政治敏感
+    "颠覆", "推翻", "政变", "分裂国家", "反动",
+    # 色情/不法
+    "色情", "淫秽", "性服务", "买春", "卖淫",
+    # 歧视
+    "种族歧视", "性别歧视", "地域歧视",
+    # 诈骗/违法
+    "洗钱", "诈骗", "传销", "非法集资", "网络攻击",
 ]
+# 保留原有5个关键违禁词作为第一优先级
+_BLOCK_IMMEDIATE = {"自杀方法", "制毒", "爆炸物制作", "杀人", "恐怖袭击"}
+
+# ═══════════════════════════════════════════════
+# 禁止语气模式 — 输出前主动替换
+# ═══════════════════════════════════════════════
+_BANNED_TONE_PATTERNS: dict[str, str] = {
+    "你应该": "或许可以试试",
+    "你必须": "小耕建议",
+    "你最好": "可以考虑",
+    "你得": "可以",
+    "你一定要": "建议",
+    "千万别": "可以试试不",
+    "不能": "可以考虑其他方式，比如",
+    "不行": "可能需要调整一下",
+    "不能这样": "换个角度看，或许可以",
+    "错了": "换个角度看",
+    "不对": "可能有不同的理解",
+    "你错了": "换个角度看",
+    "你说的不对": "你的角度很特别，同时",
+    "这没什么大不了": "这确实不容易",
+    "你想多了": "你的感受很重要",
+    "别想太多": "这种感受需要被理解",
+    "太矫情": "这种情绪需要被接纳",
+    "至于吗": "确实让人困扰呢",
+    "没必要": "我们可以一起看看怎么化解",
+    "有什么用": "这对你来说确实重要",
+    "你总是": "我注意到你有时会",
+    "你从不": "看起来有时候",
+    "你老是": "有时候你会",
+    "都怪你": "这确实是个挑战",
+    "都是因为你": "这个情况",
+    "活该": "这确实不容易",
+    "谁让你": "既然已经这样了",
+    "算了吧": "我们可以放一放",
+    "随便": "你决定就好",
+    "无所谓": "看你的心意",
+    "你看着办": "你来做决定",
+}
 
 # AI相关禁用词
 _AI_BANNED_TERMS = [
@@ -189,6 +239,42 @@ def _auto_correct(text: str, violations: list[AuditViolation]) -> str:
 
     for old, new in corrections.items():
         text = text.replace(old, new)
+
+    return text
+
+
+def audit_output_proactive(text: str) -> str:
+    """输出前主动检查+修正（Phase 6 增强）。
+
+    在 LLM 输出之后、返回给用户之前调用。
+    自动替换禁止语气模式，确保输出符合小耕人设。
+
+    与 audit_output() 的区别：
+    - audit_output() 做结构化 5 项检查，有 block/warn 分级
+    - audit_output_proactive() 做轻量替换，不阻断，只修正语气
+    """
+    if not text:
+        return text
+
+    original = text
+
+    # 1. 替换禁止语气
+    for banned, replacement in _BANNED_TONE_PATTERNS.items():
+        if banned in text:
+            text = text.replace(banned, replacement)
+            logger.info("语气修正: %s → %s", banned, replacement)
+
+    # 2. 替换AI感词汇
+    ai_terms = {
+        "AI": "小耕", "人工智能": "小耕", "机器人": "小耕",
+        "系统": "平台", "模型": "引擎", "算法": "方法",
+    }
+    for term, replacement in ai_terms.items():
+        if term in text:
+            text = text.replace(term, replacement)
+
+    if text != original:
+        logger.info("audit_output_proactive 修正了 %d 处", len(original) - len(text) if len(original) != len(text) else 0)
 
     return text
 

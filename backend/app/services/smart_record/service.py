@@ -188,6 +188,82 @@ def stop_recording(db: Session, user_id: str, recording_id: str, duration_second
     }
 
 
+def upload_recording(db: Session, user_id: str, scene: str,
+                    audio_data: bytes, filename: str = "") -> dict[str, Any]:
+    """上传完整录音文件（PC端使用）。
+
+    与移动端实时录音不同，PC端直接上传完整音频文件。
+    流程：创建录音记录 → 保存音频文件 → 触发转写+萃取流水线。
+    """
+    if scene not in RECORDING_SCENES:
+        scene = "自定义"
+
+    # 1. 创建录音记录
+    recording = Recording(
+        user_id=user_id,
+        title=f"{scene}录音",
+        scene=scene,
+        status="transcribing",
+        transcript_status="processing",
+        duration_seconds=0,
+    )
+    db.add(recording)
+    db.commit()
+    db.refresh(recording)
+
+    # 2. 保存音频文件
+    apath = _audio_path(recording.id)
+    with open(apath, "wb") as f:
+        f.write(audio_data)
+
+    file_size = len(audio_data)
+
+    # 3. 尝试获取音频时长
+    duration_seconds = 0
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", apath],
+            capture_output=True, text=True, timeout=15,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            duration_seconds = int(float(probe.stdout.strip()))
+    except Exception as e:
+        logger.warning("无法获取音频时长: recording_id=%s err=%s", recording.id, e)
+
+    # 4. 创建 FileObject
+    file_obj = FileObject(
+        storage_url=apath,
+        file_type="audio",
+        size_bytes=file_size,
+        compress_status="raw",
+        storage_layer="cloud",
+    )
+    db.add(file_obj)
+    db.flush()
+
+    # 5. 更新录音记录
+    recording.file_object_id = file_obj.id
+    recording.file_size_bytes = file_size
+    recording.duration_seconds = duration_seconds
+    db.commit()
+    db.refresh(recording)
+
+    logger.info("录音文件上传完成: recording_id=%s scene=%s size=%d dur=%ds",
+                recording.id, scene, file_size, duration_seconds)
+
+    # 6. 自动触发处理流水线（转写 + 萃取）
+    auto_process_recording(db, recording.id, user_id)
+
+    return {
+        "recording_id": recording.id,
+        "scene": scene,
+        "status": "completed",
+        "duration_seconds": duration_seconds,
+        "file_size_bytes": file_size,
+    }
+
+
 # ═══════════════════════════════════════════════
 # 转写处理
 # ═══════════════════════════════════════════════
@@ -266,15 +342,58 @@ def process_audio_chunk(db: Session, user_id: str, recording_id: str,
     return {"text": "", "confidence": 0.0, "segment_index": chunk_index, "source": "asr_failed"}
 
 
+# ── 填充词过滤器：防止 Qwen Omni 等 LLM ASR 引擎在静音/噪音上幻觉 ──
+_FILLER_PATTERN = re.compile(
+    r'^[\s,，。！？.!?…、；：;:""''（）()【】《》<>…—–-]*$'
+)
+_FILLER_CHARS = set('嗯啊哦呃唔诶咦噢呵哈嘿嗨呀哇哟嘞嘛呢吧吗啦哦哟呵嘿嗨')
+
+
+def _is_filler_or_noise(text: str) -> bool:
+    """检测 ASR 输出是否仅为填充词/噪音（非有效语音内容）。
+
+    Qwen Omni 等多模态 LLM 用作 ASR 时，面对静音/呼吸/环境噪音会
+    幻觉输出"嗯""啊""哦"等拟声词。此函数识别并过滤这些无效结果。
+
+    Returns:
+        True 如果文本只包含填充词/标点/空白，应被丢弃。
+    """
+    if not text or not text.strip():
+        return True
+
+    stripped = text.strip()
+    # 纯标点/空白 → 无效
+    if _FILLER_PATTERN.match(stripped):
+        return True
+
+    # 去掉标点和空白后，检查是否全为填充字符
+    clean = re.sub(r'[\s,，。！？.!?…、；：;:""''（）()【】《》<>…—–-]', '', stripped)
+    if not clean:
+        return True
+
+    # 如果所有非标点字符都在填充词集合中 → 幻觉
+    if all(ch in _FILLER_CHARS for ch in clean):
+        return True
+
+    # 长度 ≤2 且全是填充词 → 也过滤（避免短幻觉）
+    if len(clean) <= 2 and all(ch in _FILLER_CHARS for ch in clean):
+        return True
+
+    return False
+
+
 def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
-    """将音频chunk转为PCM后调用腾讯云ASR。
+    """将音频chunk转为PCM后调用ASR实时转写。
 
     支持两种输入格式：
       - webm/opus: 需要 ffmpeg 转码为 WAV
       - WAV/PCM: 直接提取 PCM 数据（前端原生采集已输出 WAV）
 
+    内置填充词过滤：Qwen Omni 等多模态 LLM 在静音/噪音上容易幻觉
+    输出"嗯""啊"等拟声词，通过 _is_filler_or_noise() 过滤。
+
     Returns:
-        (text, confidence)
+        (text, confidence) — 如果文本为填充词则返回 ("", 0.0)
     """
     import subprocess
     import tempfile
@@ -340,6 +459,12 @@ def _transcribe_audio_chunk(audio_data: bytes) -> tuple[str, float]:
 
     text = result.get("text", "").strip()
     confidence = result.get("confidence", 0.0)
+
+    # ── 过滤 LLM ASR 幻觉填充词（静音/噪音 → "嗯""啊"等）──
+    if _is_filler_or_noise(text):
+        logger.info("ASR结果被填充词过滤器丢弃: chunk_text=%r", text[:80])
+        return "", 0.0
+
     return text, confidence
 
 
@@ -648,54 +773,6 @@ def get_transcript(db: Session, user_id: str, recording_id: str) -> dict[str, An
     }
 
 
-def _generate_mock_transcript(scene: str, duration_seconds: int) -> list[dict]:
-    """生成模拟转写分段（MVP阶段，生产环境用ASR替换）。"""
-    if scene == "面试":
-        return [
-            {"speaker": "面试官", "speaker_role": "interviewer", "start_sec": 0, "end_sec": 8,
-             "text": "你好，欢迎来参加面试。请先简单介绍一下你自己吧。", "confidence": 0.97},
-            {"speaker": "候选人", "speaker_role": "candidate", "start_sec": 8, "end_sec": 25,
-             "text": "面试官你好，我有5年相关工作经验，毕业于计算机专业，擅长后端开发和系统架构设计。",
-             "confidence": 0.95, "is_candidate": True},
-            {"speaker": "面试官", "speaker_role": "interviewer", "start_sec": 25, "end_sec": 35,
-             "text": "你在之前的项目中遇到过什么技术挑战吗？", "confidence": 0.98},
-            {"speaker": "候选人", "speaker_role": "candidate", "start_sec": 35, "end_sec": 55,
-             "text": "之前负责一个高并发系统改造，通过引入消息队列和缓存层，将系统吞吐量提升了3倍，响应时间降低了60%。",
-             "confidence": 0.88, "is_candidate": True},
-            {"speaker": "面试官", "speaker_role": "interviewer", "start_sec": 55, "end_sec": 65,
-             "text": "听起来很不错。你平时怎么做技术选型的？", "confidence": 0.96},
-            {"speaker": "候选人", "speaker_role": "candidate", "start_sec": 65, "end_sec": 80,
-             "text": "我会根据业务需求、团队能力和生态成熟度综合评估。核心原则是简单优先、演进式架构。",
-             "confidence": 0.93, "is_candidate": True},
-        ]
-    elif scene == "会议":
-        return [
-            {"speaker": "主持人", "speaker_role": "speaker", "start_sec": 0, "end_sec": 10,
-             "text": "今天我们同步一下上周的进度，以及本周的重点事项。", "confidence": 0.97},
-            {"speaker": "成员A", "speaker_role": "speaker", "start_sec": 10, "end_sec": 25,
-             "text": "上周完成了用户模块的重构，本周计划启动权限系统的开发。",
-             "confidence": 0.94},
-            {"speaker": "成员B", "speaker_role": "speaker", "start_sec": 25, "end_sec": 40,
-             "text": "数据分析模块的接口文档已经更新，需要后端确认字段定义。",
-             "confidence": 0.91},
-            {"speaker": "主持人", "speaker_role": "speaker", "start_sec": 40, "end_sec": 50,
-             "text": "好的，那本周重点：权限系统开发 + 数据分析接口联调，大家确认一下。",
-             "confidence": 0.96},
-        ]
-    else:
-        # 日常 / 自定义
-        return [
-            {"speaker": "用户", "speaker_role": "speaker", "start_sec": 0, "end_sec": 12,
-             "text": "今天想到一个关于员工培训体系优化的好点子。", "confidence": 0.95},
-            {"speaker": "用户", "speaker_role": "speaker", "start_sec": 12, "end_sec": 28,
-             "text": "可以把培训分成三个层级：新人入职培训、岗位技能提升、管理层领导力发展。",
-             "confidence": 0.92},
-            {"speaker": "用户", "speaker_role": "speaker", "start_sec": 28, "end_sec": 40,
-             "text": "每个层级都设置必修课和选修课，跟晋升体系挂钩。",
-             "confidence": 0.94},
-        ]
-
-
 # ═══════════════════════════════════════════════
 # AI萃取
 # ═══════════════════════════════════════════════
@@ -738,17 +815,15 @@ def process_extraction(db: Session, recording_id: str, user_id: str) -> dict[str
             "source": "no_transcript",
         }
 
-    # 生成萃取内容（AI优先，mock降级）
+    # 生成萃取内容（AI引擎）
     scene = recording.scene or "日常"
     try:
         content_json, summary, action_items_data, model_used, tokens = _generate_ai_extraction(
             scene, segments, user_id=user_id, db=db,
         )
     except Exception as e:
-        logger.warning("AI萃取失败，降级到模板萃取: %s", e)
-        content_json, summary, action_items_data = _generate_mock_extraction(scene, segments)
-        model_used = "mock_mvp_fallback"
-        tokens = 0
+        logger.error("AI萃取失败: recording_id=%s error=%s", recording_id, e)
+        raise APIError(60010, f"AI萃取失败: {e}", 500)
 
     # 清除旧萃取结果
     db.query(ExtractionResult).filter(
@@ -915,67 +990,6 @@ def _build_transcript_text(segments: list) -> str:
         else:
             lines.append(text)
     return "\n".join(lines)
-
-
-def _generate_mock_extraction(scene: str, segments: list) -> tuple[dict, str, list[dict]]:
-    """生成模拟萃取数据。"""
-    if scene == "面试":
-        content = {
-            "name": "候选人",
-            "role": "后端工程师 · 面试记录",
-            "avatarBg": "#6B8FBF",
-            "years": "5 年",
-            "school": "计算机专业",
-            "skills": ["Java", "Spring Boot", "MySQL", "Redis", "系统架构"],
-            "salary": "25K - 35K · 14 薪",
-            "onboard": "1 个月内",
-            "competencies": [
-                {"label": "技术能力", "stars": 4},
-                {"label": "沟通表达", "stars": 4},
-                {"label": "项目经验", "stars": 5},
-                {"label": "文化匹配", "stars": 3},
-            ],
-        }
-        summary = "候选人具备5年后端开发经验，技术能力扎实，有高并发系统改造的成功案例。沟通表达清晰，项目经验丰富。建议进入下一轮面试。"
-        action_items = [
-            {"title": "安排二面技术深度面试", "description": "聚焦分布式系统和数据库优化方向", "priority": "high", "due_date": date.today().isoformat()},
-            {"title": "整理候选人评估报告", "description": "汇总本次面试的技术评估和胜任力分析", "priority": "medium", "due_date": date.today().isoformat()},
-        ]
-    elif scene == "会议":
-        content = {
-            "meeting_title": "周进度同步会",
-            "date": date.today().isoformat(),
-            "participants": ["主持人", "成员A", "成员B"],
-            "key_decisions": [
-                "本周重点：权限系统开发 + 数据分析接口联调",
-                "后端需确认数据分析接口字段定义",
-            ],
-            "discussion_points": [
-                "上周完成用户模块重构",
-                "数据分析模块接口文档已更新",
-            ],
-        }
-        summary = "会议明确了本周两大重点任务：权限系统开发和数据分析接口联调。需要后端尽快确认接口字段定义。"
-        action_items = [
-            {"title": "启动权限系统开发", "description": "基于用户模块重构后的接口，开发RBAC权限管理", "priority": "high", "due_date": date.today().isoformat()},
-            {"title": "确认数据分析接口字段定义", "description": "后端与前端对齐数据分析模块的接口字段", "priority": "high", "due_date": date.today().isoformat()},
-            {"title": "更新项目进度看板", "description": "将本周重点任务更新到项目甘特图", "priority": "medium", "due_date": date.today().isoformat()},
-        ]
-    else:
-        content = {
-            "topic": "员工培训体系优化方案",
-            "key_insights": [
-                "三级培训体系：新人入职→岗位技能→管理层领导力",
-                "必修课+选修课模式，与晋升体系挂钩",
-            ],
-            "tags": ["培训体系", "组织发展", "人才管理"],
-        }
-        summary = "提出了一个三级员工培训体系的优化方案，覆盖新人入职、岗位技能提升和管理层领导力发展三个层级，建议将培训与晋升体系关联以提升员工参与度。"
-        action_items = [
-            {"title": "细化三级培训体系方案", "description": "完善新人入职/岗位技能/管理层领导力三个层级的课程设计", "priority": "medium", "due_date": date.today().isoformat()},
-        ]
-
-    return content, summary, action_items
 
 
 def _generate_recording_title(scene: str, content: dict) -> str:

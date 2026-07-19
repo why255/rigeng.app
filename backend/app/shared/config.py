@@ -49,10 +49,14 @@ class Settings(BaseSettings):
     # ═══ 字节火山引擎 — 豆包 Seed 2.0 Pro（AI对话主模块 — Excel #1） ═══
     VOLCANO_API_KEY: str = ""
     VOLCANO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
-    VOLCANO_CHAT_MODEL: str = "doubao-seed-2-0-pro"
+    VOLCANO_CHAT_MODEL: str = "doubao-seed-2-0-pro-260215"
     VOLCANO_MULTIMODAL_MODEL: str = "doubao-seed-2-0-pro-260215"
     VOLCANO_MAX_TOKENS: int = 4096
     VOLCANO_TEMPERATURE: float = 0.7
+    # 豆包 Lite —— 简单意图直答 & 双阶段摘要用（低延迟低成本）
+    VOLCANO_LITE_MODEL: str = "doubao-lite-32k"
+    VOLCANO_LITE_MAX_TOKENS: int = 512
+    VOLCANO_LITE_TEMPERATURE: float = 0.5
 
     # ═══ 阿里云 DashScope — 通义千问 Qwen3.7-Max（HR模板 — Excel #2） ═══
     DASHSCOPE_API_KEY: str = ""
@@ -116,9 +120,24 @@ class Settings(BaseSettings):
     # ────────────────────────────────────────────
     EMBEDDING_MODEL: str = "bge-large-zh"
     EMBEDDING_DIM: int = 1024
-    VECTOR_INDEX_METHOD: str = "ivfflat"  # pgvector 索引方法
+    VECTOR_INDEX_METHOD: str = "ivfflat"  # pgvector 索引方法: ivfflat / hnsw
+    # HNSW 索引参数（VECTOR_INDEX_METHOD=hnsw 时生效）
+    HNSW_M: int = 16                     # 每层最大邻居数
+    HNSW_EF_CONSTRUCTION: int = 64       # 构建时的搜索深度
+    HNSW_EF_SEARCH: int = 40             # 查询时的搜索深度（越大召回率越高但速度越慢）
     RAG_TOP_N: int = 10
     RAG_SIMILARITY_THRESHOLD: float = 0.65
+
+    # ────────────────────────────────────────────
+    # 携君智库接入 — 入库流水线（2026-07-15）
+    # ────────────────────────────────────────────
+    XIEJUN_UPLOAD_MAX_MB: int = 250        # zip包最大上传大小(MB)
+    XIEJUN_API_TOKEN: str = ""             # 携君智库项目组专用API Token
+    XIEJUN_STORAGE_DIR: str = "./storage/xiejun_uploads"  # zip存储目录
+    RAG_CHUNK_SIZE: int = 512              # 文档切块大小(字符数)
+    RAG_CHUNK_OVERLAP: int = 50            # chunk重叠字符数
+    A6_L3_TRIGGER_THRESHOLD: float = 0.60  # L3互联网搜索触发阈值(老师定版)
+    EMBEDDING_PROVIDER: str = ""           # embedding API提供商(空=模拟向量): volcano/dashscope
 
     # ────────────────────────────────────────────
     # ⑥ 消息/推送服务（P2）
@@ -153,7 +172,7 @@ class Settings(BaseSettings):
     CB_FAILURE_THRESHOLD: int = 5   # 熔断器：连续失败N次→熔断
     CB_TIMEOUT_SECONDS: int = 60    # 熔断器：熔断恢复前冷却时间
     CB_HALF_OPEN_LIMIT: int = 3     # 熔断器：半开状态最大试探次数
-    DOWNSTREAM_TIMEOUT_SECONDS: int = 10  # 下游服务调用超时
+    DOWNSTREAM_TIMEOUT_SECONDS: int = 30  # 下游服务调用超时
 
     # ────────────────────────────────────────────
     # 智脑层引擎配置（算法基础设施）
@@ -190,6 +209,26 @@ class Settings(BaseSettings):
     # Redis（缓存 / 会话 / 推送频控）
     # ────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
+    # RAG L1 缓存专用 DB & TTL
+    REDIS_RAG_DB: int = 1
+    REDIS_RAG_TTL_SECONDS: int = 3600     # 高频查询结果缓存 1 小时
+    RAG_CACHE_ENABLED: bool = True         # 关闭时旁路 L1 Redis 缓存
+
+    # ────────────────────────────────────────────
+    # Meilisearch（L2 全文检索）
+    # ────────────────────────────────────────────
+    MEILISEARCH_URL: str = "http://localhost:7700"
+    MEILISEARCH_API_KEY: str = ""                  # Master key（生产必填）
+    MEILISEARCH_INDEX_NAME: str = "rag_documents"
+    MEILISEARCH_ENABLED: bool = False              # 未部署时默认关闭,不影响现有流程
+    MEILISEARCH_TIMEOUT_MS: int = 200              # 查询超时,超时降级到 pgvector
+
+    # ────────────────────────────────────────────
+    # 意图规则引擎 / 双阶段响应
+    # ────────────────────────────────────────────
+    INTENT_RULE_ENGINE_ENABLED: bool = True        # 关闭时全部走复杂流程
+    DUAL_STAGE_ENABLED: bool = True                # 关闭时不启动 lite 摘要
+    DUAL_STAGE_SUMMARY_TIMEOUT_MS: int = 500       # 摘要生成超时(ms),超时跳过
 
     # ═══════ 属性 ═══════
 

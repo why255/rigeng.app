@@ -6,9 +6,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
+from ...shared import errors
 from ...shared.database import get_db
 from ...shared.response import ok, page
 from ...shared.security import CurrentUser, require_role
+from ..knowledge_base.ingestion_pipeline import get_pipeline
 from . import service
 from .schemas import (
     AssignStudentRequest,
@@ -377,3 +379,47 @@ def delete_xiejun_document(
 ):
     """删除携君库文档（软删除）。"""
     return ok(service.delete_xiejun_document(db, operator.user_id, doc_id))
+
+
+# ═══════════════════════════════════════════════
+# 携君库 — 入库历史（2026-07-15）
+# ═══════════════════════════════════════════════
+
+@router.get("/xiejun/ingestion-tasks")
+def list_ingestion_tasks(
+    page_no: int = Query(1, alias="page", ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """携君库zip上传历史列表。"""
+    pipeline = get_pipeline()
+    result = pipeline.list_tasks(db, page=page_no, page_size=page_size)
+    return ok(result)
+
+
+@router.get("/xiejun/ingestion-tasks/{task_id}/report")
+def get_ingestion_report(
+    task_id: str,
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """获取指定任务的入库报告详情。"""
+    # task_id 可能是 upload_id
+    pipeline = get_pipeline()
+    result = pipeline.get_report(db, task_id)
+    if not result:
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, f"未找到入库报告: {task_id}", 404)
+    return ok(result)
+
+
+@router.post("/xiejun/ingestion-tasks/{upload_id}/process")
+def trigger_ingestion(
+    upload_id: str,
+    _op: CurrentUser = Depends(_admin),
+    db: Session = Depends(get_db),
+):
+    """手动触发入库流水线处理（重试失败任务）。"""
+    pipeline = get_pipeline()
+    result = pipeline.process_upload(db, upload_id)
+    return ok(result)

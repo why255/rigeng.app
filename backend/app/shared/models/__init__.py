@@ -51,3 +51,5 @@ from .acquire_client import (  # noqa: F401
 )
 from .algorithm import AlgorithmFile  # noqa: F401
 from .model_config import ModelConfig, ModuleModelBinding  # noqa: F401
+from .chat_message import ChatMessage  # noqa: F401
+from .flow_state import FlowState  # noqa: F401

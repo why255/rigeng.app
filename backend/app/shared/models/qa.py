@@ -104,6 +104,12 @@ class QaAnswer(TimestampMixin, Base):
     helpful_count: Mapped[int] = mapped_column(Integer, default=0)
     unhelpful_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # A7 答案溯源——三层来源占比（携君智库接入 2026-07-15）
+    # {"private": {"percentage": 40, "citation_titles": ["..."], "doc_count": 2},
+    #  "xiejun": {"percentage": 30, "citation_titles": ["安权老师《薪酬7步法》"], "doc_count": 1},
+    #  "internet": {"percentage": 30, "citation_titles": ["..."], "doc_count": 3}}
+    source_percentages_json: Mapped[dict | None] = mapped_column(PortableJSON())
+
 
 class QaFeedback(TimestampMixin, Base):
     """纠错反馈记录。防幻觉四级防线第3级：用户申诉纠错。"""

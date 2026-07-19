@@ -23,6 +23,9 @@ from .module_registry import (
     MODULE_TEMPLATE_FALLBACKS,
     _MODEL_TO_PROVIDER,
     get_provider_for_model as _get_provider_for_model,
+    get_fast_model,
+    FAST_MODEL_TEMPERATURE,
+    FAST_MODEL_MAX_TOKENS,
 )
 
 logger = logging.getLogger("llm_orchestrator")
@@ -173,6 +176,7 @@ def llm_generate_with_orchestration(
     provider: str | None = None,
     user_id: str | None = None,
     db: Any = None,
+    fast_mode: bool = False,
 ) -> dict[str, Any]:
     """LLM调度引擎统一入口 (v2.0)。
 
@@ -184,11 +188,7 @@ def llm_generate_with_orchestration(
         system_prompt: 系统提示词
         context: 对话历史上下文
         module: 功能模块key（决定使用哪个模型）
-        task_complexity: 保留参数，不再影响模型选择（向后兼容）
-        temperature: 温度参数（不传则按模块自动选择）
-        provider: 显式指定提供商（覆盖模块路由）
-        user_id: 用户ID
-        db: 数据库会话
+        fast_mode: Phase 3 — True时使用快速模型（更低TTFT）
 
     Returns:
         {"content": str, "model_used": str, "provider": str, "usage": dict}
@@ -197,13 +197,25 @@ def llm_generate_with_orchestration(
 
     # 选择模型和提供商
     if provider:
-        # 显式指定提供商 → 使用该提供商的默认模型
         preferred_model = None
     else:
         preferred_model, provider = select_model(module, task_complexity, db=db)
 
+    # Phase 3: 快速模式
+    if fast_mode and preferred_model:
+        original = preferred_model
+        preferred_model = get_fast_model(preferred_model)
+        provider = _get_provider_for_model(preferred_model)
+        logger.debug("快速模式(非流式): module=%s %s → %s", module, original, preferred_model)
+
     # 获取温度
     actual_temperature = _get_temperature(module, temperature)
+    if fast_mode:
+        actual_temperature = FAST_MODEL_TEMPERATURE
+
+    actual_max_tokens_nonstream = max_tokens
+    if fast_mode and max_tokens is None:
+        actual_max_tokens_nonstream = FAST_MODEL_MAX_TOKENS
 
     # 构建降级模型列表
     fallback_models = FALLBACK_CHAIN.get(preferred_model, []) if preferred_model else []
@@ -221,7 +233,7 @@ def llm_generate_with_orchestration(
                 context=context,
                 model=model,
                 temperature=actual_temperature,
-                max_tokens=max_tokens,
+                max_tokens=actual_max_tokens_nonstream,
                 stream=stream,
                 provider=current_provider,
                 user_id=user_id,
@@ -254,3 +266,182 @@ def llm_generate_with_orchestration(
         "provider": "fallback",
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
     }
+
+
+# ═══════════════════════════════════════════════
+# 流式调度入口
+# ═══════════════════════════════════════════════
+
+def llm_generate_stream_with_orchestration(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    module: str = "general",
+    task_complexity: str = "medium",
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    provider: str | None = None,
+    user_id: str | None = None,
+    db: Any = None,
+    fast_mode: bool = False,
+):
+    """LLM 流式调度引擎入口（生成器）。
+
+    按模块自动路由 + fallback 降级链，逐个 yield token 字符串。
+
+    Args:
+        fast_mode: Phase 3 — True时使用快速模型（更低TTFT），用于预生成/预测场景
+
+    用法:
+        for token in llm_generate_stream_with_orchestration(prompt="...", module="morning_plan"):
+            yield f"data: {json.dumps({'token': token, 'type': 'content'})}\\n\\n"
+        yield "data: [DONE]\\n\\n"
+    """
+    from ..services.voice_engine.service import llm_generate_stream
+
+    # 选择模型和提供商
+    if provider:
+        preferred_model = None
+    else:
+        preferred_model, provider = select_model(module, task_complexity, db=db)
+
+    # Phase 3: 快速模式 — 替换为低延迟模型
+    if fast_mode and preferred_model:
+        original = preferred_model
+        preferred_model = get_fast_model(preferred_model)
+        provider = _get_provider_for_model(preferred_model)
+        logger.debug("快速模式: module=%s %s → %s", module, original, preferred_model)
+
+    actual_temperature = _get_temperature(module, temperature)
+    if fast_mode:
+        actual_temperature = FAST_MODEL_TEMPERATURE
+
+    actual_max_tokens = max_tokens
+    if fast_mode and max_tokens is None:
+        actual_max_tokens = FAST_MODEL_MAX_TOKENS
+
+    fallback_models = FALLBACK_CHAIN.get(preferred_model, []) if preferred_model else []
+    models_to_try = [preferred_model] if preferred_model else []
+    models_to_try += fallback_models
+
+    last_error = None
+    for model in models_to_try:
+        current_provider = provider if model == preferred_model else _get_provider_for_model(model)
+        try:
+            token_count = 0
+            for token in llm_generate_stream(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                context=context,
+                model=model,
+                temperature=actual_temperature,
+                max_tokens=actual_max_tokens,
+                provider=current_provider,
+                user_id=user_id,
+                db=db,
+            ):
+                token_count += 1
+                yield token
+            logger.info(
+                "LLM流式调度完成: module=%s model=%s provider=%s temp=%.1f tokens=%d",
+                module, model, current_provider, actual_temperature, token_count,
+            )
+            return
+        except Exception as e:
+            last_error = e
+            if model != models_to_try[-1]:
+                next_idx = models_to_try.index(model) + 1
+                logger.warning("模型 %s 流式调用失败，降级到 %s: %s", model,
+                              models_to_try[next_idx], e)
+                time.sleep(1)
+                continue
+
+    # 全部失败 → 模板化兜底（以单 token 形式输出）
+    fallback_content = MODULE_TEMPLATE_FALLBACKS.get(module, MODULE_TEMPLATE_FALLBACKS["general"])
+    logger.error("LLM流式调度全部失败(module=%s): %s", module, last_error)
+    yield fallback_content
+
+
+# ═══════════════════════════════════════════════
+# 双阶段响应 — Stage-1 摘要生成
+# ═══════════════════════════════════════════════
+
+def generate_summary(
+    user_message: str,
+    timeout_ms: int | None = None,
+    user_id: str | None = None,
+    db: Any = None,
+) -> str | None:
+    """双阶段 Stage-1:用 lite 模型生成一句话(<= 20 字)核心建议。
+
+    - 超时(默认 DUAL_STAGE_SUMMARY_TIMEOUT_MS)返回 None,不阻塞主流程
+    - 任何异常返回 None,由调用方决定要不要跳过 summary 事件
+    - 用 morning_chat_lite 模块 → doubao-lite-32k(见 module_registry)
+
+    Args:
+        user_message: 用户消息(已脱敏)
+        timeout_ms: 覆盖默认超时;传 0 表示无超时(仅测试用)
+        user_id: 传给 llm_generate 用于计费/审计
+        db: DB session,允许后台 override 模型
+
+    Returns:
+        摘要文本(去首尾空白 + 截断到 40 字),或 None
+    """
+    from ..shared.config import settings as _settings
+
+    if not _settings.DUAL_STAGE_ENABLED:
+        return None
+    if not user_message or not user_message.strip():
+        return None
+
+    budget_ms = timeout_ms if timeout_ms is not None else _settings.DUAL_STAGE_SUMMARY_TIMEOUT_MS
+    if budget_ms and budget_ms <= 0:
+        # 显式关闭超时
+        deadline = None
+    else:
+        deadline = time.monotonic() + budget_ms / 1000.0
+
+    prompt = (
+        f"用户说:{user_message.strip()}\n\n"
+        "请用一句话(不超过 20 字)给出核心建议或回应,不要解释原因,不要客套。"
+    )
+    system_prompt = "你是日耕 AI 助手,只输出一句话的核心建议。"
+
+    import threading
+
+    result_holder: dict[str, Any] = {"text": None, "error": None}
+
+    def _call():
+        try:
+            out = llm_generate_with_orchestration(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                module="morning_chat_lite",
+                task_complexity="simple",
+                max_tokens=64,
+                stream=False,
+                user_id=user_id,
+                db=db,
+            )
+            content = (out or {}).get("content", "")
+            if isinstance(content, str):
+                result_holder["text"] = content.strip()[:40]
+        except Exception as exc:
+            result_holder["error"] = exc
+
+    worker = threading.Thread(target=_call, daemon=True)
+    worker.start()
+
+    if deadline is None:
+        worker.join()
+    else:
+        remaining = max(0.0, deadline - time.monotonic())
+        worker.join(remaining)
+
+    if worker.is_alive():
+        logger.info("Stage-1 摘要超时(%dms),跳过 summary 事件", budget_ms)
+        return None
+    if result_holder["error"] is not None:
+        logger.debug("Stage-1 摘要生成失败,跳过: %s", result_holder["error"])
+        return None
+    return result_holder["text"] or None

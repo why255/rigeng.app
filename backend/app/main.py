@@ -5,10 +5,12 @@
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -19,6 +21,7 @@ from .shared.config import settings
 from .shared.database import SessionLocal
 from .shared.errors import APIError, E_DEGRADED
 from .shared.models.user import User
+from .shared.rate_limit import RateLimiter
 from .shared.response import api_error_handler, ok, unhandled_error_handler
 from .shared.security import get_current_user, hash_password  # noqa: F401  (确保依赖可用)
 
@@ -45,6 +48,9 @@ from .services.acquire_client.router import router as acquire_client_router
 from .services.admin.router import router as admin_router
 from .services.algorithm_admin.router import router as algorithm_admin_router
 from .services.algorithm_admin.router import ai_config_router
+from .services.greeting.router import router as greeting_router
+from .services.chat_messages.router import router as chat_messages_router
+from .services.realtime.ws_router import router as realtime_router
 
 # ── 启动安全校验（步骤9·审查修正S1）──
 if settings.RIGENG_ENV == "prod":
@@ -159,6 +165,7 @@ class DegradationMiddleware(BaseHTTPMiddleware):
         "/api/v1/product-design": "product_design",
         "/api/v1/delivery": "order_delivery",
         "/api/v1/acquire": "acquire_client",
+        "/api/v1/chat": "chat_messages",
     }
 
     async def dispatch(self, request: Request, call_next):
@@ -212,7 +219,7 @@ app.add_middleware(
         "http://localhost",
         # 生产域名 & 直连 IP
         "http://rigeng365.com",
-        "http://47.103.197.189",
+        "https://rigeng365.com",
         "http://47.96.187.229",
     ],
     allow_credentials=True,
@@ -228,17 +235,23 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 # ── 启动事件：预置测试账号 ──
 @app.on_event("startup")
 def seed_test_user():
-    """确保测试账号 19248998160 / rigeng666 存在。"""
+    """确保测试账号 19248998160 / rigeng666 存在且为 superadmin。"""
     from sqlalchemy import select
     db = SessionLocal()
     try:
         existing = db.scalar(select(User).where(User.phone == "19248998160"))
-        if not existing:
+        if existing:
+            if existing.role != "superadmin":
+                existing.role = "superadmin"
+                existing.nickname = "测试管理员"
+                db.commit()
+                print("[seed] 测试账号已升级为 superadmin: 19248998160")
+        else:
             user = User(
                 phone="19248998160",
                 password_hash=hash_password("rigeng666"),
-                nickname="测试用户",
-                role="student",
+                nickname="测试管理员",
+                role="superadmin",
                 trial_start_at=None,  # 测试账号无试用限制
                 status="active",
             )
@@ -251,6 +264,30 @@ def seed_test_user():
         print(f"[seed] 跳过（可能表未创建）: {e}")
     finally:
         db.close()
+
+
+# ── P1-3.1: 预初始化 HTTP 客户端连接池（应用启动时建立连接）──
+@app.on_event("startup")
+def init_http_clients():
+    """预创建各 LLM 提供商的 HTTP 客户端连接池，加速首次请求。"""
+    try:
+        from .shared.http_client import ensure_provider_clients
+        ensure_provider_clients()
+        print("[http] HTTP客户端连接池已初始化")
+    except Exception as e:
+        print(f"[http] HTTP客户端初始化跳过: {e}")
+
+
+@app.on_event("shutdown")
+def shutdown_http_clients():
+    """关闭所有 HTTP 客户端连接池。"""
+    try:
+        from .shared.http_client import close_all_clients
+        close_all_clients()
+        print("[http] HTTP客户端连接池已关闭")
+    except Exception as e:
+        print(f"[http] HTTP客户端关闭异常: {e}")
+
 
 # ── 路由挂载（统一前缀 /api/v1）──
 API = "/api/v1"
@@ -276,6 +313,9 @@ app.include_router(acquire_client_router, prefix=API)
 app.include_router(admin_router, prefix=API)
 app.include_router(algorithm_admin_router, prefix=API)
 app.include_router(ai_config_router, prefix=API)
+app.include_router(greeting_router, prefix=API)
+app.include_router(chat_messages_router, prefix=API)
+app.include_router(realtime_router, prefix=API)
 
 @app.get(f"{API}/device")
 def device_info(request: Request):
@@ -292,42 +332,135 @@ def health():
     return ok({"env": settings.RIGENG_ENV, "version": __version__, "status": "up"})
 
 
+# ── UA 设备分流（本地开发用；生产由 Nginx 处理） ──
+_DEV_DEVICE_REDIRECT = """\
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>日耕</title></head>
+<body>
+<script>
+(function(){{
+  var ua = navigator.userAgent || '';
+  var isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|webOS/i.test(ua);
+  var port = isMobile ? '{mobile_port}' : '{pc_port}';
+  var path = location.pathname + location.search + location.hash;
+  location.replace('http://127.0.0.1:' + port + path);
+}})();
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+def dev_root_redirect(request: Request):
+    """本地开发：UA 检测后重定向到对应端口的 Vite 开发服务器。
+    生产环境此路由不会被命中（Nginx 直接 serve 静态文件）。
+    """
+    if settings.is_prod:
+        return ok({"status": "up", "version": __version__})
+
+    ua = request.headers.get("user-agent", "")
+    import re
+    is_mobile = bool(re.search(r"Mobile|Android|iPhone|iPad|iPod|BlackBerry|webOS", ua, re.IGNORECASE))
+    html = _DEV_DEVICE_REDIRECT.format(
+        mobile_port="5182",
+        pc_port="5181",
+    )
+    return Response(content=html, media_type="text/html; charset=utf-8")
+
+
 # ═══════════════════════════════════════════════
 # APK 版本检查（APP自主更新）
+#
+# 版本数据统一从 version.json 读取（单一来源）
+#   - 后端: backend/app/version.json（本文件同级目录）
+#   - 前端静态: mobile/dist/mobile/version.json（nginx 提供）
+# 部署脚本同步写入两个文件，消除手动同步硬编码的风险。
 # ═══════════════════════════════════════════════
-_LATEST_APK = {
-    "apk_version": "0.3.1",
-    "apk_version_code": 3,
-    "apk_url": "http://47.103.197.189/日耕-latest.apk",
-    "h5_version": "0.3.1",
-    "h5_build_time": "2026-07-11",
-    "release_notes": "多模型接入:豆包Seed2.0Pro/通义千问Qwen3.7/KimiK2.5/DeepSeekV4/通义听悟ASR/通义TTS-HD/智谱GLM4.5",
-    "min_apk_version_code": 1,
+
+_VERSION_PATH = os.path.join(os.path.dirname(__file__), "version.json")
+
+_DEFAULT_VERSION = {
+    "apk_version": "0.0.0",
+    "apk_version_code": 0,
+    "apk_url": "https://rigeng365.com/rigeng-latest.apk",
+    "sha256": "",
+    "h5_version": "0.0.0",
+    "h5_build_time": "",
+    "release_notes": "",
+    "min_apk_version_code": 0,
 }
 
 
+def _load_version() -> dict:
+    """从 version.json 加载版本数据。文件缺失时返回默认值。"""
+    try:
+        with open(_VERSION_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return dict(_DEFAULT_VERSION)
+
+
+# 模块加载时读取，后续通过文件 mtime 自动热加载（无需重启容器）
+_LATEST_APK = _load_version()
+_LATEST_APK_MTIME: float = 0.0  # version.json 最后修改时间，0 表示首次需强刷
+
+
+def _get_version() -> dict:
+    """获取最新版本数据。每次请求检测 version.json 的 mtime，
+    若文件被部署脚本更新则自动热加载，无需重启 Docker 容器。"""
+    global _LATEST_APK, _LATEST_APK_MTIME
+    try:
+        mtime = os.path.getmtime(_VERSION_PATH)
+    except OSError:
+        mtime = 0.0
+    if mtime > _LATEST_APK_MTIME:
+        _LATEST_APK = _load_version()
+        _LATEST_APK_MTIME = mtime
+    return _LATEST_APK
+
+
+# 版本检查接口速率限制: 每IP每分钟最多30次（防DDoS放大）
+# 使用工厂函数包装，避免 FastAPI 0.115 对类实例 __call__ 的依赖解析问题
+def _make_rate_limiter(max_requests: int = 30, window: int = 60, key_prefix: str = "global"):
+    """创建速率限制器依赖（工厂函数 → 普通 async 函数，FastAPI 可正确解析）。"""
+    limiter = RateLimiter(max_requests=max_requests, window=window, key_prefix=key_prefix)
+
+    async def _check_rate(request: Request):
+        return await limiter(request)
+
+    return _check_rate
+
+
+_version_rate_limit = _make_rate_limiter(max_requests=30, window=60, key_prefix="ver")
+
+
 @app.get(f"{API}/version")
-def get_version():
+def get_version(_rate: None = Depends(_version_rate_limit)):
     """获取最新版本信息。"""
-    return ok(_LATEST_APK)
+    return ok(_get_version())
 
 
 @app.get(f"{API}/version/check")
-def check_version(apk_version_code: int = 0):
+def check_version(apk_version_code: int = 0, _rate: None = Depends(_version_rate_limit)):
     """检查 APK 是否需要更新。"""
-    needs_update = apk_version_code > 0 and apk_version_code < _LATEST_APK["apk_version_code"]
-    is_critical = apk_version_code > 0 and apk_version_code < _LATEST_APK["min_apk_version_code"]
+    latest = _get_version()
+    needs_update = apk_version_code > 0 and apk_version_code < latest["apk_version_code"]
+    is_critical = apk_version_code > 0 and apk_version_code < latest["min_apk_version_code"]
 
     return ok({
         "needs_update": needs_update,
         "update": {
             "current_version": str(apk_version_code),
-            "latest_version": _LATEST_APK["apk_version"],
-            "download_url": _LATEST_APK["apk_url"],
-            "release_notes": _LATEST_APK["release_notes"],
+            "latest_version": latest["apk_version"],
+            "download_url": latest["apk_url"],
+            "release_notes": latest["release_notes"],
             "is_critical": is_critical,
+            "sha256": latest.get("sha256", ""),
         } if needs_update else None,
-        "server_version": _LATEST_APK,
+        "server_version": latest,
     })
 
 

@@ -3,6 +3,7 @@
 核心能力：人设注入(所有LLM调用前) → 语气调性控制 → 称呼规范 → 情感温度自适应
 
 三层Prompt叠加:
+  Layer 0: 日期锚定 + 用户称呼（强制注入，所有模块共用，不可变）
   Layer 1: 核心人设(所有模块共用，不可变)
   Layer 2: 模块场景适配
   Layer 3: 用户状态感知
@@ -11,6 +12,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 # ═══════════════════════════════════════════════
@@ -33,14 +35,45 @@ MODULE_TONE_PROFILES: dict[str, dict[str, float]] = {
 }
 
 # ═══════════════════════════════════════════════
+# Layer 0: 日期锚定 + 用户称呼（强制注入，实时生成）
+# ═══════════════════════════════════════════════
+
+# 星期中文映射
+_WEEKDAY_NAMES = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+
+def get_date_anchor() -> str:
+    """实时生成日期锚定字符串（不走缓存）。
+
+    Returns:
+        "2026年7月17日 (星期四)"
+    """
+    now = datetime.now()
+    weekday = _WEEKDAY_NAMES[now.weekday()]
+    return f"{now.year}年{now.month}月{now.day}日 ({weekday})"
+
+
+def _build_anchor_block(user_title: str = "先生") -> str:
+    """构建 Layer 0: 锚定信息块。
+
+    Args:
+        user_title: 用户称呼，从 User.settings_json.title 读取，默认"先生"
+    """
+    date_str = get_date_anchor()
+    return f"""【锚定信息】
+今天是 {date_str}
+用户称呼：{user_title}"""
+
+
+# ═══════════════════════════════════════════════
 # Layer 1: 核心人设（所有模块共用，不可变）
 # ═══════════════════════════════════════════════
-_CORE_PERSONA = """你是"小耕"，日耕平台的智能职场成长伙伴。
+_CORE_PERSONA_TEMPLATE = """你是"小耕"，日耕平台的智能职场成长伙伴。
 
 【身份】：
 - 你是一个像懂HR的闺蜜姐姐一样的陪伴者
 - 你的风格：国风质感、温润治愈、专业笃定、亲切随和
-- 你称呼用户永远用「姐」，自称「小耕」
+- 你称呼用户永远用「{user_title}」，自称「小耕」
 
 【绝对禁忌】：
 - 禁止命令、指责、抱怨、敷衍、说教
@@ -64,6 +97,11 @@ _CORE_PERSONA = """你是"小耕"，日耕平台的智能职场成长伙伴。
 - 用户情绪正常时：保持温润专业
 - 用户情绪低落时：更温柔，更耐心，更多共情
 - 绝不：在用户低落时强行鼓励、假大空安慰"""
+
+
+def _get_core_persona(user_title: str = "先生") -> str:
+    """获取核心人设（注入用户称呼）。"""
+    return _CORE_PERSONA_TEMPLATE.format(user_title=user_title)
 
 # ═══════════════════════════════════════════════
 # Layer 2: 模块场景适配
@@ -172,21 +210,26 @@ def build_persona_prompt(
     module: str = "general",
     user: dict[str, Any] | None = None,
     emotion_state: str = "neutral",
+    user_title: str = "先生",
 ) -> str:
-    """构建三层叠加的system prompt。
+    """构建四层叠加的system prompt。
 
     Args:
         module: 模块key（如 morning_plan, smart_qa, emotion_treehole 等）
         user: 用户信息字典，含 stage, preference_vector 等字段
         emotion_state: 用户情绪状态 (positive/neutral/low/anxious)
+        user_title: 用户称呼，从 User.settings_json.title 读取，默认"先生"
 
     Returns:
         完整的 system prompt 字符串
     """
     parts: list[str] = []
 
-    # Layer 1: 核心人设（不可变）
-    parts.append(_CORE_PERSONA)
+    # Layer 0: 日期锚定 + 用户称呼（强制注入，所有模块最优先）
+    parts.append(_build_anchor_block(user_title))
+
+    # Layer 1: 核心人设（不可变，参数化称呼）
+    parts.append(_get_core_persona(user_title))
 
     # Layer 2: 模块场景适配
     scene_prompt = _MODULE_SCENE_PROMPTS.get(module, _MODULE_SCENE_PROMPTS["general"])
@@ -289,9 +332,10 @@ def get_module_system_prompt(
     module: str = "general",
     user: dict[str, Any] | None = None,
     emotion_state: str = "neutral",
+    user_title: str = "先生",
 ) -> str:
     """便捷方法：获取指定模块的完整系统提示词。
 
     等同于 build_persona_prompt() 的快捷入口。
     """
-    return build_persona_prompt(module=module, user=user, emotion_state=emotion_state)
+    return build_persona_prompt(module=module, user=user, emotion_state=emotion_state, user_title=user_title)

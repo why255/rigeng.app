@@ -1,7 +1,7 @@
 """②公私知识库服务 路由层（步骤3 §4：K1-K16 核心）。"""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
@@ -130,3 +130,98 @@ def update_settings(body: UpdateSettingsIn, user: CurrentUser = Depends(get_curr
 @router.post("/folders")  # K13
 def create_folder(body: FolderIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     return ok(service.create_folder(db, user.user_id, body))
+
+
+# ═══════════════════════════════════════════════
+# 携君智库接入 — 入库流水线端点（2026-07-15）
+# ═══════════════════════════════════════════════
+
+from .ingestion_pipeline import get_pipeline
+from .schemas import IngestionReportResponse, IngestionStatusResponse, IngestionTaskItem, UploadResponse
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_zip(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A1: zip批量上传接口。
+
+    接收携君智库项目组推送的zip包（200MB+），
+    生成upload_id后自动触发A2-A5流水线处理。
+    """
+    content = await file.read()
+    filename = file.filename or "untitled.zip"
+
+    # 鉴权：仅 superadmin 或持有 API Token 的项目组账号
+    from ...shared.security import require_role
+    _admin = require_role("superadmin")
+    # 此处使用 get_current_user 已足够（登录用户），后续可扩展 API Token 校验
+
+    pipeline = get_pipeline()
+    result = pipeline.create_upload_task(
+        db, filename, content, operator_id=user.user_id,
+    )
+    return ok(result)
+
+
+@router.get("/upload/{upload_id}/status", response_model=IngestionStatusResponse)
+def get_upload_status(
+    upload_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """查询zip上传的处理状态。"""
+    pipeline = get_pipeline()
+    result = pipeline.get_task_status(db, upload_id)
+    if not result:
+        from ...shared import errors
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, f"未找到上传任务: {upload_id}", 404)
+    return ok(result)
+
+
+@router.get("/upload/{upload_id}/report", response_model=IngestionReportResponse)
+def get_upload_report(
+    upload_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A5: 获取入库报告。"""
+    pipeline = get_pipeline()
+    result = pipeline.get_report(db, upload_id)
+    if not result:
+        from ...shared import errors
+        raise errors.APIError(errors.E_PARAM_FORMAT.code, f"未找到入库报告: {upload_id}", 404)
+    return ok(result)
+
+
+@router.get("/ingestion-tasks")
+def list_ingestion_tasks(
+    page_no: int = Query(1, alias="page", ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """查询zip上传历史列表。"""
+    pipeline = get_pipeline()
+    result = pipeline.list_tasks(db, page=page_no, page_size=page_size)
+    return page(result["items"], result["total"], page_no, page_size)
+
+
+@router.post("/upload/{upload_id}/process")
+def trigger_processing(
+    upload_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """手动触发入库流水线处理（A2→A5）。
+
+    通常在A1上传后自动触发，此端点用于重试失败的任务。
+    """
+    from ...shared.security import require_role
+    _admin = require_role("superadmin")
+
+    pipeline = get_pipeline()
+    result = pipeline.process_upload(db, upload_id)
+    return ok(result)

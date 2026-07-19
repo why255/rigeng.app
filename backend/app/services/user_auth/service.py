@@ -5,15 +5,16 @@
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...shared import errors
 from ...shared.config import settings
 from ...shared.database import utcnow
 from ...shared.models.analytics import SmsSendLog
+from ...shared.models.knowledge import Document
 from ...shared.models.user import (
     AuthorizationGrant, CARE_MODES, ContributionBalance, TeacherAssignment,
     User, UserDisclaimer, VipMembership, VOICE_TYPES,
@@ -200,6 +201,25 @@ def get_me(db: Session, user_id: str) -> dict:
         raise errors.E_USER_NOT_FOUND
     vip = db.scalar(select(VipMembership).where(VipMembership.user_id == user_id))
     bal = db.scalar(select(ContributionBalance).where(ContributionBalance.user_id == user_id))
+
+    # 日耕天数：从注册日到今天（注册当天算第1天）
+    farming_days = 1
+    if user.created_at:
+        delta = date.today() - user.created_at.date()
+        farming_days = max(1, delta.days + 1)
+
+    # 累计完成计划数（永久计数器，每次完成一个计划项 +1）
+    completed_plans = user.completed_plans_count or 0
+
+    # 沉淀文档数（不含已回收/软删除）
+    total_docs = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.owner_user_id == user_id,
+            Document.status != "recycled",
+            Document.deleted_at.is_(None),
+        )
+    ) or 0
+
     return {
         "user_id": user.id, "phone": user.phone, "nickname": user.nickname,
         "gender": user.gender, "addressing": user.addressing,
@@ -211,7 +231,20 @@ def get_me(db: Session, user_id: str) -> dict:
         "preferred_model": user.preferred_model,
         "vip": _vip_dict(vip), "trial": _trial_dict(vip),
         "contribution": {"balance": bal.balance if bal else 0, "level": bal.level if bal else "青铜"},
+        "farming_days": farming_days,
+        "completed_plans": completed_plans,
+        "total_docs": total_docs,
     }
+
+
+def increment_completed_plans(db: Session, user_id: str) -> dict:
+    """完成计划计数 +1（永久累加）。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    user.completed_plans_count = (user.completed_plans_count or 0) + 1
+    db.commit()
+    return {"completed_plans": user.completed_plans_count}
 
 
 def update_profile(db: Session, user_id: str, *, nickname, gender, voice_type, addressing, care_mode) -> dict:
@@ -256,6 +289,36 @@ def change_password(db: Session, user_id: str, old_password: str, new_password: 
     user.password_hash = hash_password(new_password)
     db.commit()
     return {"message": "密码已更新"}
+
+
+# ── 设置同步（Phase 5 全模块数据互通）──
+
+def get_user_settings(db: Session, user_id: str) -> dict:
+    """读取用户全部跨设备设置。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+    return {
+        "user_id": user_id,
+        "settings": user.settings_json or {},
+    }
+
+
+def patch_user_settings(db: Session, user_id: str, updates: dict) -> dict:
+    """合并式更新用户设置。仅更新传入的 key，保留未传入的 key。"""
+    user = db.get(User, user_id)
+    if not user:
+        raise errors.E_USER_NOT_FOUND
+
+    current = dict(user.settings_json or {})
+    current.update(updates)
+    user.settings_json = current
+    db.commit()
+
+    return {
+        "user_id": user_id,
+        "settings": current,
+    }
 
 
 def _vip_dict(vip: VipMembership | None) -> dict:

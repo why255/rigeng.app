@@ -2,6 +2,7 @@
 
 API 端点：
   POST   /qa/ask                      — 发起提问（三源检索 + AI答案生成 + 追问澄清）
+  POST   /qa/chat                     — SSE流式对话
   GET    /qa/conversations/{id}       — 获取对话历史
   DELETE /qa/conversations/{id}       — 删除对话
   POST   /qa/answers/{id}/feedback    — 纠错反馈（防幻觉L3）
@@ -12,21 +13,27 @@ API 端点：
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ...shared.database import get_db
 from ...shared.response import ok
 from ...shared.security import CurrentUser, get_current_user
+from ...shared.sse_utils import sse_event, sse_done, sse_error, sse_response
 from . import service
 from .schemas import (
     ArchiveRequest,
     AskRequest,
     FeedbackRequest,
     HelpfulRequest,
+    QaChatIn,
 )
 
 router = APIRouter(tags=["智能问答"], prefix="/qa")
+logger = logging.getLogger("smart_qa_router")
 
 
 # ═══════════════════════════════════════════════
@@ -56,6 +63,93 @@ def ask(
         source_engines=source_engines_dict,
     )
     return ok(result)
+
+
+# ═══════════════════════════════════════════════
+# SSE 流式对话
+# ═══════════════════════════════════════════════
+
+@router.post("/chat")
+def qa_chat(
+    body: QaChatIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    stream: bool = Query(default=True, description="是否使用 SSE 流式输出"),
+    fast_mode: bool = Query(default=False, description="Phase 3: 快速模型模式"),
+):
+    """智能问答 SSE 流式对话。
+
+    - stream=true（默认）：SSE 流式输出，逐字返回 AI 回复
+    - stream=false：传统 JSON 响应（委托给 /qa/ask）
+    """
+    if not stream:
+        # 向后兼容：委托给 /qa/ask
+        result = service.ask_question(
+            db=db,
+            user_id=user.user_id,
+            question=body.message,
+            conversation_id=body.conversation_id,
+        )
+        return ok(result)
+
+    # SSE 流式模式
+    from ...engines.persona import build_persona_prompt
+    from ...engines.llm_orchestrator import llm_generate_stream_with_orchestration
+
+    def generate_sse():
+        try:
+            # 构建对话历史文本
+            context_text = ""
+            if body.context:
+                recent = body.context[-12:]
+                parts = []
+                for m in recent:
+                    role_label = "用户" if m.get("role") == "user" else "小耕"
+                    text = (m.get("text") or m.get("content") or "").strip()
+                    if text:
+                        parts.append(f"{role_label}：{text}")
+                context_text = "\n".join(parts)
+
+            # 构建 prompt
+            if not body.message.strip():
+                combined_prompt = (
+                    "用户打开了智能问答，还没有提问。\n"
+                    "请以温暖专业的方式欢迎用户，告诉用户可以问HR相关问题。\n"
+                    "2句话即可。"
+                )
+            else:
+                combined_prompt = (
+                    f"【对话历史】：\n{context_text}\n\n"
+                    f"【用户提问】：{body.message}\n\n"
+                    f"请以小耕的身份（专业严谨、温暖简洁）回答。\n"
+                    f"要求：\n"
+                    f"- 基于知识库给出专业、实用的HR建议\n"
+                    f"- 如果问题不够清晰，温和追问澄清\n"
+                    f"- 不知道就说不知道，绝不编造\n"
+                    f"- 四要素回答：操作要点+注意事项+沟通话术+达成标准\n"
+                    f"- 3-5句话为宜"
+                )
+
+            system_prompt = build_persona_prompt(module="smart_qa")
+
+            tokens = llm_generate_stream_with_orchestration(
+                prompt=combined_prompt,
+                system_prompt=system_prompt,
+                module="smart_qa",
+                temperature=0.5,
+                user_id=user.user_id,
+                db=db,
+                fast_mode=fast_mode,
+            )
+            for token in tokens:
+                yield sse_event(token, "content")
+            yield sse_done({"model_used": "stream"})
+
+        except Exception as e:
+            logger.exception("智能问答SSE流式异常")
+            yield sse_error("小耕正在努力思考中，稍等一下哦～")
+
+    return sse_response(generate_sse())
 
 
 # ═══════════════════════════════════════════════

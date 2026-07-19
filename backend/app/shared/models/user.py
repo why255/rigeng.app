@@ -30,6 +30,12 @@ class User(TimestampMixin, Base):
     trial_start_at: Mapped[datetime | None] = mapped_column(DateTime)
     preferred_model: Mapped[str | None] = mapped_column(String(64))
     push_timezone: Mapped[str] = mapped_column(String(32), default="Asia/Shanghai")
+    completed_plans_count: Mapped[int] = mapped_column(Integer, default=0)
+    settings_json: Mapped[dict | None] = mapped_column(PortableJSON())  # 跨设备设置同步
+    # Tier 2: 用户画像与活跃追踪
+    user_profile: Mapped[dict | None] = mapped_column(PortableJSON())  # 结构化画像（工作习惯/偏好/情感模式）
+    last_active_module: Mapped[str | None] = mapped_column(String(32))  # 上次活跃模块
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime)  # 上次活跃时间
     status: Mapped[str] = mapped_column(String(16), default="active")
 
 

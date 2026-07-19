@@ -19,6 +19,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from ...shared.config import settings
 from ...shared.errors import (
     APIError,
@@ -106,12 +108,12 @@ def _tencent_sign(service: str, action: str, payload: str, timestamp: int) -> di
 
 
 def asr_online(audio_base64: str, audio_format: str = "wav", sample_rate: int = 16000, engine: str | None = None) -> dict[str, Any]:
-    """A1 在线语音转文字（腾讯云 ASR）。
+    """A1 在线语音转文字（腾讯云 ASR，P1-3.1: 使用 httpx 连接池）。
 
     Returns:
         {text, confidence, duration_ms}
     """
-    import urllib.request
+    from ...shared.http_client import get_http_client
 
     engine = engine or settings.TENCENT_ASR_ENGINE
     timestamp = int(time.time())
@@ -133,13 +135,10 @@ def asr_online(audio_base64: str, audio_format: str = "wav", sample_rate: int = 
     headers = _tencent_sign(TENCENT_ASR_ENDPOINT, "SentenceRecognition", payload, timestamp)
 
     try:
-        req = urllib.request.Request(
-            f"https://{TENCENT_ASR_ENDPOINT}",
-            data=payload.encode("utf-8"),
-            headers=headers,
-        )
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("tencent_asr", base_url=f"https://{TENCENT_ASR_ENDPOINT}", http2=True)
+        resp = client.post("/", content=payload.encode("utf-8"), headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         if "Error" in result.get("Response", {}):
             err = result["Response"]["Error"]
@@ -155,6 +154,9 @@ def asr_online(audio_base64: str, audio_format: str = "wav", sample_rate: int = 
 
     except APIError:
         raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("腾讯云ASR HTTP错误(status=%d)", e.response.status_code)
+        raise APIError(50001, f"语音识别服务异常", 503)
     except Exception as e:
         logger.exception("腾讯云ASR调用异常")
         raise APIError(50001, f"语音识别服务异常: {str(e)}", 503)
@@ -411,11 +413,11 @@ def llm_generate_anthropic(prompt: str, system_prompt: str | None = None,
                            context: list[dict[str, str]] | None = None,
                            model: str | None = None, temperature: float | None = None,
                            max_tokens: int | None = None) -> dict[str, Any]:
-    """A3/A4 LLM生成回答（Anthropic Claude）。
+    """A3/A4 LLM生成回答（Anthropic Claude，P1-3.1: 使用 httpx 连接池）。
 
     使用 Anthropic Messages API，支持 system prompt 和多轮对话上下文。
     """
-    import urllib.request
+    from ...shared.http_client import get_http_client
 
     if not settings.ANTHROPIC_API_KEY:
         raise APIError(50020, "Anthropic API密钥未配置", 503)
@@ -433,13 +435,13 @@ def llm_generate_anthropic(prompt: str, system_prompt: str | None = None,
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": prompt})
 
-    body = json.dumps({
+    body = {
         "model": model,
         "max_tokens": max_tokens,
         "temperature": temperature,
         "system": system_prompt or "",
         "messages": messages,
-    }).encode("utf-8")
+    }
 
     headers = {
         "x-api-key": settings.ANTHROPIC_API_KEY,
@@ -448,9 +450,10 @@ def llm_generate_anthropic(prompt: str, system_prompt: str | None = None,
     }
 
     try:
-        req = urllib.request.Request(ANTHROPIC_ENDPOINT, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("anthropic", base_url="https://api.anthropic.com", http2=True)
+        resp = client.post("/v1/messages", json=body, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         if "content" not in result:
             raise APIError(50020, "Claude返回为空", 502)
@@ -475,6 +478,9 @@ def llm_generate_anthropic(prompt: str, system_prompt: str | None = None,
 
     except APIError:
         raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("Anthropic Claude HTTP错误(status=%d)", e.response.status_code)
+        raise E_LLM_TIMEOUT
     except Exception as e:
         logger.exception("Anthropic Claude调用异常")
         raise E_LLM_TIMEOUT
@@ -595,12 +601,10 @@ def _llm_generate_zhipu(prompt: str, system_prompt: str | None = None,
                          context: list[dict[str, str]] | None = None,
                          model: str | None = None, temperature: float | None = None,
                          max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
-    """智谱AI GLM 原始实现（内部函数）。
+    """智谱AI GLM 原始实现（内部函数，P1-3.1: 委托给 _call_zhipu_api）。
 
     支持余额不足时自动降级到备用模型列表。
     """
-    import urllib.request
-
     if not settings.ZHIPUAI_API_KEY:
         raise APIError(50020, "智谱AI API密钥未配置", 503)
 
@@ -651,8 +655,8 @@ def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
                      context: list[dict[str, str]] | None = None,
                      model: str | None = None, temperature: float | None = None,
                      max_tokens: int | None = None, stream: bool = False) -> dict[str, Any]:
-    """单次调用智谱AI API。余额不足时抛 _BalanceInsufficientError。"""
-    import urllib.request
+    """单次调用智谱AI API（P1-3.1: 使用 httpx 连接池）。余额不足时抛 _BalanceInsufficientError。"""
+    from ...shared.http_client import get_http_client
 
     model = model or settings.ZHIPUAI_MODEL
     messages: list[dict[str, str]] = []
@@ -662,13 +666,13 @@ def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
         messages.extend(context)
     messages.append({"role": "user", "content": prompt})
 
-    body = json.dumps({
+    body = {
         "model": model,
         "messages": messages,
         "temperature": temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE,
         "max_tokens": max_tokens or settings.ZHIPUAI_MAX_TOKENS,
         "stream": stream,
-    }).encode("utf-8")
+    }
 
     headers = {
         "Authorization": f"Bearer {settings.ZHIPUAI_API_KEY}",
@@ -676,11 +680,12 @@ def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
     }
 
     try:
-        req = urllib.request.Request(ZHIPUAI_ENDPOINT, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
+        client = get_http_client("zhipu", base_url="https://open.bigmodel.cn/api/paas/v4", http2=True)
+        resp = client.post("/chat/completions", json=body, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+    except httpx.HTTPStatusError as e:
+        err_body = e.response.text
         try:
             err_data = json.loads(err_body)
             err_code = str(err_data.get("error", {}).get("code", ""))
@@ -692,7 +697,7 @@ def _call_zhipu_api(prompt: str, system_prompt: str | None = None,
         except (_BalanceInsufficientError, APIError):
             raise
         except Exception:
-            raise APIError(50020, f"大模型HTTP错误({e.code})", 502)
+            raise APIError(50020, f"大模型HTTP错误({e.response.status_code})", 502)
 
     if "choices" not in result or not result["choices"]:
         raise APIError(50020, "大模型返回为空", 502)
@@ -728,11 +733,11 @@ def _openai_compatible_generate(
     max_tokens: int = 4096,
     provider_name: str = "openai_compatible",
 ) -> dict[str, Any]:
-    """通用 OpenAI 兼容接口调用。
+    """通用 OpenAI 兼容接口调用（P1-3.1: 使用 httpx 连接池）。
 
     适用于: 火山引擎(豆包)、阿里云DashScope(通义千问)、月之暗面(Kimi)、DeepSeek
     """
-    import urllib.request
+    from ...shared.http_client import get_http_client
 
     if not api_key:
         raise APIError(50020, f"{provider_name} API密钥未配置", 503)
@@ -749,13 +754,12 @@ def _openai_compatible_generate(
                 messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": prompt})
 
-    endpoint = f"{base_url.rstrip('/')}/chat/completions"
-    body = json.dumps({
+    body = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-    }).encode("utf-8")
+    }
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -763,9 +767,10 @@ def _openai_compatible_generate(
     }
 
     try:
-        req = urllib.request.Request(endpoint, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client(provider_name, base_url=base_url, http2=True)
+        resp = client.post("/chat/completions", json=body, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         if "choices" not in result or not result["choices"]:
             raise APIError(50020, f"{provider_name}返回为空", 502)
@@ -784,9 +789,302 @@ def _openai_compatible_generate(
 
     except APIError:
         raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("%s HTTP错误(status=%d)", provider_name, e.response.status_code)
+        raise E_LLM_TIMEOUT
     except Exception as e:
         logger.exception("%s调用异常", provider_name)
         raise E_LLM_TIMEOUT
+
+
+# ═══════════════════════════════════════════════
+# 流式生成（SSE token-level streaming）
+# ═══════════════════════════════════════════════
+
+def _openai_compatible_generate_stream(
+    prompt: str,
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    provider_name: str = "openai_compatible",
+):
+    """通用 OpenAI 兼容流式接口（P1-3.1: 使用 httpx 连接池）。
+
+    逐个 yield token 字符串。适用于所有 OpenAI-compatible 提供商。
+    """
+    from ...shared.http_client import get_http_client
+
+    if not api_key:
+        raise APIError(50020, f"{provider_name} API密钥未配置", 503)
+
+    messages: list[dict[str, Any]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    if context:
+        for msg in context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role in ("user", "assistant", "system"):
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    body = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        client = get_http_client(provider_name, base_url=base_url, http2=True)
+        with client.stream("POST", "/chat/completions", json=body, headers=headers) as resp:
+            resp.raise_for_status()
+            model_used = model
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]  # 去掉 "data: " 前缀
+                if data_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+                if "model" in chunk:
+                    model_used = chunk["model"]
+                choices = chunk.get("choices", [])
+                if choices:
+                    delta = choices[0].get("delta", {})
+                    content = delta.get("content", "")
+                    # 豆包推理模型会先输出 reasoning_content（内部思考，不展示），
+                    # 再输出 content（实际回复）。只 yield content，跳过推理过程。
+                    if content:
+                        yield content
+    except APIError:
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("%s流式HTTP错误(status=%d)", provider_name, e.response.status_code)
+        raise E_LLM_TIMEOUT
+    except Exception as e:
+        logger.exception("%s流式调用异常", provider_name)
+        raise E_LLM_TIMEOUT
+
+
+def _anthropic_generate_stream(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+):
+    """Anthropic Claude 流式生成器（P1-3.1: 使用 httpx 连接池）。"""
+    from ...shared.http_client import get_http_client
+
+    if not settings.ANTHROPIC_API_KEY:
+        raise APIError(50020, "Anthropic API密钥未配置", 503)
+
+    model = model or settings.ANTHROPIC_MODEL
+    temperature = temperature if temperature is not None else settings.ANTHROPIC_TEMPERATURE
+    max_tokens = max_tokens or settings.ANTHROPIC_MAX_TOKENS
+
+    messages: list[dict[str, Any]] = []
+    if context:
+        for msg in context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    body = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "system": system_prompt or "",
+        "messages": messages,
+        "stream": True,
+    }
+
+    headers = {
+        "x-api-key": settings.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        client = get_http_client("anthropic", base_url="https://api.anthropic.com", http2=True)
+        with client.stream("POST", "/v1/messages", json=body, headers=headers) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                try:
+                    event = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+                event_type = event.get("type", "")
+                if event_type == "content_block_delta":
+                    delta = event.get("delta", {})
+                    text = delta.get("text", "")
+                    if text:
+                        yield text
+                elif event_type == "message_stop":
+                    break
+    except APIError:
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("Anthropic流式HTTP错误(status=%d)", e.response.status_code)
+        raise E_LLM_TIMEOUT
+    except Exception as e:
+        logger.exception("Anthropic流式调用异常")
+        raise E_LLM_TIMEOUT
+
+
+def llm_generate_stream(
+    prompt: str,
+    system_prompt: str | None = None,
+    context: list[dict[str, str]] | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    provider: str | None = None,
+    user_id: str | None = None,
+    db=None,
+    module: str | None = None,
+):
+    """LLM 流式生成统一入口（生成器）。
+
+    按 provider 路由到对应流式实现，逐个 yield token 字符串。
+    用法:
+        for token in llm_generate_stream(prompt="你好", provider="volcano"):
+            yield token
+    """
+    # 管理员后台模块→模型绑定
+    if module and model is None and provider is None and db is not None:
+        try:
+            from ..engines.llm_orchestrator import select_model
+            model, provider = select_model(module, db=db)
+        except Exception:
+            pass
+
+    # 用户模型偏好
+    if model is None and user_id and db is not None:
+        try:
+            from ..user_auth.service import get_preferred_model
+            pref = get_preferred_model(db, user_id)
+            model = pref["model"]
+        except Exception:
+            pass
+
+    provider = provider or settings.LLM_PROVIDER
+
+    if provider == "volcano":
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt, base_url=settings.VOLCANO_BASE_URL,
+            api_key=settings.VOLCANO_API_KEY,
+            model=model or settings.VOLCANO_CHAT_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.VOLCANO_TEMPERATURE,
+            max_tokens=max_tokens or settings.VOLCANO_MAX_TOKENS,
+            provider_name="volcano",
+        )
+    elif provider == "dashscope":
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt, base_url=settings.DASHSCOPE_BASE_URL,
+            api_key=settings.DASHSCOPE_API_KEY,
+            model=model or settings.DASHSCOPE_CHAT_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.DASHSCOPE_TEMPERATURE,
+            max_tokens=max_tokens or settings.DASHSCOPE_MAX_TOKENS,
+            provider_name="dashscope",
+        )
+    elif provider == "kimi":
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt, base_url=settings.KIMI_BASE_URL,
+            api_key=settings.KIMI_API_KEY,
+            model=model or settings.KIMI_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.KIMI_TEMPERATURE,
+            max_tokens=max_tokens or settings.KIMI_MAX_TOKENS,
+            provider_name="kimi",
+        )
+    elif provider == "deepseek":
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt, base_url=settings.DEEPSEEK_BASE_URL,
+            api_key=settings.DEEPSEEK_API_KEY,
+            model=model or settings.DEEPSEEK_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.DEEPSEEK_TEMPERATURE,
+            max_tokens=max_tokens or settings.DEEPSEEK_MAX_TOKENS,
+            provider_name="deepseek",
+        )
+    elif provider == "zhipu":
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt, base_url="https://open.bigmodel.cn/api/paas/v4",
+            api_key=settings.ZHIPUAI_API_KEY,
+            model=model or settings.ZHIPUAI_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.ZHIPUAI_TEMPERATURE,
+            max_tokens=max_tokens or settings.ZHIPUAI_MAX_TOKENS,
+            provider_name="zhipu",
+        )
+    elif provider == "anthropic":
+        yield from _anthropic_generate_stream(
+            prompt=prompt, system_prompt=system_prompt, context=context,
+            model=model, temperature=temperature, max_tokens=max_tokens,
+        )
+    elif provider == "hunyuan":
+        # 混元也支持 OpenAI 兼容流式
+        yield from _openai_compatible_generate_stream(
+            prompt=prompt,
+            base_url="https://hunyuan.tencentcloudapi.com",
+            api_key=settings.HUNYUAN_SECRET_ID or "",
+            model=model or settings.HUNYUAN_MODEL,
+            system_prompt=system_prompt, context=context,
+            temperature=temperature if temperature is not None else settings.HUNYUAN_TEMPERATURE,
+            max_tokens=max_tokens or settings.HUNYUAN_MAX_TOKENS,
+            provider_name="hunyuan",
+        )
+    elif provider == "auto":
+        # auto 模式：依次尝试可用提供商
+        providers = [
+            ("volcano", settings.VOLCANO_API_KEY),
+            ("dashscope", settings.DASHSCOPE_API_KEY),
+            ("anthropic", settings.ANTHROPIC_API_KEY),
+            ("zhipu", settings.ZHIPUAI_API_KEY),
+            ("deepseek", settings.DEEPSEEK_API_KEY),
+            ("kimi", settings.KIMI_API_KEY),
+        ]
+        last_error = None
+        for prov_name, api_key in providers:
+            if api_key:
+                try:
+                    yield from llm_generate_stream(
+                        prompt=prompt, system_prompt=system_prompt,
+                        context=context, model=model,
+                        temperature=temperature, max_tokens=max_tokens,
+                        provider=prov_name, user_id=user_id, db=db,
+                    )
+                    return
+                except Exception as e:
+                    last_error = e
+                    logger.warning("auto流式模式: %s 调用失败，尝试下一个", prov_name)
+                    continue
+        raise APIError(50020, "所有LLM提供商均不可用", 503) from last_error
+    else:
+        raise APIError(50020, f"不支持的LLM提供商: {provider}", 400)
 
 
 # ═══════════════════════════════════════════════
@@ -905,8 +1203,8 @@ def llm_generate_hunyuan(
     temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> dict[str, Any]:
-    """腾讯混元 Hy3 — 智能会议纪要（使用腾讯云API v3签名）。"""
-    import urllib.request
+    """腾讯混元 Hy3 — 智能会议纪要（使用腾讯云API v3签名，P1-3.1: 使用 httpx 连接池）。"""
+    from ...shared.http_client import get_http_client
 
     if not settings.HUNYUAN_SECRET_ID or not settings.HUNYUAN_SECRET_KEY:
         raise APIError(50020, "腾讯混元API密钥未配置（HUNYUAN_SECRET_ID/SECRET_KEY）", 503)
@@ -937,13 +1235,10 @@ def llm_generate_hunyuan(
     headers["X-TC-Version"] = "2023-09-01"
 
     try:
-        req = urllib.request.Request(
-            f"https://{service}",
-            data=payload.encode("utf-8"),
-            headers=headers,
-        )
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("hunyuan", base_url=f"https://{service}", http2=True)
+        resp = client.post("/", content=payload.encode("utf-8"), headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         if "Error" in result.get("Response", {}):
             err = result["Response"]["Error"]
@@ -968,6 +1263,9 @@ def llm_generate_hunyuan(
 
     except APIError:
         raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("腾讯混元HTTP错误(status=%d)", e.response.status_code)
+        raise E_LLM_TIMEOUT
     except Exception as e:
         logger.exception("腾讯混元调用异常")
         raise E_LLM_TIMEOUT
@@ -1001,7 +1299,7 @@ def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int
     Returns:
         {"text": str, "confidence": float, "duration_ms": int, "engine_used": str}
     """
-    import urllib.request
+    from ...shared.http_client import get_http_client
 
     if not settings.DASHSCOPE_API_KEY:
         raise APIError(50001, "DashScope API密钥未配置（DASHSCOPE_API_KEY）", 503)
@@ -1010,14 +1308,20 @@ def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int
     mime_type = "audio/webm" if audio_format == "webm" else "audio/wav"
     data_uri = f"data:{mime_type};base64,{audio_base64}"
 
-    body = json.dumps({
+    body = {
         "model": model,
         "input": {
             "messages": [{
                 "role": "user",
                 "content": [
                     {"audio": data_uri},
-                    {"text": "请直接输出这段语音的转写文本，只输出文本内容，不要添加任何前缀、解释或标点修饰。"},
+                    {"text": (
+                        "请将这段语音转写为文本，严格遵循以下规则：\n"
+                        "1. 只输出转写文本内容，不要添加任何前缀、解释或标点修饰。\n"
+                        "2. 如果音频中只有沉默、呼吸声、环境噪音或无法辨认的声音，请输出空字符串（不要输出\"嗯\"\"啊\"等拟声词）。\n"
+                        "3. 如果音频中有清晰的人声语音，则输出完整的转写文本。\n"
+                        "4. 不要编造或猜测听不清的内容。"
+                    )},
                 ],
             }],
         },
@@ -1025,7 +1329,7 @@ def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int
             "temperature": 0.1,
             "max_tokens": 4096,
         },
-    }).encode("utf-8")
+    }
 
     headers = {
         "Authorization": f"Bearer {settings.DASHSCOPE_API_KEY}",
@@ -1033,9 +1337,10 @@ def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int
     }
 
     try:
-        req = urllib.request.Request(DASHSCOPE_MULTIMODAL_ENDPOINT, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("dashscope_multimodal", base_url=DASHSCOPE_MULTIMODAL_ENDPOINT, http2=True)
+        resp = client.post("/", json=body, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         # 提取文本内容
         choices = result.get("output", {}).get("choices", [])
@@ -1062,6 +1367,9 @@ def asr_qwen_omni(audio_base64: str, audio_format: str = "wav", sample_rate: int
 
     except APIError:
         raise
+    except httpx.HTTPStatusError as e:
+        logger.exception("通义千问ASR HTTP错误(status=%d)", e.response.status_code)
+        raise APIError(50001, f"语音识别服务异常", 503)
     except Exception as e:
         logger.exception("通义千问ASR调用异常")
         raise APIError(50001, f"语音识别服务异常: {str(e)}", 503)
@@ -1281,7 +1589,7 @@ class VoiceInterruptionHandler:
 
 def tts_speak(text: str, emotion_context: str = "neutral", voice: str = "zhitian_emo",
               audio_format: str = "mp3") -> dict:
-    """TTS语音合成 — 小耕说话（阿里云通义TTS-HD — Excel #6）。
+    """TTS语音合成 — 小耕说话（阿里云通义TTS-HD — Excel #6，P1-3.1: 使用 httpx 连接池）。
 
     使用阿里云 DashScope 通义千问 TTS-HD 模型：
     - 小耕专属温柔治愈女声
@@ -1303,7 +1611,7 @@ def tts_speak(text: str, emotion_context: str = "neutral", voice: str = "zhitian
             "speed": float,        # 实际语速
         }
     """
-    import urllib.request
+    from ...shared.http_client import get_http_client
 
     # 情绪→语速映射
     emotion_speed_map = {
@@ -1329,7 +1637,6 @@ def tts_speak(text: str, emotion_context: str = "neutral", voice: str = "zhitian
         }
 
     # 调用阿里云 DashScope TTS API
-    endpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
     body = json.dumps({
         "model": settings.DASHSCOPE_TTS_MODEL,  # qwen-tts-hd
         "input": {
@@ -1355,9 +1662,12 @@ def tts_speak(text: str, emotion_context: str = "neutral", voice: str = "zhitian
     }
 
     try:
-        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("dashscope_tts",
+                                 base_url="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation",
+                                 http2=True)
+        resp = client.post("/generation", content=body, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
 
         output = result.get("output", {})
         audio_url = output.get("audio", {}).get("url", "")
@@ -1405,3 +1715,119 @@ def build_voice_system_prompt(module: str, enable_dialect: bool = True) -> str:
         "遇到明显不通顺的地方，请结合上下文理解用户意图，不要逐字较真。"
     )
     return "\n".join(extras)
+
+
+# ═══════════════════════════════════════════════
+# Phase 3: 增量音频块处理 + 语音流水线
+# ═══════════════════════════════════════════════
+
+# 音频块累积存储（session_id → 累积的 Base64 块列表）
+_chunk_buffers: dict[str, list[str]] = {}
+
+
+def handle_audio_chunk(
+    audio_base64: str,
+    chunk_index: int,
+    is_last: bool,
+    audio_format: str,
+    session_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    """处理增量音频块。
+
+    累积音频块，最后一个块（is_last=true）触发完整 ASR。
+
+    Returns:
+        - 中间块：{"status": "buffering", "chunks_received": N}
+        - 最后块：{"status": "completed", "text": str, "confidence": float}
+    """
+    import uuid as _uuid
+
+    if not session_id:
+        session_id = f"voice_{user_id}_{_uuid.uuid4().hex[:8]}"
+
+    # 累积块
+    if session_id not in _chunk_buffers:
+        _chunk_buffers[session_id] = []
+    _chunk_buffers[session_id].append(audio_base64)
+
+    chunks_received = len(_chunk_buffers[session_id])
+
+    if not is_last:
+        return {
+            "status": "buffering",
+            "session_id": session_id,
+            "chunk_index": chunk_index,
+            "chunks_received": chunks_received,
+        }
+
+    # 最后一块：合并所有 Base64 数据
+    try:
+        import base64 as _b64
+
+        # 合并为完整的 Base64（去除前导 data:xxx;base64, 等前缀）
+        all_chunks = _chunk_buffers.pop(session_id, [])
+        if not all_chunks:
+            return {"status": "completed", "text": "", "confidence": 0, "session_id": session_id}
+
+        # 尝试合并（如果是同一格式的 Base64）
+        combined_b64_parts = []
+        for c in all_chunks:
+            # 去除可能的 data URI 前缀
+            clean = c
+            if "base64," in clean:
+                clean = clean.split("base64,", 1)[1]
+            combined_b64_parts.append(clean)
+
+        combined_b64 = "".join(combined_b64_parts)
+
+        # ASR 识别
+        result = recognize_speech(
+            audio_base64=combined_b64,
+            audio_format=audio_format,
+        )
+        return {
+            "status": "completed",
+            "session_id": session_id,
+            "text": result.get("text", ""),
+            "confidence": result.get("confidence", 0),
+            "chunks_processed": chunks_received,
+        }
+
+    except Exception as e:
+        _chunk_buffers.pop(session_id, None)
+        logger.exception("音频块处理异常")
+        return {
+            "status": "error",
+            "session_id": session_id,
+            "error": str(e),
+        }
+
+
+def pre_warm_llm(keywords: list[str], module: str = "general") -> None:
+    """关键字命中后预热 LLM 提供商（fire-and-forget）。
+
+    通过向 LLM 发送一个极短的空请求来建立连接池，
+    减少实际请求时的冷启动延迟。
+
+    实际效果取决于提供商是否支持 keep-alive 连接池。
+    """
+    if not keywords:
+        return
+
+    logger.info("LLM预热: module=%s keywords=%s", module, keywords[:3])
+
+    try:
+        # 发送一个极短的 warm-up 请求
+        llm_generate(
+            prompt="ping",
+            system_prompt="ok",
+            model=None,
+            temperature=0.1,
+            max_tokens=1,
+            provider=None,
+            module=module,
+        )
+    except Exception:
+        # 预热失败不影响主流程
+        pass

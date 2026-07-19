@@ -57,10 +57,16 @@ class CurrentUser:
 
 
 def get_current_user(request: Request) -> CurrentUser:
+    # 优先从 Authorization header 读取，降级到 query 参数 ?token=xxx
+    # （用于 <audio>/<video> 等浏览器自动发起的请求，无法设置自定义 header）
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise errors.E_UNAUTHENTICATED
-    return CurrentUser(decode_token(auth[7:]))
+    if auth.startswith("Bearer "):
+        return CurrentUser(decode_token(auth[7:]))
+    # 降级：query 参数
+    token = request.query_params.get("token", "")
+    if token:
+        return CurrentUser(decode_token(token))
+    raise errors.E_UNAUTHENTICATED
 
 
 def require_role(*roles: str):

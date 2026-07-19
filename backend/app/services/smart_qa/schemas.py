@@ -138,3 +138,12 @@ class HelpfulResponse(BaseModel):
     """有帮助反馈结果。"""
     answer_id: str
     helpful_count: int = 0
+
+
+# ═══════ 对话聊天 ═══════
+
+class QaChatIn(BaseModel):
+    """智能问答对话请求（SSE流式）。"""
+    message: str = Field(..., min_length=0, max_length=5000)
+    conversation_id: str | None = None
+    context: list[dict[str, Any]] | None = None  # 对话历史 [{role, text}]

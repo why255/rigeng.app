@@ -59,8 +59,8 @@ def _percent_encode(s: str) -> str:
 def _aliyun_call(endpoint: str, action: str, params: dict[str, str],
                  access_key_id: str, access_key_secret: str,
                  version: str = "2016-08-01") -> dict[str, Any]:
-    """阿里云通用API调用。"""
-    import urllib.request
+    """阿里云通用API调用（P1-3.1: 使用 httpx 连接池）。"""
+    from ...shared.http_client import get_http_client
 
     common_params = {
         "Format": "JSON",
@@ -82,13 +82,11 @@ def _aliyun_call(endpoint: str, action: str, params: dict[str, str],
     ).encode("utf-8")
 
     try:
-        req = urllib.request.Request(
-            f"https://{endpoint}",
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        with urllib.request.urlopen(req, timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        client = get_http_client("aliyun_push", base_url=f"https://{endpoint}", http2=True)
+        resp = client.post("/", content=data,
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        resp.raise_for_status()
+        result = resp.json()
 
         if result.get("Code") != "OK":
             logger.error("阿里云推送错误: %s - %s", result.get("Code"), result.get("Message"))

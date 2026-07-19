@@ -62,3 +62,17 @@ class ModelPreferenceIn(BaseModel):
 class PasswordChangeIn(BaseModel):
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=6, max_length=64)
+
+
+# ── 设置同步（Phase 5 全模块数据互通）──
+
+class UserSettingsPatchIn(BaseModel):
+    """合并式更新设置。仅传入要更新的 key。"""
+    settings: dict = Field(default_factory=dict, description="要合并的设置键值对")
+
+
+class UserSettingsResponse(BaseModel):
+    """用户全部跨设备设置。"""
+    user_id: str
+    settings: dict = {}
+

@@ -69,6 +69,25 @@ def stop(
     return ok(result)
 
 
+@router.post("/upload")
+def upload_recording(
+    file: UploadFile = File(...),
+    scene: str = Form(default="面试"),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """上传完整录音文件（PC端使用）。
+
+    PC端不支持实时录音，用户直接上传音频文件（支持 webm/wav/mp3/m4a 等格式）。
+    后端自动完成：保存文件 → 转写 → 萃取 全流程。
+    """
+    audio_data = file.file.read()
+    result = service.upload_recording(
+        db, user.user_id, scene, audio_data, file.filename or "",
+    )
+    return ok(result)
+
+
 # ═══════════════════════════════════════════════
 # 实时 ASR：音频流上传 + 实时转写
 # ═══════════════════════════════════════════════

@@ -11,6 +11,7 @@ from . import service
 from .schemas import (
     CareModeIn, CodeLoginIn, DisclaimerIn, GrantIn, LoginIn, PasswordChangeIn,
     ProfileIn, RegisterIn, SendCodeIn, TeacherAssignIn, ModelPreferenceIn,
+    UserSettingsPatchIn,
 )
 
 router = APIRouter(tags=["①用户/权限"])
@@ -83,6 +84,11 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
     return ok(service.get_me(db, user.user_id))
 
 
+@router.post("/users/me/complete-plan-count")  # 完成计划计数 +1
+def increment_completed_plans(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ok(service.increment_completed_plans(db, user.user_id))
+
+
 @router.patch("/users/me/profile")  # U3
 def profile(body: ProfileIn, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     return ok(service.update_profile(db, user.user_id, nickname=body.nickname,
@@ -147,3 +153,24 @@ def upload_avatar(
 ):
     content = file.file.read()
     return ok(service.upload_avatar(db, user.user_id, content, file.filename or "avatar"))
+
+
+# ── 设置同步（Phase 5 全模块数据互通）──
+
+@router.get("/users/me/settings")
+def get_settings(
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """读取用户全部跨设备设置。"""
+    return ok(service.get_user_settings(db, user.user_id))
+
+
+@router.patch("/users/me/settings")
+def patch_settings(
+    body: UserSettingsPatchIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """合并式更新用户设置。仅更新传入的 key，保留未传入的 key。"""
+    return ok(service.patch_user_settings(db, user.user_id, body.settings))

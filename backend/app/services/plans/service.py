@@ -17,6 +17,8 @@ from ...engines.persona import build_persona_prompt
 from ...engines.llm_orchestrator import llm_generate_with_orchestration
 from ...engines.security_compliance import desensitize
 from ...engines.data_foundation import emit_event
+from ...engines.session_context import save_turn, get_recent_turns
+from ...engines.user_profiler import generate_morning_context, track_user_activity
 from ...shared import errors
 from ...shared.database import utcnow
 from ...shared.llm_utils import safe_extract_json
@@ -418,7 +420,21 @@ def get_plan_stats(db: Session, *, user_id: str) -> dict:
 
 
 def get_yesterday_unfinished(db: Session, *, user_id: str) -> dict:
-    """昨日未完成任务列表（P1 入口页用）。"""
+    """昨日未完成任务列表（P1 入口页用）。
+
+    优先使用 Tier 2 profiler 检测最近 3 天的未完成任务，
+    fallback 到昨日 plan 表中的 pending 任务。
+    """
+    # Tier 2: profiler 检测（更全面的 3 天范围）
+    try:
+        from ...engines.user_profiler import detect_unfinished_tasks
+        profiler_tasks = detect_unfinished_tasks(db, user_id)
+        if profiler_tasks:
+            return {"tasks": profiler_tasks, "source": "profiler_3d"}
+    except Exception:
+        pass
+
+    # Fallback: 昨日 plan 表
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
     y_start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
     y_end = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
@@ -434,7 +450,7 @@ def get_yesterday_unfinished(db: Session, *, user_id: str) -> dict:
         ).order_by(Plan.created_at.desc())
     )
     if not plan:
-        return {"tasks": []}
+        return {"tasks": [], "source": "fallback"}
 
     tasks = list(
         db.scalars(
@@ -443,7 +459,7 @@ def get_yesterday_unfinished(db: Session, *, user_id: str) -> dict:
             ).order_by(PlanTask.sort_order)
         )
     )
-    return {"tasks": [_task_out(t) for t in tasks]}
+    return {"tasks": [_task_out(t) for t in tasks], "source": "fallback"}
 
 
 def get_smart_record_sync(db: Session, *, user_id: str) -> dict:
@@ -786,6 +802,28 @@ def process_morning_chat(message: str, user_id: str, db) -> dict:
         safe_message = desensitize(message, module="morning_plan")
         system_prompt = build_persona_prompt(module="morning_plan")
 
+        # Tier 2: 早上规划上下文（画像 + 未完成任务 + 最近对话）
+        extra_context = ""
+        if db:
+            try:
+                morning_ctx = generate_morning_context(db, user_id)
+                if morning_ctx.get("yesterday_unfinished"):
+                    items = morning_ctx["yesterday_unfinished"]
+                    unfinished_lines = "\n".join(
+                        f"  - {t['title']}（{t.get('date', '之前')}）" for t in items[:5]
+                    )
+                    extra_context += f"\n\n【昨日未完成事项】：\n{unfinished_lines}"
+                if morning_ctx.get("user_profile_summary"):
+                    extra_context += f"\n\n【用户习惯】：{morning_ctx['user_profile_summary']}"
+            except Exception:
+                pass  # 画像获取失败不阻塞主流程
+
+            # Tier 1: 记录用户活跃
+            try:
+                track_user_activity(db, user_id, "morning_plan")
+            except Exception:
+                pass
+
         prompt = (
             f"用户说：{safe_message}\n\n"
             f"请用小耕的身份（温暖专业的HR闺蜜姐姐）自然回复。\n"
@@ -796,6 +834,7 @@ def process_morning_chat(message: str, user_id: str, db) -> dict:
             f"- 如果用户问的是HR专业问题，给出专业、实用的建议\n"
             f"- 如果用户表达情绪，先共情再回应\n"
             f"- 回复2-4句话为宜，不要太长"
+            f"{extra_context}"
         )
 
         result = llm_generate_with_orchestration(
@@ -812,6 +851,13 @@ def process_morning_chat(message: str, user_id: str, db) -> dict:
         if not reply:
             reply = "姐，您说的小耕都听到了～有什么我可以帮您的吗？"
 
+        # Tier 1: 保存对话轮次到会话记忆
+        try:
+            save_turn(user_id, "morning_plan", "user", safe_message)
+            save_turn(user_id, "morning_plan", "assistant", reply)
+        except Exception:
+            pass  # 记忆保存失败不阻塞主流程
+
         return {
             "reply": reply,
             "model_used": result.get("model_used", ""),
@@ -822,6 +868,61 @@ def process_morning_chat(message: str, user_id: str, db) -> dict:
         return {
             "reply": "姐，小耕正在努力思考中，稍等一下哦～",
             "model_used": "",
+        }
+
+
+def process_morning_chat_simple(message: str, user_id: str, db) -> dict:
+    """朝有规划-简单意图直答通道(lite 模型)。
+
+    规则引擎判定为 SIMPLE(寒暄/致谢/确认等)时使用:
+    - 跳过重量级前奏:不构建 Persona 提示词、不注入 morning context、不做 RAG 检索
+    - 使用 morning_chat_lite 模块 → doubao-lite-32k,追求极低延迟
+    - 仍保留 desensitize + save_turn,保证审计一致
+
+    Returns:
+        {"reply": str, "model_used": str, "intent": "simple"}
+    """
+    try:
+        safe_message = desensitize(message, module="morning_plan")
+
+        prompt = (
+            f"用户说:{safe_message}\n\n"
+            "请以「小耕」(温暖亲切的HR闺蜜姐姐)身份用一句话自然回复。\n"
+            "要求:称呼「姐」;不解释原因;不追问;10-30 字为宜。"
+        )
+        system_prompt = "你是小耕,一位温暖亲切的HR闺蜜姐姐,擅长简短自然地回应寒暄类问候。"
+
+        result = llm_generate_with_orchestration(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            module="morning_chat_lite",
+            task_complexity="simple",
+            max_tokens=128,
+            user_id=user_id,
+            db=db,
+        )
+
+        reply = (result.get("content") or "").strip()
+        if not reply:
+            reply = "姐,小耕在这儿呢~"
+
+        try:
+            save_turn(user_id, "morning_plan", "user", safe_message)
+            save_turn(user_id, "morning_plan", "assistant", reply)
+        except Exception:
+            pass
+
+        return {
+            "reply": reply,
+            "model_used": result.get("model_used", ""),
+            "intent": "simple",
+        }
+    except Exception as e:
+        logger.warning("朝有规划-简单意图直答失败: %s", e)
+        return {
+            "reply": "姐,小耕在这儿呢~",
+            "model_used": "",
+            "intent": "simple",
         }
 
 

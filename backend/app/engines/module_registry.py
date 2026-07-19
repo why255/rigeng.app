@@ -27,6 +27,19 @@ MODULE_REGISTRY: dict[str, dict] = {
         "template_fallback": "姐，今天有什么计划呢？小耕帮您梳理一下~",
         "ai_capabilities": ["LLM"],
     },
+    "morning_chat_lite": {
+        # 双阶段响应 Stage-1:先给出一句话核心建议(< 500ms),再由 morning_plan 生成完整回答
+        "name": "朝有规划-摘要",
+        "icon": "mingcute:sun-line",
+        "color": "#E8A94D",
+        "default_model": "doubao-lite-32k",
+        "provider": "volcano",
+        "temperature": 0.5,
+        "description": "双阶段摘要通道(lite 模型),仅用于生成 20 字内核心建议",
+        "fallback_chain": ["deepseek-chat", "glm-4-flash"],
+        "template_fallback": "姐,小耕正在思考…",
+        "ai_capabilities": ["LLM"],
+    },
     "evening_review": {
         "name": "暮有复盘",
         "icon": "mingcute:moon-line",
@@ -222,6 +235,38 @@ MODULE_REGISTRY: dict[str, dict] = {
 }
 
 # ═══════════════════════════════════════════════
+# Phase 3: 快速模型映射（用于预生成/预热场景，追求低TTFT）
+# ═══════════════════════════════════════════════
+
+# 每个主模型的快速替代模型。DeepSeek Chat 首token延迟最低（<500ms），
+# GLM-4-Flash 是智谱的低延迟变体。均用于 fast_mode=1 的预生成请求。
+FAST_MODEL_MAP: dict[str, str] = {
+    "doubao-seed-2-0-pro": "deepseek-chat",
+    "doubao-seed-2-0-pro-260215": "deepseek-chat",
+    "qwen3.7-max-preview": "deepseek-chat",
+    "hy3-preview": "deepseek-chat",
+    "kimi-k2.5": "deepseek-chat",
+    "deepseek-chat": "deepseek-chat",   # 已是最快
+    "glm-4.5": "glm-4-flash",           # 智谱快速变体
+    "glm-4-flash": "glm-4-flash",
+    "GLM-4.7": "glm-4-flash",
+    "GLM-4.5-Air": "glm-4-flash",
+    "claude-sonnet-4-6": "deepseek-chat",
+}
+
+# 快速模型默认温度（低temperature保证预生成结果可用）
+FAST_MODEL_TEMPERATURE: float = 0.1
+
+# 快速模型默认 max_tokens（预生成不需要完整回复，够看到方向即可）
+FAST_MODEL_MAX_TOKENS: int = 512
+
+
+def get_fast_model(main_model: str) -> str:
+    """返回主模型对应的快速替代模型。"""
+    return FAST_MODEL_MAP.get(main_model, "deepseek-chat")
+
+
+# ═══════════════════════════════════════════════
 # 向后兼容的导出（供 llm_orchestrator.py 使用）
 # ═══════════════════════════════════════════════
 
@@ -241,6 +286,7 @@ MODULE_TEMPERATURE: dict[str, float] = {
 _MODEL_TO_PROVIDER: dict[str, str] = {
     "doubao-seed-2-0-pro": "volcano",
     "doubao-seed-2-0-pro-260215": "volcano",
+    "doubao-lite-32k": "volcano",
     "qwen3.7-max-preview": "dashscope",
     "hy3-preview": "hunyuan",
     "kimi-k2.5": "kimi",

@@ -48,3 +48,55 @@ class FolderIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     parent_id: str | None = None
     hr_category: str | None = None
+
+
+# ═══════════════════════════════════════════════
+# 携君智库接入 — 入库流水线请求/响应模型（2026-07-15）
+# ═══════════════════════════════════════════════
+
+class UploadResponse(BaseModel):
+    """A1 zip上传响应。"""
+    success: bool = True
+    upload_id: str
+    message: str = "文件已接收,开始解析"
+
+
+class IngestionStatusResponse(BaseModel):
+    """A1→A5 处理状态查询响应。"""
+    upload_id: str
+    package_id: str | None = None
+    status: str  # uploaded / parsing / processing / completed / completed_with_warnings / failed
+    total_files: int = 0
+    processed_files: int = 0
+    success_count: int = 0
+    failed_count: int = 0
+    pending_review_count: int = 0
+    report_id: str | None = None
+    error_message: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class IngestionReportResponse(BaseModel):
+    """A5 入库报告响应。"""
+    upload_id: str
+    package_id: str | None = None
+    process_time: str = ""
+    status: str | None = None
+    counts: dict | None = None
+    failures: list[dict] = []
+    pending_review: list[dict] = []
+
+
+class IngestionTaskItem(BaseModel):
+    """入库任务列表项。"""
+    upload_id: str
+    package_id: str | None = None
+    filename: str | None = None
+    file_size_bytes: int | None = None
+    status: str
+    total_files: int = 0
+    success_count: int = 0
+    failed_count: int = 0
+    created_at: str = ""
+    updated_at: str = ""
